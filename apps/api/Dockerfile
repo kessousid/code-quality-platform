@@ -1,0 +1,18 @@
+# Build context is the repo ROOT (pnpm workspace) — see docs/adr/0030.
+FROM node:20-slim AS build
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @cqp/db run generate
+RUN pnpm --filter @cqp/api... run build
+
+FROM node:20-slim AS runtime
+RUN corepack enable
+WORKDIR /repo
+COPY --from=build /repo /repo
+ENV NODE_ENV=production
+EXPOSE 3000
+# `prisma migrate deploy` is idempotent (no-ops on already-applied migrations) — safe to run on every
+# start rather than needing a separate release-phase step, given this deploys as a single API instance.
+CMD ["sh", "-c", "pnpm --filter @cqp/db run migrate:deploy && node --enable-source-maps apps/api/dist/main.js"]

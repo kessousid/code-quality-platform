@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -b && vite build",
     "dev": "vite",
+    "start": "node server.mjs",
     "lint": "eslint src",
     "typecheck": "tsc -b",
     "test": "vitest run --passWithNoTests"
@@ -20,7 +21,9 @@
     "@xyflow/react": "^12.3.0",
     "recharts": "^2.15.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "express": "^4.21.0",
+    "http-proxy-middleware": "^3.0.3"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
