@@ -1,0 +1,45 @@
+{
+  "name": "@cqp/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b && concurrently -k -n tsc,node -c blue,green \"tsc -b --watch --preserveWatchOutput\" \"node --watch --enable-source-maps dist/main.js\"",
+    "start": "node dist/main.js",
+    "bootstrap": "node dist/scripts/bootstrap-org.js",
+    "lint": "eslint src",
+    "typecheck": "tsc -b",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cqp/core": "workspace:*",
+    "@cqp/db": "workspace:*",
+    "@cqp/application": "workspace:*",
+    "@cqp/storage": "workspace:*",
+    "@cqp/reporting": "workspace:*",
+    "@cqp/queue": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "class-validator": "^0.14.1",
+    "class-transformer": "^0.5.1",
+    "cookie-parser": "^1.4.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "concurrently": "^9.1.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.10.0",
+    "@types/express": "^5.0.0",
+    "@types/cookie-parser": "^1.4.7",
+    "@nestjs/testing": "^11.0.0",
+    "@swc/core": "^1.9.0",
+    "unplugin-swc": "^1.5.0",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2"
+  }
+}

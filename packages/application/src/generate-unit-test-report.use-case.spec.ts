@@ -1,0 +1,134 @@
+import { describe, expect, it } from 'vitest';
+import {
+  InMemoryGeneratedTestFileRepository,
+  InMemoryObjectStorage,
+  InMemoryRepoRepository,
+  InMemoryTestCaseResultRepository,
+  InMemoryUnitTestReportRepository,
+  InMemoryUnitTestRunRepository,
+} from './testing/index.js';
+import { GenerateUnitTestReportUseCase } from './generate-unit-test-report.use-case.js';
+import { GetUnitTestRunUseCase } from './get-unit-test-run.use-case.js';
+import { GetUnitTestReportUseCase } from './get-unit-test-report.use-case.js';
+import { GetUnitTestReportContentUseCase } from './get-unit-test-report-content.use-case.js';
+
+async function setUp() {
+  const repoRepository = new InMemoryRepoRepository();
+  const unitTestRunRepository = new InMemoryUnitTestRunRepository();
+  const generatedTestFileRepository = new InMemoryGeneratedTestFileRepository();
+  const testCaseResultRepository = new InMemoryTestCaseResultRepository();
+  const unitTestReportRepository = new InMemoryUnitTestReportRepository();
+  const objectStorage = new InMemoryObjectStorage();
+
+  const repo = await repoRepository.create({ orgId: 'org_1', name: 'sample-repo' });
+  const run = await unitTestRunRepository.create({
+    orgId: 'org_1',
+    repoId: repo.id,
+    target: { path: 'src/math.ts' },
+  });
+  await unitTestRunRepository.updateStatus('org_1', run.id, 'running');
+  await unitTestRunRepository.updateResultsSummary('org_1', run.id, {
+    testsTotal: 2,
+    testsPassed: 1,
+    testsFailed: 1,
+  });
+  await unitTestRunRepository.updateStatus('org_1', run.id, 'completed');
+
+  await generatedTestFileRepository.saveMany(run.id, [
+    { sourceFilePath: 'src/math.ts', testFilePath: 'src/math.generated.test.ts' },
+  ]);
+  await testCaseResultRepository.saveMany(run.id, [
+    { testFilePath: 'src/math.generated.test.ts', testName: 'adds', status: 'passed' },
+    {
+      testFilePath: 'src/math.generated.test.ts',
+      testName: 'fails on purpose',
+      status: 'failed',
+      failureMessage: 'boom',
+    },
+  ]);
+  // Belongs to a different run — must not leak into this run's report.
+  await testCaseResultRepository.saveMany('run_other', [
+    { testFilePath: 'other.generated.test.ts', testName: 'unrelated', status: 'passed' },
+  ]);
+
+  const useCase = new GenerateUnitTestReportUseCase(
+    new GetUnitTestRunUseCase(unitTestRunRepository),
+    generatedTestFileRepository,
+    testCaseResultRepository,
+    unitTestReportRepository,
+    objectStorage,
+  );
+
+  return { run, useCase, unitTestReportRepository, objectStorage };
+}
+
+describe('GenerateUnitTestReportUseCase', () => {
+  it('generates a JSON report scoped to the given run only and persists it', async () => {
+    const { run, useCase, unitTestReportRepository, objectStorage } = await setUp();
+
+    const report = await useCase.execute('org_1', run.id, 'json');
+
+    expect(report.unitTestRunId).toBe(run.id);
+    expect(report.format).toBe('json');
+    expect(report.storageKey).toBe(`unit-test-reports/org_1/${run.id}/json.json`);
+
+    const persisted = await unitTestReportRepository.findById('org_1', report.id);
+    expect(persisted).not.toBeNull();
+
+    const content = JSON.parse((await objectStorage.get(report.storageKey)).toString('utf-8'));
+    expect(content.results).toHaveLength(2); // adds, fails on purpose — not the "run_other" result
+    expect(content.results.every((r: { testName: string }) => r.testName !== 'unrelated')).toBe(
+      true,
+    );
+    expect(content.run.testsTotal).toBe(2);
+  });
+
+  it('generates a real HTML report end to end', async () => {
+    const { run, useCase, objectStorage } = await setUp();
+    const report = await useCase.execute('org_1', run.id, 'html');
+    const html = (await objectStorage.get(report.storageKey)).toString('utf-8');
+    expect(html).toContain('<!doctype html>');
+    expect(html).toContain('fails on purpose');
+  });
+
+  it('generates a real PDF report end to end', async () => {
+    const { run, useCase, objectStorage } = await setUp();
+    const report = await useCase.execute('org_1', run.id, 'pdf');
+    const buffer = await objectStorage.get(report.storageKey);
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  });
+
+  it('regenerating the same format for the same run upserts rather than duplicating', async () => {
+    const { run, useCase, unitTestReportRepository } = await setUp();
+
+    const first = await useCase.execute('org_1', run.id, 'html');
+    const second = await useCase.execute('org_1', run.id, 'html');
+
+    expect(second.id).toBe(first.id);
+    const all = await unitTestReportRepository.listByRun('org_1', run.id);
+    expect(all.filter((r) => r.format === 'html')).toHaveLength(1);
+  });
+
+  it('rejects a runId that does not exist', async () => {
+    const { useCase } = await setUp();
+    await expect(useCase.execute('org_1', 'no-such-run', 'json')).rejects.toThrow(
+      'UnitTestRun not found',
+    );
+  });
+});
+
+describe('GetUnitTestReportContentUseCase', () => {
+  it('returns the report metadata plus the real generated bytes', async () => {
+    const { run, useCase, objectStorage } = await setUp();
+    const report = await useCase.execute('org_1', run.id, 'json');
+
+    const contentUseCase = new GetUnitTestReportContentUseCase(
+      new GetUnitTestReportUseCase(new InMemoryUnitTestReportRepository([report])),
+      objectStorage,
+    );
+    const result = await contentUseCase.execute('org_1', report.id);
+
+    expect(result.report.id).toBe(report.id);
+    expect(JSON.parse(result.content.toString('utf-8')).run.id).toBe(run.id);
+  });
+});

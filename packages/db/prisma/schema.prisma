@@ -1,0 +1,543 @@
+// Phase 4 schema. See docs/adr/0009-database-schema-design.md for the
+// non-obvious calls: Finding is a persistent entity (not a per-scan
+// snapshot), org_id is denormalized onto every tenant-scoped table, and the
+// dependency graph is stored as a blob, not relational rows.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum RepoProvider {
+  LOCAL
+  GITHUB
+  GITLAB
+}
+
+enum ScanMode {
+  FULL
+  INCREMENTAL
+}
+
+enum ScanStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum Confidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AnalysisCategory {
+  CODE_QUALITY
+  SECURITY
+  DEPENDENCY_VULNERABILITY
+  SECRET_DETECTION
+  ARCHITECTURE
+  PERFORMANCE
+  DATABASE
+  DEVOPS_IAC
+  TEST_COVERAGE
+  DOCUMENTATION
+  BEST_PRACTICES
+  TECHNICAL_DEBT
+}
+
+enum FindingStatus {
+  OPEN
+  FIXED
+  IGNORED
+  FALSE_POSITIVE
+}
+
+enum ReportFormat {
+  HTML
+  PDF
+  JSON
+  SARIF
+}
+
+enum UnitTestRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TestCaseStatus {
+  PASSED
+  FAILED
+  SKIPPED
+}
+
+enum UnitTestReportFormat {
+  JSON
+  HTML
+  PDF
+}
+
+/// Which JestTestGenerator implementation writes a run's tests — see docs/adr/0026.
+enum TestGeneratorType {
+  GEMINI
+  SCRIPT
+}
+
+enum CoverageRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum CoverageFileStatus {
+  COVERED
+  UNCOVERED
+}
+
+enum CoverageReportFormat {
+  JSON
+  HTML
+  PDF
+}
+
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  apiTokens    ApiToken[]
+  repos        Repo[]
+  scans        Scan[]
+  findings     Finding[]
+  patches      Patch[]
+  reports      Report[]
+  unitTestRuns    UnitTestRun[]
+  unitTestReports UnitTestReport[]
+  coverageRuns    CoverageRun[]
+  coverageReports CoverageReport[]
+
+  @@map("orgs")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  orgId     String
+  email     String   @unique
+  name      String
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  org             Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  triggeredScans  Scan[]  @relation("ScanTriggeredBy")
+  createdPatchPrs Patch[] @relation("PatchPrCreatedBy")
+
+  @@index([orgId])
+  @@map("users")
+}
+
+/// The sole credential type for MVP (see docs/adr/0014-auth-model.md) — no
+/// password/session system. Only `tokenHash` is ever stored; the raw token
+/// is shown once, at issuance, by the bootstrap script.
+model ApiToken {
+  id         String    @id @default(cuid())
+  orgId      String
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("api_tokens")
+}
+
+model Repo {
+  id            String       @id @default(cuid())
+  orgId         String
+  name          String
+  provider      RepoProvider @default(LOCAL)
+  remoteUrl     String?
+  /// Absolute path on the worker's filesystem — see docs/adr/0021. Only a
+  /// `local` repo with this set is actually scannable; no cloning exists yet.
+  localPath     String?
+  defaultBranch String       @default("main")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  org          Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scans        Scan[]
+  findings     Finding[]
+  unitTestRuns UnitTestRun[]
+  coverageRuns CoverageRun[]
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@map("repos")
+}
+
+model Scan {
+  id                        String     @id @default(cuid())
+  orgId                     String
+  repoId                    String
+  ref                       String
+  mode                      ScanMode   @default(FULL)
+  status                    ScanStatus @default(QUEUED)
+  /// Empty means "run every applicable plugin" — see docs/adr/0023.
+  categories                AnalysisCategory[]
+  baseScanId                String?
+  dependencyGraphStorageKey String?
+  triggeredByUserId         String?
+  startedAt                 DateTime?
+  completedAt               DateTime?
+  createdAt                 DateTime   @default(now())
+  pluginsTotal              Int?
+  pluginsCompleted          Int?
+  currentPluginId           String?
+
+  org              Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  repo             Repo             @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  baseScan         Scan?            @relation("ScanBaseline", fields: [baseScanId], references: [id])
+  incrementalScans Scan[]           @relation("ScanBaseline")
+  triggeredByUser  User?            @relation("ScanTriggeredBy", fields: [triggeredByUserId], references: [id])
+  firstSeenFindings Finding[]       @relation("FindingFirstSeen")
+  lastSeenFindings  Finding[]       @relation("FindingLastSeen")
+  findingHistory   FindingHistory[]
+  reports          Report[]
+
+  @@index([orgId, repoId, createdAt])
+  @@map("scans")
+}
+
+/// Persistent per logical issue — see docs/adr/0009. Deduped across scans
+/// by `fingerprint`; per-scan observations live in FindingHistory.
+model Finding {
+  id                     String           @id @default(cuid())
+  orgId                  String
+  repoId                 String
+  category               AnalysisCategory
+  source                 String
+  ruleId                 String
+  title                  String
+  severity               Severity
+  confidence             Confidence
+  cwe                    String?
+  owaspCategory          String?
+  rootCause              String
+  riskDescription        String
+  recommendedFix         String
+  exampleCode            String?
+  status                 FindingStatus    @default(OPEN)
+  patchPrConfirmedByUser Boolean          @default(false)
+  fingerprint            String
+  firstSeenScanId        String
+  lastSeenScanId         String
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  org           Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  repo          Repo                 @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  firstSeenScan Scan                 @relation("FindingFirstSeen", fields: [firstSeenScanId], references: [id])
+  lastSeenScan  Scan                 @relation("FindingLastSeen", fields: [lastSeenScanId], references: [id])
+  locations     FindingLocation[]
+  references    FindingReference[]
+  aiEnrichment  AiFindingEnrichment?
+  history       FindingHistory[]
+  patches       Patch[]
+  relatedTo     FindingCorrelation[] @relation("FindingCorrelationSource")
+  relatedFrom   FindingCorrelation[] @relation("FindingCorrelationTarget")
+
+  @@unique([repoId, fingerprint])
+  @@index([orgId, status])
+  @@index([orgId, severity])
+  @@map("findings")
+}
+
+model FindingLocation {
+  id          String @id @default(cuid())
+  findingId   String
+  filePath    String
+  startLine   Int
+  endLine     Int?
+  startColumn Int?
+  endColumn   Int?
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId])
+  @@map("finding_locations")
+}
+
+model FindingReference {
+  id        String @id @default(cuid())
+  findingId String
+  title     String
+  url       String
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId])
+  @@map("finding_references")
+}
+
+/// AI enrichment (Phase 8). Populated by the AI engine only — never
+/// written by an analyzer plugin directly.
+model AiFindingEnrichment {
+  id                      String      @id @default(cuid())
+  findingId               String      @unique
+  plainEnglishExplanation String
+  businessImpact          String
+  suggestedPatch          String?
+  patchConfidence         Confidence?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@map("ai_finding_enrichments")
+}
+
+/// Directed "this finding relates to that finding" edges from the
+/// correlation engine (Phase 8) — e.g. the same weakness across two files.
+model FindingCorrelation {
+  id               String  @id @default(cuid())
+  findingId        String
+  relatedFindingId String
+  reason           String?
+
+  finding        Finding @relation("FindingCorrelationSource", fields: [findingId], references: [id], onDelete: Cascade)
+  relatedFinding Finding @relation("FindingCorrelationTarget", fields: [relatedFindingId], references: [id], onDelete: Cascade)
+
+  @@unique([findingId, relatedFindingId])
+  @@index([findingId])
+  @@index([relatedFindingId])
+  @@map("finding_correlations")
+}
+
+/// One row per (finding, scan) — the per-scan snapshot Finding itself no
+/// longer carries. Source for trend charts and lifecycle history.
+model FindingHistory {
+  id         String        @id @default(cuid())
+  findingId  String
+  scanId     String
+  status     FindingStatus
+  severity   Severity
+  occurredAt DateTime      @default(now())
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  scan    Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([findingId, scanId])
+  @@index([scanId])
+  @@map("finding_history")
+}
+
+/// AI-drafted patch. `prCreatedByUserId`/`prCreatedAt` being non-null is the
+/// literal database representation of ADR-0004's human-in-the-loop gate —
+/// the platform never populates them itself.
+model Patch {
+  id                String    @id @default(cuid())
+  orgId             String
+  findingId         String
+  diff              String
+  createdByAi       Boolean   @default(true)
+  prUrl             String?
+  prCreatedByUserId String?
+  prCreatedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  org             Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  finding         Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  prCreatedByUser User?   @relation("PatchPrCreatedBy", fields: [prCreatedByUserId], references: [id])
+
+  @@index([orgId, findingId])
+  @@map("patches")
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  orgId      String
+  scanId     String
+  format     ReportFormat
+  storageKey String
+  createdAt  DateTime     @default(now())
+
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  scan Scan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, format])
+  @@index([orgId, scanId])
+  @@map("reports")
+}
+
+/// See docs/adr/0024. targetPath is relative to the repo's localPath; targetFunction narrows to one exported function within it.
+model UnitTestRun {
+  id              String            @id @default(cuid())
+  orgId           String
+  repoId          String
+  targetPath      String
+  targetFunction  String?
+  generator       TestGeneratorType @default(GEMINI)
+  status          UnitTestRunStatus @default(QUEUED)
+  filesTotal      Int?
+  filesCompleted  Int?
+  currentFilePath String?
+  testsTotal      Int?
+  testsPassed     Int?
+  testsFailed     Int?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+
+  org                Org                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  repo               Repo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  generatedTestFiles GeneratedTestFile[]
+  testCaseResults    TestCaseResult[]
+  reports            UnitTestReport[]
+
+  @@index([orgId, repoId, createdAt])
+  @@map("unit_test_runs")
+}
+
+/// One row per generated Jest file (docs/adr/0024) — testFilePath always ends in `.generated.test.<ext>`.
+model GeneratedTestFile {
+  id             String   @id @default(cuid())
+  runId          String
+  sourceFilePath String
+  testFilePath   String
+  functionName   String?
+  createdAt      DateTime @default(now())
+
+  run UnitTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("generated_test_files")
+}
+
+/// One row per Jest `it(...)` result (docs/adr/0024), parsed from `jest --json` output.
+model TestCaseResult {
+  id             String         @id @default(cuid())
+  runId          String
+  testFilePath   String
+  testName       String
+  status         TestCaseStatus
+  durationMs     Int?
+  failureMessage String?
+
+  run UnitTestRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("test_case_results")
+}
+
+/// Mirrors Report exactly (docs/adr/0019), for UnitTestRun instead of Scan — see docs/adr/0024's follow-up.
+model UnitTestReport {
+  id            String               @id @default(cuid())
+  orgId         String
+  unitTestRunId String
+  format        UnitTestReportFormat
+  storageKey    String
+  createdAt     DateTime             @default(now())
+
+  org Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run UnitTestRun @relation(fields: [unitTestRunId], references: [id], onDelete: Cascade)
+
+  @@unique([unitTestRunId, format])
+  @@index([orgId, unitTestRunId])
+  @@map("unit_test_reports")
+}
+
+/// Zero-LLM coverage gate (docs/adr/0025) — diffs a repo's working tree
+/// against baseRef, runs its own existing Jest suite with `--coverage`,
+/// and fails if any changed line lacks coverage or any test is failing.
+model CoverageRun {
+  id                  String            @id @default(cuid())
+  orgId               String
+  repoId              String
+  baseRef             String
+  status              CoverageRunStatus @default(QUEUED)
+  gatePassed          Boolean?
+  filesTotal          Int?
+  filesCompleted      Int?
+  currentFilePath     String?
+  testsTotal          Int?
+  testsPassed         Int?
+  testsFailed         Int?
+  changedLinesTotal   Int?
+  uncoveredLinesTotal Int?
+  errorMessage        String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime          @default(now())
+
+  org         Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  repo        Repo                 @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  fileResults CoverageFileResult[]
+  reports     CoverageReport[]
+
+  @@index([orgId, repoId, createdAt])
+  @@map("coverage_runs")
+}
+
+/// One row per changed file in a CoverageRun (docs/adr/0025).
+model CoverageFileResult {
+  id             String             @id @default(cuid())
+  runId          String
+  filePath       String
+  changedLines   Int[]
+  uncoveredLines Int[]
+  status         CoverageFileStatus
+
+  run CoverageRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("coverage_file_results")
+}
+
+/// Mirrors UnitTestReport exactly (docs/adr/0019, docs/adr/0024), for CoverageRun instead — docs/adr/0025.
+model CoverageReport {
+  id            String               @id @default(cuid())
+  orgId         String
+  coverageRunId String
+  format        CoverageReportFormat
+  storageKey    String
+  createdAt     DateTime             @default(now())
+
+  org Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run CoverageRun @relation(fields: [coverageRunId], references: [id], onDelete: Cascade)
+
+  @@unique([coverageRunId, format])
+  @@index([orgId, coverageRunId])
+  @@map("coverage_reports")
+}

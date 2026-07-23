@@ -1,0 +1,31 @@
+{
+  "name": "@cqp/scan-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint src",
+    "typecheck": "tsc -b",
+    "pretest": "tsc -b",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cqp/core": "workspace:*",
+    "@cqp/plugin-runtime": "workspace:*",
+    "@cqp/plugin-semgrep": "workspace:*",
+    "@cqp/plugin-gitleaks": "workspace:*",
+    "@cqp/plugin-osv-scanner": "workspace:*",
+    "@cqp/plugin-eslint": "workspace:*",
+    "@cqp/plugin-jscpd": "workspace:*",
+    "@cqp/plugin-dependency-graph": "workspace:*",
+    "minimatch": "^10.2.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.10.0"
+  }
+}

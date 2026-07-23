@@ -1,0 +1,24 @@
+{
+  "name": "@cqp/plugin-dependency-graph",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint src",
+    "typecheck": "tsc -b",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@cqp/core": "workspace:*",
+    "madge": "^8.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.10.0",
+    "@types/madge": "^5.0.3"
+  }
+}

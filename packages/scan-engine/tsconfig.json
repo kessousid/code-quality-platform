@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../core" },
+    { "path": "../plugin-runtime" },
+    { "path": "../plugins/semgrep" },
+    { "path": "../plugins/gitleaks" },
+    { "path": "../plugins/osv-scanner" },
+    { "path": "../plugins/eslint" },
+    { "path": "../plugins/jscpd" },
+    { "path": "../plugins/dependency-graph" }
+  ],
+  "include": ["src/**/*.ts"]
+}

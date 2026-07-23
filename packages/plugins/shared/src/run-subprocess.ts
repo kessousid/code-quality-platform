@@ -1,0 +1,74 @@
+import { spawn } from 'node:child_process';
+
+export class ToolNotFoundError extends Error {
+  constructor(command: string, envVarName: string) {
+    super(`${command} not found — set ${envVarName} or install it on PATH`);
+    this.name = 'ToolNotFoundError';
+  }
+}
+
+export interface SubprocessResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}
+
+/**
+ * Real target-repo code frequently does DB/third-party-client setup at
+ * module load time with no `.catch()` on the resulting promise (docs/adr/0028)
+ * — since Node 15, an unhandled rejection crashes the whole process by
+ * default, which was taking down the entire Jest run (and its JSON report)
+ * over a failure in code the generated test never even calls directly.
+ * `NODE_OPTIONS` is read by the Node runtime at process startup, before any
+ * of the target repo's own code (including its own `.env`) runs — so this
+ * can only be fixed from the *outside*, by the process that spawns `node`,
+ * not by anything inside the target repo itself. Appends to (never
+ * replaces) any `NODE_OPTIONS` already present, in case the environment
+ * legitimately sets other flags.
+ */
+export function withUnhandledRejectionsAsWarnings(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const existing = baseEnv.NODE_OPTIONS?.trim();
+  return {
+    ...baseEnv,
+    NODE_OPTIONS: [existing, '--unhandled-rejections=warn'].filter(Boolean).join(' '),
+  };
+}
+
+/**
+ * Shared by every plugin that shells out (Semgrep, gitleaks, OSV-Scanner —
+ * see docs/adr/0017). Many of these tools exit non-zero when they find
+ * something (that's the whole point), so a non-zero exit code is not
+ * itself treated as failure here — only a failed spawn (ENOENT) is. Each
+ * caller decides what its own tool's exit codes mean.
+ */
+export function runSubprocess(
+  command: string,
+  args: string[],
+  options: { cwd: string; envVarName: string; env?: NodeJS.ProcessEnv },
+): Promise<SubprocessResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: options.cwd,
+      ...(options.env ? { env: options.env } : {}),
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') {
+        reject(new ToolNotFoundError(command, options.envVarName));
+      } else {
+        reject(error);
+      }
+    });
+
+    child.on('close', (exitCode) => {
+      resolve({ stdout, stderr, exitCode });
+    });
+  });
+}

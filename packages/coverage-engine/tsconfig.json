@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../core" },
+    { "path": "../unit-test-engine" },
+    { "path": "../scan-engine" },
+    { "path": "../plugins/shared" }
+  ],
+  "include": ["src/**/*.ts"]
+}

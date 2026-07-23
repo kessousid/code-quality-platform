@@ -1,0 +1,24 @@
+/**
+ * DI tokens for domain repository ports (ADR-0010) — interfaces have no
+ * runtime value to inject by, so each port gets a Symbol. Centralized here
+ * so every module wiring a Prisma adapter to a port agrees on the same
+ * token instead of each module inventing its own.
+ */
+export const SCAN_REPOSITORY = Symbol('SCAN_REPOSITORY');
+export const REPO_REPOSITORY = Symbol('REPO_REPOSITORY');
+export const FINDING_REPOSITORY = Symbol('FINDING_REPOSITORY');
+export const REPORT_REPOSITORY = Symbol('REPORT_REPOSITORY');
+export const API_TOKEN_REPOSITORY = Symbol('API_TOKEN_REPOSITORY');
+export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
+export const SCAN_QUEUE = Symbol('SCAN_QUEUE');
+export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
+export const ORG_REPOSITORY = Symbol('ORG_REPOSITORY');
+export const UNIT_TEST_RUN_REPOSITORY = Symbol('UNIT_TEST_RUN_REPOSITORY');
+export const GENERATED_TEST_FILE_REPOSITORY = Symbol('GENERATED_TEST_FILE_REPOSITORY');
+export const TEST_CASE_RESULT_REPOSITORY = Symbol('TEST_CASE_RESULT_REPOSITORY');
+export const UNIT_TEST_QUEUE = Symbol('UNIT_TEST_QUEUE');
+export const UNIT_TEST_REPORT_REPOSITORY = Symbol('UNIT_TEST_REPORT_REPOSITORY');
+export const COVERAGE_RUN_REPOSITORY = Symbol('COVERAGE_RUN_REPOSITORY');
+export const COVERAGE_FILE_RESULT_REPOSITORY = Symbol('COVERAGE_FILE_RESULT_REPOSITORY');
+export const COVERAGE_QUEUE = Symbol('COVERAGE_QUEUE');
+export const COVERAGE_REPORT_REPOSITORY = Symbol('COVERAGE_REPORT_REPOSITORY');

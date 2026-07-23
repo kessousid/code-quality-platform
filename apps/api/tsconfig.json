@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/application" },
+    { "path": "../../packages/storage" },
+    { "path": "../../packages/reporting" },
+    { "path": "../../packages/queue" }
+  ],
+  "include": ["src"]
+}
