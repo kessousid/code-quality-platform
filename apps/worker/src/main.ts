@@ -1,5 +1,10 @@
 import { createPrismaClient } from '@cqp/db';
-import { createRedisConnection } from '@cqp/queue';
+import {
+  coverageQueueName,
+  createRedisConnection,
+  scanQueueName,
+  unitTestQueueName,
+} from '@cqp/queue';
 import { createCoverageWorker, createScanWorker, createUnitTestWorker } from './queue.js';
 
 /** Never logs the full connection string — it embeds a password, unlike everything else this worker prints. */
@@ -51,7 +56,7 @@ async function main(): Promise<void> {
   });
 
   console.log(
-    `[worker] workerId "${workerId}" listening on queues "scans:${workerId}", "unit-tests:${workerId}", and "coverage-runs:${workerId}" via ${redisHost(redisUrl)}`,
+    `[worker] workerId "${workerId}" listening on queues "${scanQueueName(workerId)}", "${unitTestQueueName(workerId)}", and "${coverageQueueName(workerId)}" via ${redisHost(redisUrl)}`,
   );
 
   const shutdown = async (): Promise<void> => {
