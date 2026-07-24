@@ -23,6 +23,7 @@ describe('DashboardPage', () => {
       orgId: 'org_1',
       name: 'existing-repo',
       provider: 'local',
+      workerId: 'default',
       defaultBranch: 'main',
       createdAt: new Date().toISOString(),
     });

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import type {
   CoverageFileResultRepository,
-  CoverageQueue,
+  CoverageQueueRegistry,
   CoverageReportRepository,
   CoverageRunRepository,
   ObjectStorage,
@@ -23,13 +23,13 @@ import {
   PrismaCoverageReportRepository,
   PrismaCoverageRunRepository,
 } from '@cqp/db';
-import { BullMqCoverageQueue, createCoverageBullQueue, createRedisConnection } from '@cqp/queue';
+import { BullMqCoverageQueueRegistry, createRedisConnection } from '@cqp/queue';
 import { LocalFilesystemObjectStorage } from '@cqp/storage';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RepoModule } from '../repos/repo.module.js';
 import {
   COVERAGE_FILE_RESULT_REPOSITORY,
-  COVERAGE_QUEUE,
+  COVERAGE_QUEUE_REGISTRY,
   COVERAGE_REPORT_REPOSITORY,
   COVERAGE_RUN_REPOSITORY,
   OBJECT_STORAGE,
@@ -65,12 +65,13 @@ import { CoverageReportController } from './coverage-report.controller.js';
         new LocalFilesystemObjectStorage(process.env.CQP_STORAGE_ROOT ?? './.data/storage'),
     },
     {
-      // Real BullMQ producer (see docs/adr/0021, 0024, 0025) — same pattern as UnitTestModule's queue, a separate queue name/connection.
-      provide: COVERAGE_QUEUE,
+      // Real BullMQ producer, one real queue per workerId (see docs/adr/0021,
+      // 0024, 0025, 0031) — same pattern as UnitTestModule's queue registry.
+      provide: COVERAGE_QUEUE_REGISTRY,
       useFactory: () => {
         const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
         const connection = createRedisConnection(redisUrl);
-        return new BullMqCoverageQueue(createCoverageBullQueue(connection));
+        return new BullMqCoverageQueueRegistry(connection);
       },
     },
     {
@@ -78,9 +79,10 @@ import { CoverageReportController } from './coverage-report.controller.js';
       useFactory: (
         coverageRunRepository: CoverageRunRepository,
         repoRepository: RepoRepository,
-        coverageQueue: CoverageQueue,
-      ) => new CreateCoverageRunUseCase(coverageRunRepository, repoRepository, coverageQueue),
-      inject: [COVERAGE_RUN_REPOSITORY, REPO_REPOSITORY, COVERAGE_QUEUE],
+        coverageQueueRegistry: CoverageQueueRegistry,
+      ) =>
+        new CreateCoverageRunUseCase(coverageRunRepository, repoRepository, coverageQueueRegistry),
+      inject: [COVERAGE_RUN_REPOSITORY, REPO_REPOSITORY, COVERAGE_QUEUE_REGISTRY],
     },
     {
       provide: GetCoverageRunUseCase,
@@ -101,9 +103,13 @@ import { CoverageReportController } from './coverage-report.controller.js';
     },
     {
       provide: CancelCoverageRunUseCase,
-      useFactory: (coverageRunRepository: CoverageRunRepository, coverageQueue: CoverageQueue) =>
-        new CancelCoverageRunUseCase(coverageRunRepository, coverageQueue),
-      inject: [COVERAGE_RUN_REPOSITORY, COVERAGE_QUEUE],
+      useFactory: (
+        coverageRunRepository: CoverageRunRepository,
+        repoRepository: RepoRepository,
+        coverageQueueRegistry: CoverageQueueRegistry,
+      ) =>
+        new CancelCoverageRunUseCase(coverageRunRepository, repoRepository, coverageQueueRegistry),
+      inject: [COVERAGE_RUN_REPOSITORY, REPO_REPOSITORY, COVERAGE_QUEUE_REGISTRY],
     },
     {
       provide: ListCoverageReportsByRunUseCase,

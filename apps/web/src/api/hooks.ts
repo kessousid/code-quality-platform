@@ -42,7 +42,7 @@ export function useRepo(repoId: string | undefined) {
 export function useCreateRepo() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: Pick<CreateRepoInput, 'name' | 'localPath'>) =>
+    mutationFn: (input: Pick<CreateRepoInput, 'name' | 'localPath' | 'workerId'>) =>
       apiPost<Repo>('/repos', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['repos'] }),
   });

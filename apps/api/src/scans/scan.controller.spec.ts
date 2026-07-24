@@ -13,7 +13,7 @@ import {
 import {
   InMemoryFindingRepository,
   InMemoryRepoRepository,
-  InMemoryScanQueue,
+  InMemoryScanQueueRegistry,
   InMemoryScanRepository,
 } from '@cqp/application/testing';
 import { ScanController } from './scan.controller.js';
@@ -30,15 +30,16 @@ async function buildTestingModule() {
   const scanRepository = new InMemoryScanRepository();
   const repoRepository = new InMemoryRepoRepository();
   const findingRepository = new InMemoryFindingRepository();
-  const scanQueue = new InMemoryScanQueue();
+  const scanQueueRegistry = new InMemoryScanQueueRegistry();
   const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
+  const scanQueue = scanQueueRegistry.forWorker(repo.workerId);
 
   const moduleRef = await Test.createTestingModule({
     controllers: [ScanController],
     providers: [
       {
         provide: CreateScanUseCase,
-        useValue: new CreateScanUseCase(scanRepository, repoRepository, scanQueue),
+        useValue: new CreateScanUseCase(scanRepository, repoRepository, scanQueueRegistry),
       },
       { provide: GetScanUseCase, useValue: new GetScanUseCase(scanRepository) },
       { provide: ListScansByRepoUseCase, useValue: new ListScansByRepoUseCase(scanRepository) },
@@ -50,7 +51,10 @@ async function buildTestingModule() {
         provide: ListFindingsByScanUseCase,
         useValue: new ListFindingsByScanUseCase(findingRepository),
       },
-      { provide: CancelScanUseCase, useValue: new CancelScanUseCase(scanRepository, scanQueue) },
+      {
+        provide: CancelScanUseCase,
+        useValue: new CancelScanUseCase(scanRepository, repoRepository, scanQueueRegistry),
+      },
     ],
   }).compile();
 

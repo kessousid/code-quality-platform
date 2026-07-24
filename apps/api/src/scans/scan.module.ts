@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
-import type { FindingRepository, RepoRepository, ScanQueue, ScanRepository } from '@cqp/core';
+import type {
+  FindingRepository,
+  RepoRepository,
+  ScanQueueRegistry,
+  ScanRepository,
+} from '@cqp/core';
 import {
   CancelScanUseCase,
   CreateScanUseCase,
@@ -9,11 +14,16 @@ import {
   ListScansByRepoUseCase,
 } from '@cqp/application';
 import { PrismaScanRepository } from '@cqp/db';
-import { BullMqScanQueue, createRedisConnection, createScanBullQueue } from '@cqp/queue';
+import { BullMqScanQueueRegistry, createRedisConnection } from '@cqp/queue';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RepoModule } from '../repos/repo.module.js';
 import { FindingModule } from '../findings/finding.module.js';
-import { FINDING_REPOSITORY, REPO_REPOSITORY, SCAN_QUEUE, SCAN_REPOSITORY } from '../tokens.js';
+import {
+  FINDING_REPOSITORY,
+  REPO_REPOSITORY,
+  SCAN_QUEUE_REGISTRY,
+  SCAN_REPOSITORY,
+} from '../tokens.js';
 import { ScanController } from './scan.controller.js';
 
 @Module({
@@ -26,15 +36,16 @@ import { ScanController } from './scan.controller.js';
       inject: [PrismaService],
     },
     {
-      // Real BullMQ producer (see docs/adr/0021) — `apps/worker` consumes
-      // the same queue name/job shape via `@cqp/queue`. Connection is
-      // opened here, not at module-import time, matching every other
-      // adapter's "no side effect on import" rule.
-      provide: SCAN_QUEUE,
+      // Real BullMQ producer, one real queue per workerId (see docs/adr/0021,
+      // docs/adr/0031) — `apps/worker` consumes the same queue names/job
+      // shape via `@cqp/queue`. Connection is opened here, not at
+      // module-import time, matching every other adapter's "no side effect
+      // on import" rule.
+      provide: SCAN_QUEUE_REGISTRY,
       useFactory: () => {
         const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
         const connection = createRedisConnection(redisUrl);
-        return new BullMqScanQueue(createScanBullQueue(connection));
+        return new BullMqScanQueueRegistry(connection);
       },
     },
     {
@@ -42,9 +53,9 @@ import { ScanController } from './scan.controller.js';
       useFactory: (
         scanRepository: ScanRepository,
         repoRepository: RepoRepository,
-        scanQueue: ScanQueue,
-      ) => new CreateScanUseCase(scanRepository, repoRepository, scanQueue),
-      inject: [SCAN_REPOSITORY, REPO_REPOSITORY, SCAN_QUEUE],
+        scanQueueRegistry: ScanQueueRegistry,
+      ) => new CreateScanUseCase(scanRepository, repoRepository, scanQueueRegistry),
+      inject: [SCAN_REPOSITORY, REPO_REPOSITORY, SCAN_QUEUE_REGISTRY],
     },
     {
       provide: GetScanUseCase,
@@ -69,9 +80,12 @@ import { ScanController } from './scan.controller.js';
     },
     {
       provide: CancelScanUseCase,
-      useFactory: (scanRepository: ScanRepository, scanQueue: ScanQueue) =>
-        new CancelScanUseCase(scanRepository, scanQueue),
-      inject: [SCAN_REPOSITORY, SCAN_QUEUE],
+      useFactory: (
+        scanRepository: ScanRepository,
+        repoRepository: RepoRepository,
+        scanQueueRegistry: ScanQueueRegistry,
+      ) => new CancelScanUseCase(scanRepository, repoRepository, scanQueueRegistry),
+      inject: [SCAN_REPOSITORY, REPO_REPOSITORY, SCAN_QUEUE_REGISTRY],
     },
   ],
   exports: [SCAN_REPOSITORY],

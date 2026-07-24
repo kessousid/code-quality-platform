@@ -14,6 +14,15 @@ export interface Repo {
    * clone-from-remote mechanism yet (ADR-0003 defers live VCS integration).
    */
   localPath?: string;
+  /**
+   * Which worker instance's filesystem `localPath` actually lives on (see
+   * docs/adr/0031) — routes every job for this repo to a queue only that
+   * specific worker consumes, so a job never gets picked up by a worker
+   * that can't see the right files. Defaults to `'default'`, matching the
+   * single-machine setup where the API, worker, and the code all live on
+   * the same box and there's only ever one worker to route to.
+   */
+  workerId: string;
   defaultBranch: string;
   createdAt: Date;
 }
@@ -24,6 +33,8 @@ export interface CreateRepoInput {
   provider?: RepoProvider;
   remoteUrl?: string;
   localPath?: string;
+  /** Defaults to 'default' when omitted — resolved in the repository implementation, not here (mirrors CreateUnitTestRunInput's generator field). */
+  workerId?: string;
   defaultBranch?: string;
 }
 

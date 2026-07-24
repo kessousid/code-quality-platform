@@ -19,3 +19,14 @@ export interface ScanQueue {
    */
   cancel(scanId: string): Promise<void>;
 }
+
+/**
+ * One real queue per `workerId` (see docs/adr/0031) — a repo's jobs must
+ * only ever reach the one worker instance that actually has its files on
+ * disk. Producers (the Create/Cancel use cases) resolve `forWorker(repo.workerId)`
+ * once they have the repo in hand, rather than depending on a single
+ * fixed `ScanQueue` the way earlier code did.
+ */
+export interface ScanQueueRegistry {
+  forWorker(workerId: string): ScanQueue;
+}

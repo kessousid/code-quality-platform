@@ -19,6 +19,7 @@ export class PrismaRepoRepository implements RepoRepository {
         provider: repoProviderToDb(input.provider ?? 'local'),
         remoteUrl: input.remoteUrl ?? null,
         localPath: input.localPath ?? null,
+        workerId: input.workerId ?? 'default',
         defaultBranch: input.defaultBranch ?? 'main',
       },
     });
@@ -57,6 +58,7 @@ export class PrismaRepoRepository implements RepoRepository {
     provider: Parameters<typeof repoProviderFromDb>[0];
     remoteUrl: string | null;
     localPath: string | null;
+    workerId: string;
     defaultBranch: string;
     createdAt: Date;
   }): Repo {
@@ -65,6 +67,7 @@ export class PrismaRepoRepository implements RepoRepository {
       orgId: row.orgId,
       name: row.name,
       provider: repoProviderFromDb(row.provider),
+      workerId: row.workerId,
       defaultBranch: row.defaultBranch,
       createdAt: row.createdAt,
       ...(row.remoteUrl !== null ? { remoteUrl: row.remoteUrl } : {}),

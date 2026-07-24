@@ -16,6 +16,7 @@ export interface Repo {
   name: string;
   provider: string;
   localPath?: string;
+  workerId: string;
   defaultBranch: string;
   createdAt: string;
 }
@@ -199,6 +200,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
         orgId: 'org_1',
         name: input.name ?? '',
         provider: 'local',
+        workerId: input.workerId ?? 'default',
         defaultBranch: 'main',
         createdAt: new Date().toISOString(),
         ...(input.localPath ? { localPath: input.localPath } : {}),

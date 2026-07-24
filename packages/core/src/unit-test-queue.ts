@@ -8,3 +8,8 @@ export interface UnitTestQueue {
   enqueue(data: UnitTestJobData): Promise<void>;
   cancel(runId: string): Promise<void>;
 }
+
+/** Mirrors scan-queue.ts's ScanQueueRegistry (docs/adr/0031) — one real queue per workerId. */
+export interface UnitTestQueueRegistry {
+  forWorker(workerId: string): UnitTestQueue;
+}

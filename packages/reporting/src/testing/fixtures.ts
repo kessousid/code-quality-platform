@@ -29,6 +29,7 @@ export function makeRepo(overrides: Partial<Repo> = {}): Repo {
     orgId: 'org_1',
     name: 'sample-repo',
     provider: 'local',
+    workerId: 'default',
     defaultBranch: 'main',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,

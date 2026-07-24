@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   InMemoryRepoRepository,
-  InMemoryScanQueue,
+  InMemoryScanQueueRegistry,
   InMemoryScanRepository,
 } from './testing/index.js';
 import { CancelScanUseCase } from './cancel-scan.use-case.js';
@@ -9,9 +9,10 @@ import { CancelScanUseCase } from './cancel-scan.use-case.js';
 async function setUp() {
   const repoRepository = new InMemoryRepoRepository();
   const scanRepository = new InMemoryScanRepository();
-  const scanQueue = new InMemoryScanQueue();
+  const scanQueueRegistry = new InMemoryScanQueueRegistry();
   const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
-  const useCase = new CancelScanUseCase(scanRepository, scanQueue);
+  const scanQueue = scanQueueRegistry.forWorker(repo.workerId);
+  const useCase = new CancelScanUseCase(scanRepository, repoRepository, scanQueueRegistry);
   return { repo, scanRepository, scanQueue, useCase };
 }
 
@@ -68,5 +69,32 @@ describe('CancelScanUseCase', () => {
   it('rejects an unknown scanId', async () => {
     const { useCase } = await setUp();
     await expect(useCase.execute('org_1', 'no-such-scan')).rejects.toThrow('Scan not found');
+  });
+
+  it("cancels through the repo's own workerId queue, not some other worker's", async () => {
+    const repoRepository = new InMemoryRepoRepository();
+    const scanRepository = new InMemoryScanRepository();
+    const scanQueueRegistry = new InMemoryScanQueueRegistry();
+    const repo = await repoRepository.create({
+      orgId: 'org_1',
+      name: 'laptop-repo',
+      workerId: 'keshav-laptop',
+    });
+    const useCase = new CancelScanUseCase(scanRepository, repoRepository, scanQueueRegistry);
+
+    const scan = await scanRepository.create({
+      orgId: 'org_1',
+      repoId: repo.id,
+      ref: 'main',
+      mode: 'full',
+    });
+    const laptopQueue = scanQueueRegistry.forWorker('keshav-laptop');
+    const defaultQueue = scanQueueRegistry.forWorker('default');
+    await laptopQueue.enqueue({ orgId: 'org_1', scanId: scan.id });
+
+    await useCase.execute('org_1', scan.id);
+
+    expect(laptopQueue.cancelled).toContain(scan.id);
+    expect(defaultQueue.cancelled).toHaveLength(0);
   });
 });

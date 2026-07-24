@@ -30,21 +30,35 @@ export function createHealthcheckWorker(connection: ConnectionOptions): Worker<H
   );
 }
 
-/** Queue name/job shape shared with `apps/api`'s producer via `@cqp/queue` — see docs/adr/0021. */
+/**
+ * Queue name/job shape shared with `apps/api`'s producer via `@cqp/queue`
+ * (see docs/adr/0021). Namespaced by `workerId` (docs/adr/0031) — this
+ * instance only ever consumes jobs for repos whose `localPath` lives on
+ * this same machine, so a job never reaches a worker that can't see the
+ * right files.
+ */
 export function createScanWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
+  workerId: string,
 ): Worker<ScanJobData> {
-  return createScanBullWorker(connection, async (job) => processRunScanJob(prisma, job.data));
+  return createScanBullWorker(
+    connection,
+    async (job) => processRunScanJob(prisma, job.data),
+    workerId,
+  );
 }
 
 /** A separate queue from scans (docs/adr/0024) — a slow, LLM-backed unit-test run never blocks scan throughput or vice versa. */
 export function createUnitTestWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
+  workerId: string,
 ): Worker<UnitTestJobData> {
-  return createUnitTestBullWorker(connection, async (job) =>
-    processRunUnitTestGenerationJob(prisma, job.data),
+  return createUnitTestBullWorker(
+    connection,
+    async (job) => processRunUnitTestGenerationJob(prisma, job.data),
+    workerId,
   );
 }
 
@@ -52,8 +66,11 @@ export function createUnitTestWorker(
 export function createCoverageWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
+  workerId: string,
 ): Worker<CoverageJobData> {
-  return createCoverageBullWorker(connection, async (job) =>
-    processRunCoverageGateJob(prisma, job.data),
+  return createCoverageBullWorker(
+    connection,
+    async (job) => processRunCoverageGateJob(prisma, job.data),
+    workerId,
   );
 }

@@ -16,6 +16,7 @@ beforeEach(async () => {
     orgId: 'org_1',
     name: 'demo-repo',
     provider: 'local',
+    workerId: 'default',
     defaultBranch: 'main',
     createdAt: new Date().toISOString(),
   });
@@ -98,6 +99,7 @@ describe('RepoDetailPage', () => {
       orgId: 'org_1',
       name: 'nested-repo',
       provider: 'local',
+      workerId: 'default',
       defaultBranch: 'main',
       createdAt: new Date().toISOString(),
       localPath: 'C:\\CuratalIT\\assessment\\src\\controllers',
@@ -149,6 +151,7 @@ describe('RepoDetailPage', () => {
       orgId: 'org_1',
       name: 'nested-repo-2',
       provider: 'local',
+      workerId: 'default',
       defaultBranch: 'main',
       createdAt: new Date().toISOString(),
       localPath: 'C:\\CuratalIT\\assessment\\src\\controllers',

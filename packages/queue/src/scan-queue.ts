@@ -1,5 +1,5 @@
 import { Queue, Worker, type ConnectionOptions, type Processor } from 'bullmq';
-import type { ScanJobData, ScanQueue } from '@cqp/core';
+import type { ScanJobData, ScanQueue, ScanQueueRegistry } from '@cqp/core';
 
 /**
  * Shared between `apps/api` (producer) and `apps/worker` (consumer) so
@@ -8,18 +8,29 @@ import type { ScanJobData, ScanQueue } from '@cqp/core';
  * in the monorepo that imports `bullmq` directly on the producer side;
  * `apps/api`'s own code only ever sees the framework-free `ScanQueue`
  * port from `@cqp/core`.
+ *
+ * Namespaced by `workerId` (see docs/adr/0031) — a repo's jobs must only
+ * ever reach the one worker instance that actually has its files on
+ * disk, so each worker gets its own real BullMQ queue rather than every
+ * worker instance competing for jobs on one shared queue.
  */
-export const SCAN_QUEUE_NAME = 'scans';
+export function scanQueueName(workerId: string): string {
+  return `scans:${workerId}`;
+}
 
-export function createScanBullQueue(connection: ConnectionOptions): Queue<ScanJobData> {
-  return new Queue<ScanJobData>(SCAN_QUEUE_NAME, { connection });
+export function createScanBullQueue(
+  connection: ConnectionOptions,
+  workerId: string,
+): Queue<ScanJobData> {
+  return new Queue<ScanJobData>(scanQueueName(workerId), { connection });
 }
 
 export function createScanBullWorker(
   connection: ConnectionOptions,
   processor: Processor<ScanJobData>,
+  workerId: string,
 ): Worker<ScanJobData> {
-  return new Worker<ScanJobData>(SCAN_QUEUE_NAME, processor, { connection });
+  return new Worker<ScanJobData>(scanQueueName(workerId), processor, { connection });
 }
 
 /** The `ScanQueue` port's real adapter — everything else in `apps/api` depends on the port, not on this class or on BullMQ. */
@@ -46,5 +57,27 @@ export class BullMqScanQueue implements ScanQueue {
     }
     // An already-'active' job can't be removed from here — RunScanUseCase's
     // own DB-polling loop is what actually stops a running scan.
+  }
+}
+
+/**
+ * Lazily creates and caches one `BullMqScanQueue` (and its underlying real
+ * BullMQ `Queue`) per `workerId`, all sharing the same Redis connection —
+ * see docs/adr/0031. A `workerId` that's never had a worker actually start
+ * for it just accumulates queued jobs harmlessly; nothing here assumes the
+ * worker exists yet.
+ */
+export class BullMqScanQueueRegistry implements ScanQueueRegistry {
+  private readonly queues = new Map<string, ScanQueue>();
+
+  constructor(private readonly connection: ConnectionOptions) {}
+
+  forWorker(workerId: string): ScanQueue {
+    const existing = this.queues.get(workerId);
+    if (existing) return existing;
+
+    const queue = new BullMqScanQueue(createScanBullQueue(this.connection, workerId));
+    this.queues.set(workerId, queue);
+    return queue;
   }
 }

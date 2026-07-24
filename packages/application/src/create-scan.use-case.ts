@@ -1,4 +1,10 @@
-import type { CreateScanInput, RepoRepository, Scan, ScanQueue, ScanRepository } from '@cqp/core';
+import type {
+  CreateScanInput,
+  RepoRepository,
+  Scan,
+  ScanQueueRegistry,
+  ScanRepository,
+} from '@cqp/core';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 
 /**
@@ -11,12 +17,14 @@ import { RepoNotFoundError } from './get-repo.use-case.js';
  * (docs/adr/0021) closes the next one: creating a `Scan` row used to be
  * the entire effect of this use case — nothing ever told a worker to
  * actually run it. It now enqueues through `ScanQueue` right after.
+ * docs/adr/0031 adds one more step: `repo.workerId` picks which real
+ * queue (and so which worker instance) actually receives the job.
  */
 export class CreateScanUseCase {
   constructor(
     private readonly scanRepository: ScanRepository,
     private readonly repoRepository: RepoRepository,
-    private readonly scanQueue: ScanQueue,
+    private readonly scanQueueRegistry: ScanQueueRegistry,
   ) {}
 
   async execute(input: CreateScanInput): Promise<Scan> {
@@ -30,7 +38,9 @@ export class CreateScanUseCase {
     }
 
     const scan = await this.scanRepository.create(input);
-    await this.scanQueue.enqueue({ orgId: input.orgId, scanId: scan.id });
+    await this.scanQueueRegistry
+      .forWorker(repo.workerId)
+      .enqueue({ orgId: input.orgId, scanId: scan.id });
     return scan;
   }
 }

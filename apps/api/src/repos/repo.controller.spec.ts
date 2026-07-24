@@ -49,4 +49,21 @@ describe('RepoController', () => {
     expect(page1.data).toHaveLength(2);
     expect(page1.total).toBe(3);
   });
+
+  it("defaults a repo's workerId to 'default' when omitted (docs/adr/0031)", async () => {
+    const controller = await buildTestingModule();
+    const created = await controller.create('org_1', { name: 'demo-repo' });
+
+    expect(created.workerId).toBe('default');
+  });
+
+  it('honors an explicit workerId instead of defaulting', async () => {
+    const controller = await buildTestingModule();
+    const created = await controller.create('org_1', {
+      name: 'laptop-repo',
+      workerId: 'keshav-laptop',
+    });
+
+    expect(created.workerId).toBe('keshav-laptop');
+  });
 });

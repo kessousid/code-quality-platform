@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   InMemoryRepoRepository,
-  InMemoryUnitTestQueue,
+  InMemoryUnitTestQueueRegistry,
   InMemoryUnitTestRunRepository,
 } from './testing/index.js';
 import { CancelUnitTestRunUseCase } from './cancel-unit-test-run.use-case.js';
@@ -9,9 +9,14 @@ import { CancelUnitTestRunUseCase } from './cancel-unit-test-run.use-case.js';
 async function setUp() {
   const repoRepository = new InMemoryRepoRepository();
   const unitTestRunRepository = new InMemoryUnitTestRunRepository();
-  const unitTestQueue = new InMemoryUnitTestQueue();
+  const unitTestQueueRegistry = new InMemoryUnitTestQueueRegistry();
   const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
-  const useCase = new CancelUnitTestRunUseCase(unitTestRunRepository, unitTestQueue);
+  const unitTestQueue = unitTestQueueRegistry.forWorker(repo.workerId);
+  const useCase = new CancelUnitTestRunUseCase(
+    unitTestRunRepository,
+    repoRepository,
+    unitTestQueueRegistry,
+  );
   return { repo, unitTestRunRepository, unitTestQueue, useCase };
 }
 

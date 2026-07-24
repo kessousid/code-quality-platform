@@ -191,6 +191,9 @@ model Repo {
   /// Absolute path on the worker's filesystem — see docs/adr/0021. Only a
   /// `local` repo with this set is actually scannable; no cloning exists yet.
   localPath     String?
+  /// Which worker instance's filesystem localPath lives on — see docs/adr/0031. Routes every job for
+  /// this repo to a queue only that worker consumes. Defaults to 'default' (the single-machine setup).
+  workerId      String       @default("default")
   defaultBranch String       @default("main")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt

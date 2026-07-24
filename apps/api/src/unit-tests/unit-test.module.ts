@@ -4,7 +4,7 @@ import type {
   ObjectStorage,
   RepoRepository,
   TestCaseResultRepository,
-  UnitTestQueue,
+  UnitTestQueueRegistry,
   UnitTestReportRepository,
   UnitTestRunRepository,
 } from '@cqp/core';
@@ -26,7 +26,7 @@ import {
   PrismaUnitTestReportRepository,
   PrismaUnitTestRunRepository,
 } from '@cqp/db';
-import { BullMqUnitTestQueue, createRedisConnection, createUnitTestBullQueue } from '@cqp/queue';
+import { BullMqUnitTestQueueRegistry, createRedisConnection } from '@cqp/queue';
 import { LocalFilesystemObjectStorage } from '@cqp/storage';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RepoModule } from '../repos/repo.module.js';
@@ -35,7 +35,7 @@ import {
   OBJECT_STORAGE,
   REPO_REPOSITORY,
   TEST_CASE_RESULT_REPOSITORY,
-  UNIT_TEST_QUEUE,
+  UNIT_TEST_QUEUE_REGISTRY,
   UNIT_TEST_REPORT_REPOSITORY,
   UNIT_TEST_RUN_REPOSITORY,
 } from '../tokens.js';
@@ -73,12 +73,13 @@ import { UnitTestReportController } from './unit-test-report.controller.js';
       inject: [PrismaService],
     },
     {
-      // Real BullMQ producer (see docs/adr/0021, 0024) — same pattern as ScanModule's queue, a separate queue name/connection.
-      provide: UNIT_TEST_QUEUE,
+      // Real BullMQ producer, one real queue per workerId (see docs/adr/0021,
+      // 0024, 0031) — same pattern as ScanModule's queue registry.
+      provide: UNIT_TEST_QUEUE_REGISTRY,
       useFactory: () => {
         const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
         const connection = createRedisConnection(redisUrl);
-        return new BullMqUnitTestQueue(createUnitTestBullQueue(connection));
+        return new BullMqUnitTestQueueRegistry(connection);
       },
     },
     {
@@ -86,9 +87,10 @@ import { UnitTestReportController } from './unit-test-report.controller.js';
       useFactory: (
         unitTestRunRepository: UnitTestRunRepository,
         repoRepository: RepoRepository,
-        unitTestQueue: UnitTestQueue,
-      ) => new CreateUnitTestRunUseCase(unitTestRunRepository, repoRepository, unitTestQueue),
-      inject: [UNIT_TEST_RUN_REPOSITORY, REPO_REPOSITORY, UNIT_TEST_QUEUE],
+        unitTestQueueRegistry: UnitTestQueueRegistry,
+      ) =>
+        new CreateUnitTestRunUseCase(unitTestRunRepository, repoRepository, unitTestQueueRegistry),
+      inject: [UNIT_TEST_RUN_REPOSITORY, REPO_REPOSITORY, UNIT_TEST_QUEUE_REGISTRY],
     },
     {
       provide: GetUnitTestRunUseCase,
@@ -115,9 +117,13 @@ import { UnitTestReportController } from './unit-test-report.controller.js';
     },
     {
       provide: CancelUnitTestRunUseCase,
-      useFactory: (unitTestRunRepository: UnitTestRunRepository, unitTestQueue: UnitTestQueue) =>
-        new CancelUnitTestRunUseCase(unitTestRunRepository, unitTestQueue),
-      inject: [UNIT_TEST_RUN_REPOSITORY, UNIT_TEST_QUEUE],
+      useFactory: (
+        unitTestRunRepository: UnitTestRunRepository,
+        repoRepository: RepoRepository,
+        unitTestQueueRegistry: UnitTestQueueRegistry,
+      ) =>
+        new CancelUnitTestRunUseCase(unitTestRunRepository, repoRepository, unitTestQueueRegistry),
+      inject: [UNIT_TEST_RUN_REPOSITORY, REPO_REPOSITORY, UNIT_TEST_QUEUE_REGISTRY],
     },
     {
       provide: ListUnitTestReportsByRunUseCase,

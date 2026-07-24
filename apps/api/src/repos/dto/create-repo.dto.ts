@@ -29,6 +29,15 @@ export class CreateRepoRequestDto {
   @IsString()
   localPath?: string;
 
+  @ApiProperty({
+    required: false,
+    description:
+      "Which worker instance's filesystem localPath actually lives on (see docs/adr/0031) — routes every job for this repo to that worker only. Defaults to 'default', the single-machine setup.",
+  })
+  @IsOptional()
+  @IsString()
+  workerId?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

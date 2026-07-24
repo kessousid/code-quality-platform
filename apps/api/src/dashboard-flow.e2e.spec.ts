@@ -13,7 +13,7 @@ import {
   InMemoryOrgRepository,
   InMemoryRepoRepository,
   InMemoryReportRepository,
-  InMemoryScanQueue,
+  InMemoryScanQueueRegistry,
   InMemoryScanRepository,
   InMemoryUserRepository,
 } from '@cqp/application/testing';
@@ -25,7 +25,7 @@ import {
   ORG_REPOSITORY,
   REPO_REPOSITORY,
   REPORT_REPOSITORY,
-  SCAN_QUEUE,
+  SCAN_QUEUE_REGISTRY,
   SCAN_REPOSITORY,
   USER_REPOSITORY,
 } from './tokens.js';
@@ -70,8 +70,8 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
       .useValue(new InMemoryReportRepository())
       .overrideProvider(OBJECT_STORAGE)
       .useValue(new InMemoryObjectStorage())
-      .overrideProvider(SCAN_QUEUE)
-      .useValue(new InMemoryScanQueue())
+      .overrideProvider(SCAN_QUEUE_REGISTRY)
+      .useValue(new InMemoryScanQueueRegistry())
       .overrideProvider(ORG_REPOSITORY)
       .useValue(new InMemoryOrgRepository())
       .overrideProvider(USER_REPOSITORY)

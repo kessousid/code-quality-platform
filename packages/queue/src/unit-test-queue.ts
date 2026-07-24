@@ -1,18 +1,29 @@
 import { Queue, Worker, type ConnectionOptions, type Processor } from 'bullmq';
-import type { UnitTestJobData, UnitTestQueue } from '@cqp/core';
+import type { UnitTestJobData, UnitTestQueue, UnitTestQueueRegistry } from '@cqp/core';
 
-/** Mirrors scan-queue.ts (docs/adr/0021, docs/adr/0023) — a separate BullMQ queue so a slow LLM-backed unit-test run never blocks scan throughput or vice versa. */
-export const UNIT_TEST_QUEUE_NAME = 'unit-tests';
+/**
+ * Mirrors scan-queue.ts (docs/adr/0021, docs/adr/0023, docs/adr/0031) — a
+ * separate BullMQ queue so a slow LLM-backed unit-test run never blocks
+ * scan throughput or vice versa, namespaced by workerId so a job never
+ * reaches a worker that can't see the repo's files.
+ */
+export function unitTestQueueName(workerId: string): string {
+  return `unit-tests:${workerId}`;
+}
 
-export function createUnitTestBullQueue(connection: ConnectionOptions): Queue<UnitTestJobData> {
-  return new Queue<UnitTestJobData>(UNIT_TEST_QUEUE_NAME, { connection });
+export function createUnitTestBullQueue(
+  connection: ConnectionOptions,
+  workerId: string,
+): Queue<UnitTestJobData> {
+  return new Queue<UnitTestJobData>(unitTestQueueName(workerId), { connection });
 }
 
 export function createUnitTestBullWorker(
   connection: ConnectionOptions,
   processor: Processor<UnitTestJobData>,
+  workerId: string,
 ): Worker<UnitTestJobData> {
-  return new Worker<UnitTestJobData>(UNIT_TEST_QUEUE_NAME, processor, { connection });
+  return new Worker<UnitTestJobData>(unitTestQueueName(workerId), processor, { connection });
 }
 
 export class BullMqUnitTestQueue implements UnitTestQueue {
@@ -34,5 +45,21 @@ export class BullMqUnitTestQueue implements UnitTestQueue {
     ) {
       await job.remove();
     }
+  }
+}
+
+/** Mirrors BullMqScanQueueRegistry (docs/adr/0031) — one real queue per workerId, lazily created and cached. */
+export class BullMqUnitTestQueueRegistry implements UnitTestQueueRegistry {
+  private readonly queues = new Map<string, UnitTestQueue>();
+
+  constructor(private readonly connection: ConnectionOptions) {}
+
+  forWorker(workerId: string): UnitTestQueue {
+    const existing = this.queues.get(workerId);
+    if (existing) return existing;
+
+    const queue = new BullMqUnitTestQueue(createUnitTestBullQueue(this.connection, workerId));
+    this.queues.set(workerId, queue);
+    return queue;
   }
 }

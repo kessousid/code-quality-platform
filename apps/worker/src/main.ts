@@ -2,18 +2,31 @@ import { createPrismaClient } from '@cqp/db';
 import { createRedisConnection } from '@cqp/queue';
 import { createCoverageWorker, createScanWorker, createUnitTestWorker } from './queue.js';
 
+/** Never logs the full connection string — it embeds a password, unlike everything else this worker prints. */
+function redisHost(redisUrl: string): string {
+  try {
+    return new URL(redisUrl).host;
+  } catch {
+    return '(unparseable URL)';
+  }
+}
+
 /**
- * Real bootstrap (see docs/adr/0021, docs/adr/0024, docs/adr/0025) — one
- * process, one Redis connection, one Prisma client, three independent
- * BullMQ workers (scans, unit-test generation, coverage gate) so a slow
- * LLM-backed run never blocks scan/coverage throughput or vice versa.
+ * Real bootstrap (see docs/adr/0021, docs/adr/0024, docs/adr/0025,
+ * docs/adr/0031) — one process, one Redis connection, one Prisma client,
+ * three independent BullMQ workers (scans, unit-test generation, coverage
+ * gate) so a slow LLM-backed run never blocks scan/coverage throughput or
+ * vice versa. `WORKER_ID` (default `'default'`) scopes which repos'
+ * jobs this instance actually consumes — a repo whose `localPath` lives
+ * on a different machine is invisible to this worker, by design.
  */
 async function main(): Promise<void> {
   const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+  const workerId = process.env.WORKER_ID ?? 'default';
   const connection = createRedisConnection(redisUrl);
   const prisma = createPrismaClient();
 
-  const scanWorker = createScanWorker(connection, prisma);
+  const scanWorker = createScanWorker(connection, prisma, workerId);
   scanWorker.on('completed', (job) => {
     console.log(`[worker] scan job ${job.id} (scan ${job.data.scanId}) completed`);
   });
@@ -21,7 +34,7 @@ async function main(): Promise<void> {
     console.error(`[worker] scan job ${job?.id} (scan ${job?.data.scanId}) failed:`, error);
   });
 
-  const unitTestWorker = createUnitTestWorker(connection, prisma);
+  const unitTestWorker = createUnitTestWorker(connection, prisma, workerId);
   unitTestWorker.on('completed', (job) => {
     console.log(`[worker] unit-test job ${job.id} (run ${job.data.runId}) completed`);
   });
@@ -29,7 +42,7 @@ async function main(): Promise<void> {
     console.error(`[worker] unit-test job ${job?.id} (run ${job?.data.runId}) failed:`, error);
   });
 
-  const coverageWorker = createCoverageWorker(connection, prisma);
+  const coverageWorker = createCoverageWorker(connection, prisma, workerId);
   coverageWorker.on('completed', (job) => {
     console.log(`[worker] coverage job ${job.id} (run ${job.data.runId}) completed`);
   });
@@ -38,7 +51,7 @@ async function main(): Promise<void> {
   });
 
   console.log(
-    `[worker] listening on queues "scans", "unit-tests", and "coverage-runs" via ${redisUrl}`,
+    `[worker] workerId "${workerId}" listening on queues "scans:${workerId}", "unit-tests:${workerId}", and "coverage-runs:${workerId}" via ${redisHost(redisUrl)}`,
   );
 
   const shutdown = async (): Promise<void> => {

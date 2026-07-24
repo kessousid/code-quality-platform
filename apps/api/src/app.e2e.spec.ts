@@ -9,11 +9,16 @@ import { hashApiToken } from '@cqp/application';
 import {
   InMemoryApiTokenRepository,
   InMemoryOrgRepository,
-  InMemoryScanQueue,
+  InMemoryScanQueueRegistry,
   InMemoryUserRepository,
 } from '@cqp/application/testing';
 import { AppModule } from './app.module.js';
-import { API_TOKEN_REPOSITORY, ORG_REPOSITORY, SCAN_QUEUE, USER_REPOSITORY } from './tokens.js';
+import {
+  API_TOKEN_REPOSITORY,
+  ORG_REPOSITORY,
+  SCAN_QUEUE_REGISTRY,
+  USER_REPOSITORY,
+} from './tokens.js';
 
 /**
  * Boots the *real* AppModule — the actual global ApiTokenGuard (APP_GUARD),
@@ -42,8 +47,8 @@ describe('AppModule (e2e)', () => {
       .useValue(tokenRepository)
       // Avoids a real Redis connection attempt at boot (docs/adr/0021) —
       // same reasoning as overriding API_TOKEN_REPOSITORY above.
-      .overrideProvider(SCAN_QUEUE)
-      .useValue(new InMemoryScanQueue())
+      .overrideProvider(SCAN_QUEUE_REGISTRY)
+      .useValue(new InMemoryScanQueueRegistry())
       .overrideProvider(ORG_REPOSITORY)
       .useValue(new InMemoryOrgRepository())
       .overrideProvider(USER_REPOSITORY)

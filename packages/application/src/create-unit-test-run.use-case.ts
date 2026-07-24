@@ -1,18 +1,22 @@
 import type {
   CreateUnitTestRunInput,
   RepoRepository,
-  UnitTestQueue,
+  UnitTestQueueRegistry,
   UnitTestRun,
   UnitTestRunRepository,
 } from '@cqp/core';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 
-/** Mirrors CreateScanUseCase (docs/adr/0021) exactly — validates the repo exists in this org, creates the row, enqueues the real work. */
+/**
+ * Mirrors CreateScanUseCase (docs/adr/0021, docs/adr/0031) exactly —
+ * validates the repo exists in this org, creates the row, enqueues the
+ * real work through the queue `repo.workerId` picks.
+ */
 export class CreateUnitTestRunUseCase {
   constructor(
     private readonly unitTestRunRepository: UnitTestRunRepository,
     private readonly repoRepository: RepoRepository,
-    private readonly unitTestQueue: UnitTestQueue,
+    private readonly unitTestQueueRegistry: UnitTestQueueRegistry,
   ) {}
 
   async execute(input: CreateUnitTestRunInput): Promise<UnitTestRun> {
@@ -26,7 +30,9 @@ export class CreateUnitTestRunUseCase {
       ...input,
       generator: input.generator ?? 'gemini',
     });
-    await this.unitTestQueue.enqueue({ orgId: input.orgId, runId: run.id });
+    await this.unitTestQueueRegistry
+      .forWorker(repo.workerId)
+      .enqueue({ orgId: input.orgId, runId: run.id });
     return run;
   }
 }

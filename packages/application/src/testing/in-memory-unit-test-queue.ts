@@ -1,4 +1,4 @@
-import type { UnitTestJobData, UnitTestQueue } from '@cqp/core';
+import type { UnitTestJobData, UnitTestQueue, UnitTestQueueRegistry } from '@cqp/core';
 
 /** Mirrors InMemoryScanQueue exactly (docs/adr/0023). */
 export class InMemoryUnitTestQueue implements UnitTestQueue {
@@ -15,5 +15,19 @@ export class InMemoryUnitTestQueue implements UnitTestQueue {
     if (index !== -1) {
       this.enqueued.splice(index, 1);
     }
+  }
+}
+
+/** Mirrors InMemoryScanQueueRegistry (docs/adr/0031) — a distinct queue per workerId. */
+export class InMemoryUnitTestQueueRegistry implements UnitTestQueueRegistry {
+  private readonly queues = new Map<string, InMemoryUnitTestQueue>();
+
+  forWorker(workerId: string): InMemoryUnitTestQueue {
+    const existing = this.queues.get(workerId);
+    if (existing) return existing;
+
+    const queue = new InMemoryUnitTestQueue();
+    this.queues.set(workerId, queue);
+    return queue;
   }
 }

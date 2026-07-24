@@ -1,4 +1,4 @@
-import type { CoverageJobData, CoverageQueue } from '@cqp/core';
+import type { CoverageJobData, CoverageQueue, CoverageQueueRegistry } from '@cqp/core';
 
 /** Mirrors InMemoryUnitTestQueue exactly (docs/adr/0023, docs/adr/0025). */
 export class InMemoryCoverageQueue implements CoverageQueue {
@@ -15,5 +15,19 @@ export class InMemoryCoverageQueue implements CoverageQueue {
     if (index !== -1) {
       this.enqueued.splice(index, 1);
     }
+  }
+}
+
+/** Mirrors InMemoryScanQueueRegistry (docs/adr/0031) — a distinct queue per workerId. */
+export class InMemoryCoverageQueueRegistry implements CoverageQueueRegistry {
+  private readonly queues = new Map<string, InMemoryCoverageQueue>();
+
+  forWorker(workerId: string): InMemoryCoverageQueue {
+    const existing = this.queues.get(workerId);
+    if (existing) return existing;
+
+    const queue = new InMemoryCoverageQueue();
+    this.queues.set(workerId, queue);
+    return queue;
   }
 }

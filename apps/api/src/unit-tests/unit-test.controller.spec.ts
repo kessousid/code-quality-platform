@@ -14,7 +14,7 @@ import {
   InMemoryGeneratedTestFileRepository,
   InMemoryRepoRepository,
   InMemoryTestCaseResultRepository,
-  InMemoryUnitTestQueue,
+  InMemoryUnitTestQueueRegistry,
   InMemoryUnitTestRunRepository,
 } from '@cqp/application/testing';
 import { UnitTestController } from './unit-test.controller.js';
@@ -24,8 +24,9 @@ async function buildTestingModule() {
   const repoRepository = new InMemoryRepoRepository();
   const generatedTestFileRepository = new InMemoryGeneratedTestFileRepository();
   const testCaseResultRepository = new InMemoryTestCaseResultRepository();
-  const unitTestQueue = new InMemoryUnitTestQueue();
+  const unitTestQueueRegistry = new InMemoryUnitTestQueueRegistry();
   const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
+  const unitTestQueue = unitTestQueueRegistry.forWorker(repo.workerId);
 
   const moduleRef = await Test.createTestingModule({
     controllers: [UnitTestController],
@@ -35,7 +36,7 @@ async function buildTestingModule() {
         useValue: new CreateUnitTestRunUseCase(
           unitTestRunRepository,
           repoRepository,
-          unitTestQueue,
+          unitTestQueueRegistry,
         ),
       },
       {
@@ -56,7 +57,11 @@ async function buildTestingModule() {
       },
       {
         provide: CancelUnitTestRunUseCase,
-        useValue: new CancelUnitTestRunUseCase(unitTestRunRepository, unitTestQueue),
+        useValue: new CancelUnitTestRunUseCase(
+          unitTestRunRepository,
+          repoRepository,
+          unitTestQueueRegistry,
+        ),
       },
     ],
   }).compile();

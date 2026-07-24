@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryScanRepository } from './testing/in-memory-scan-repository.js';
 import { InMemoryRepoRepository } from './testing/in-memory-repo-repository.js';
-import { InMemoryScanQueue } from './testing/in-memory-scan-queue.js';
+import { InMemoryScanQueueRegistry } from './testing/in-memory-scan-queue.js';
 import { CreateScanUseCase } from './create-scan.use-case.js';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 
 async function setup() {
   const scanRepository = new InMemoryScanRepository();
   const repoRepository = new InMemoryRepoRepository();
-  const scanQueue = new InMemoryScanQueue();
+  const scanQueueRegistry = new InMemoryScanQueueRegistry();
   const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
-  const useCase = new CreateScanUseCase(scanRepository, repoRepository, scanQueue);
-  return { useCase, repo, repoRepository, scanQueue };
+  const scanQueue = scanQueueRegistry.forWorker(repo.workerId);
+  const useCase = new CreateScanUseCase(scanRepository, repoRepository, scanQueueRegistry);
+  return { useCase, repo, repoRepository, scanQueue, scanQueueRegistry };
 }
 
 describe('CreateScanUseCase', () => {
@@ -69,5 +70,29 @@ describe('CreateScanUseCase', () => {
     await expect(
       useCase.execute({ orgId: 'org_2', repoId: repo.id, ref: 'main', mode: 'full' }),
     ).rejects.toThrow(RepoNotFoundError);
+  });
+
+  it("enqueues through the repo's own workerId queue, not the default one", async () => {
+    const scanRepository = new InMemoryScanRepository();
+    const repoRepository = new InMemoryRepoRepository();
+    const scanQueueRegistry = new InMemoryScanQueueRegistry();
+    const repo = await repoRepository.create({
+      orgId: 'org_1',
+      name: 'laptop-repo',
+      workerId: 'keshav-laptop',
+    });
+    const useCase = new CreateScanUseCase(scanRepository, repoRepository, scanQueueRegistry);
+
+    const scan = await useCase.execute({
+      orgId: 'org_1',
+      repoId: repo.id,
+      ref: 'main',
+      mode: 'full',
+    });
+
+    expect(scanQueueRegistry.forWorker('keshav-laptop').enqueued).toEqual([
+      { orgId: 'org_1', scanId: scan.id },
+    ]);
+    expect(scanQueueRegistry.forWorker('default').enqueued).toHaveLength(0);
   });
 });

@@ -16,6 +16,7 @@ export class InMemoryRepoRepository implements RepoRepository {
       orgId: input.orgId,
       name: input.name,
       provider: input.provider ?? 'local',
+      workerId: input.workerId ?? 'default',
       defaultBranch: input.defaultBranch ?? 'main',
       createdAt: new Date(),
       ...(input.remoteUrl !== undefined ? { remoteUrl: input.remoteUrl } : {}),

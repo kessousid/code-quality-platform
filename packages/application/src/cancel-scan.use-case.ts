@@ -1,4 +1,4 @@
-import type { Scan, ScanQueue, ScanRepository } from '@cqp/core';
+import type { RepoRepository, Scan, ScanQueueRegistry, ScanRepository } from '@cqp/core';
 import { ScanNotFoundError } from './get-scan.use-case.js';
 
 const TERMINAL_STATUSES: Scan['status'][] = ['completed', 'failed', 'cancelled'];
@@ -9,11 +9,18 @@ const TERMINAL_STATUSES: Scan['status'][] = ['completed', 'failed', 'cancelled']
  * actually stopped by `RunScanUseCase`'s own DB-polling loop, since the
  * cancel request (API process) and the scan (worker process) are
  * different processes with no other shared channel.
+ *
+ * docs/adr/0031: the job was enqueued to whichever worker owns the
+ * repo, so cancelling it means fetching the repo again to recover
+ * `workerId` and resolving the same queue instance from the registry —
+ * a `CreateScanUseCase`-style repo lookup this use case didn't need
+ * before per-worker routing existed.
  */
 export class CancelScanUseCase {
   constructor(
     private readonly scanRepository: ScanRepository,
-    private readonly scanQueue: ScanQueue,
+    private readonly repoRepository: RepoRepository,
+    private readonly scanQueueRegistry: ScanQueueRegistry,
   ) {}
 
   async execute(orgId: string, scanId: string): Promise<Scan> {
@@ -26,7 +33,12 @@ export class CancelScanUseCase {
     }
 
     if (scan.status === 'queued') {
-      await this.scanQueue.cancel(scanId);
+      const repo = await this.repoRepository.findById(orgId, scan.repoId);
+      // A missing repo (e.g. deleted since the scan was created) leaves nothing to route a cancel to —
+      // the status update below still happens, same practical effect as removing an already-gone job.
+      if (repo) {
+        await this.scanQueueRegistry.forWorker(repo.workerId).cancel(scanId);
+      }
     }
 
     return this.scanRepository.updateStatus(orgId, scanId, 'cancelled');

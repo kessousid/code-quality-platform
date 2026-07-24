@@ -133,6 +133,22 @@ describe('RunCoverageGateUseCase', () => {
     expect(failed?.status).toBe('failed');
   });
 
+  it('fails clearly when baseRef does not resolve in the local checkout (docs/adr/0031: no longer validated at creation time)', async () => {
+    const { repoRepository, coverageRunRepository, useCase } = await setUp();
+    const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo', localPath: repoRoot });
+    const run = await coverageRunRepository.create({
+      orgId: 'org_1',
+      repoId: repo.id,
+      baseRef: 'no-such-branch',
+    });
+
+    await expect(useCase.execute('org_1', run.id)).rejects.toThrow();
+
+    const failed = await coverageRunRepository.findById('org_1', run.id);
+    expect(failed?.status).toBe('failed');
+    expect(failed?.errorMessage).toBeTruthy();
+  });
+
   it('never starts a run that was already cancelled while queued', async () => {
     const { repoRepository, coverageRunRepository, useCase } = await setUp();
     const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo', localPath: repoRoot });

@@ -1,13 +1,19 @@
-import type { UnitTestQueue, UnitTestRun, UnitTestRunRepository } from '@cqp/core';
+import type {
+  RepoRepository,
+  UnitTestQueueRegistry,
+  UnitTestRun,
+  UnitTestRunRepository,
+} from '@cqp/core';
 import { UnitTestRunNotFoundError } from './get-unit-test-run.use-case.js';
 
 const TERMINAL_STATUSES: UnitTestRun['status'][] = ['completed', 'failed', 'cancelled'];
 
-/** Mirrors CancelScanUseCase (docs/adr/0023) exactly — same reasoning applies unchanged. */
+/** Mirrors CancelScanUseCase (docs/adr/0023, docs/adr/0031) exactly — same reasoning applies unchanged. */
 export class CancelUnitTestRunUseCase {
   constructor(
     private readonly unitTestRunRepository: UnitTestRunRepository,
-    private readonly unitTestQueue: UnitTestQueue,
+    private readonly repoRepository: RepoRepository,
+    private readonly unitTestQueueRegistry: UnitTestQueueRegistry,
   ) {}
 
   async execute(orgId: string, runId: string): Promise<UnitTestRun> {
@@ -20,7 +26,10 @@ export class CancelUnitTestRunUseCase {
     }
 
     if (run.status === 'queued') {
-      await this.unitTestQueue.cancel(runId);
+      const repo = await this.repoRepository.findById(orgId, run.repoId);
+      if (repo) {
+        await this.unitTestQueueRegistry.forWorker(repo.workerId).cancel(runId);
+      }
     }
 
     return this.unitTestRunRepository.updateStatus(orgId, runId, 'cancelled');

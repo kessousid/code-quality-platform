@@ -1,16 +1,6 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  NotFoundException,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
-  BaseRefNotFoundError,
   CancelCoverageRunUseCase,
   CoverageRunNotFoundError,
   CreateCoverageRunUseCase,
@@ -47,9 +37,6 @@ export class CoverageController {
     } catch (error) {
       if (error instanceof RepoNotFoundError) {
         throw new NotFoundException(error.message);
-      }
-      if (error instanceof BaseRefNotFoundError) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }

@@ -1,12 +1,7 @@
 import 'reflect-metadata';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { describe, expect, it, afterEach, beforeEach } from 'vitest';
-import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
+import { describe, expect, it } from 'vitest';
 import {
   CancelCoverageRunUseCase,
   CreateCoverageRunUseCase,
@@ -16,45 +11,26 @@ import {
 } from '@cqp/application';
 import {
   InMemoryCoverageFileResultRepository,
-  InMemoryCoverageQueue,
+  InMemoryCoverageQueueRegistry,
   InMemoryCoverageRunRepository,
   InMemoryRepoRepository,
 } from '@cqp/application/testing';
 import { CoverageController } from './coverage.controller.js';
 
-const execFileAsync = promisify(execFile);
-
-/** Real git repo (project convention: no mocking) — CreateCoverageRunUseCase's base-ref validation shells out to real `git rev-parse`. */
+/** docs/adr/0031: baseRef is no longer validated at creation time (it happens on the worker instead), so this no longer needs a real git repo. */
 describe('CoverageController', () => {
-  let repoRoot: string;
-
-  beforeEach(async () => {
-    repoRoot = await mkdtemp(join(tmpdir(), 'cqp-coverage-controller-'));
-    const git = (...args: string[]) => execFileAsync('git', args, { cwd: repoRoot });
-    await git('init', '--quiet');
-    await git('config', 'user.email', 'test@example.com');
-    await git('config', 'user.name', 'Test');
-    await writeFile(join(repoRoot, 'a.txt'), 'a\n');
-    await git('add', '.');
-    await git('commit', '--quiet', '-m', 'base');
-    await git('branch', 'main');
-  });
-
-  afterEach(async () => {
-    await rm(repoRoot, { recursive: true, force: true });
-  });
-
   async function buildTestingModule() {
     const coverageRunRepository = new InMemoryCoverageRunRepository();
     const repoRepository = new InMemoryRepoRepository();
     const coverageFileResultRepository = new InMemoryCoverageFileResultRepository();
-    const coverageQueue = new InMemoryCoverageQueue();
+    const coverageQueueRegistry = new InMemoryCoverageQueueRegistry();
     const repo = await repoRepository.create({
       orgId: 'org_1',
       name: 'demo-repo',
-      localPath: repoRoot,
+      localPath: '/repo',
       defaultBranch: 'main',
     });
+    const coverageQueue = coverageQueueRegistry.forWorker(repo.workerId);
 
     const moduleRef = await Test.createTestingModule({
       controllers: [CoverageController],
@@ -64,7 +40,7 @@ describe('CoverageController', () => {
           useValue: new CreateCoverageRunUseCase(
             coverageRunRepository,
             repoRepository,
-            coverageQueue,
+            coverageQueueRegistry,
           ),
         },
         {
@@ -81,7 +57,11 @@ describe('CoverageController', () => {
         },
         {
           provide: CancelCoverageRunUseCase,
-          useValue: new CancelCoverageRunUseCase(coverageRunRepository, coverageQueue),
+          useValue: new CancelCoverageRunUseCase(
+            coverageRunRepository,
+            repoRepository,
+            coverageQueueRegistry,
+          ),
         },
       ],
     }).compile();
@@ -110,13 +90,6 @@ describe('CoverageController', () => {
     await expect(controller.create('org_1', { repoId: 'does-not-exist' })).rejects.toThrow(
       NotFoundException,
     );
-  });
-
-  it('translates BaseRefNotFoundError into a 400', async () => {
-    const { controller, repo } = await buildTestingModule();
-    await expect(
-      controller.create('org_1', { repoId: repo.id, baseRef: 'no-such-branch' }),
-    ).rejects.toThrow(BadRequestException);
   });
 
   it('translates CoverageRunNotFoundError into a 404', async () => {

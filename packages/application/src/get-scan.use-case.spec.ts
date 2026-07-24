@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryScanRepository } from './testing/in-memory-scan-repository.js';
 import { InMemoryRepoRepository } from './testing/in-memory-repo-repository.js';
-import { InMemoryScanQueue } from './testing/in-memory-scan-queue.js';
+import { InMemoryScanQueueRegistry } from './testing/in-memory-scan-queue.js';
 import { CreateScanUseCase } from './create-scan.use-case.js';
 import { GetScanUseCase, ScanNotFoundError } from './get-scan.use-case.js';
 
 async function createScan(scanRepository: InMemoryScanRepository, orgId: string) {
   const repoRepository = new InMemoryRepoRepository();
   const repo = await repoRepository.create({ orgId, name: 'demo-repo' });
-  return new CreateScanUseCase(scanRepository, repoRepository, new InMemoryScanQueue()).execute({
+  return new CreateScanUseCase(
+    scanRepository,
+    repoRepository,
+    new InMemoryScanQueueRegistry(),
+  ).execute({
     orgId,
     repoId: repo.id,
     ref: 'main',

@@ -1,13 +1,19 @@
-import type { CoverageQueue, CoverageRun, CoverageRunRepository } from '@cqp/core';
+import type {
+  CoverageQueueRegistry,
+  CoverageRun,
+  CoverageRunRepository,
+  RepoRepository,
+} from '@cqp/core';
 import { CoverageRunNotFoundError } from './get-coverage-run.use-case.js';
 
 const TERMINAL_STATUSES: CoverageRun['status'][] = ['completed', 'failed', 'cancelled'];
 
-/** Mirrors CancelUnitTestRunUseCase (docs/adr/0023, docs/adr/0025) exactly — same reasoning applies unchanged. */
+/** Mirrors CancelUnitTestRunUseCase (docs/adr/0023, docs/adr/0025, docs/adr/0031) exactly — same reasoning applies unchanged. */
 export class CancelCoverageRunUseCase {
   constructor(
     private readonly coverageRunRepository: CoverageRunRepository,
-    private readonly coverageQueue: CoverageQueue,
+    private readonly repoRepository: RepoRepository,
+    private readonly coverageQueueRegistry: CoverageQueueRegistry,
   ) {}
 
   async execute(orgId: string, runId: string): Promise<CoverageRun> {
@@ -20,7 +26,10 @@ export class CancelCoverageRunUseCase {
     }
 
     if (run.status === 'queued') {
-      await this.coverageQueue.cancel(runId);
+      const repo = await this.repoRepository.findById(orgId, run.repoId);
+      if (repo) {
+        await this.coverageQueueRegistry.forWorker(repo.workerId).cancel(runId);
+      }
     }
 
     return this.coverageRunRepository.updateStatus(orgId, runId, 'cancelled');

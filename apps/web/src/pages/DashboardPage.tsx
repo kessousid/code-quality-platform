@@ -8,6 +8,7 @@ export function DashboardPage() {
   const createRepo = useCreateRepo();
   const [name, setName] = useState('');
   const [localPath, setLocalPath] = useState('');
+  const [workerId, setWorkerId] = useState('');
   const [browsing, setBrowsing] = useState(false);
 
   async function handleCreate(e: React.FormEvent) {
@@ -17,12 +18,14 @@ export function DashboardPage() {
       await createRepo.mutateAsync({
         name: name.trim(),
         ...(localPath.trim().length > 0 ? { localPath: localPath.trim() } : {}),
+        ...(workerId.trim().length > 0 ? { workerId: workerId.trim() } : {}),
       });
     } catch {
       return; // surfaced via createRepo.isError, if the UI grows one
     }
     setName('');
     setLocalPath('');
+    setWorkerId('');
   }
 
   return (
@@ -70,6 +73,12 @@ export function DashboardPage() {
             onClose={() => setBrowsing(false)}
           />
         )}
+        <input
+          value={workerId}
+          onChange={(e) => setWorkerId(e.target.value)}
+          placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
+          className="w-full rounded border px-3 py-2 text-sm"
+        />
       </form>
 
       {reposQuery.isLoading && <p className="text-sm text-neutral-500">Loading repos…</p>}
@@ -86,7 +95,8 @@ export function DashboardPage() {
               {repo.name}
             </Link>
             <div className="text-xs text-neutral-500">
-              {repo.provider} &middot; default branch {repo.defaultBranch}
+              {repo.provider} &middot; default branch {repo.defaultBranch} &middot; worker{' '}
+              {repo.workerId}
               {repo.localPath ? (
                 <> &middot; {repo.localPath}</>
               ) : (
