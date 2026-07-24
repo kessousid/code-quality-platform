@@ -133,7 +133,12 @@ export async function ensureJestAvailable(
 
   const resolved = resolveJestCommand(repoRoot);
   if (!resolved) {
-    // npm reported success (exit 0) but jest still isn't resolvable at the expected path — e.g. a workspace/monorepo hoisting it elsewhere. A genuinely broken environment, not something to retry silently forever.
+    // npm reported success (exit 0) but jest still isn't resolvable at the expected path. The single most common real cause (confirmed live): repoRoot is a subfolder of the actual project (e.g. `src`), so npm walked up to the real project's package.json and installed/hoisted jest there instead of at repoRoot — a missing package.json right here is a strong, cheap signal for exactly that.
+    if (!existsSync(join(repoRoot, 'package.json'))) {
+      throw new Error(
+        `No package.json found in ${repoRoot} — this repo's local checkout path looks like it points at a subfolder of the real project, not the project root itself. Point the repo's localPath at the folder that directly contains package.json (the one \`npm install\`/\`jest\` would actually run from), then try again.`,
+      );
+    }
     throw new ToolNotFoundError('jest', 'CQP_JEST_PATH');
   }
   return resolved;

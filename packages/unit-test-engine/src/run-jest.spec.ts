@@ -107,6 +107,23 @@ describe('runJest', () => {
     expect(existsSync(join(repoRoot, 'node_modules', '@babel', 'preset-typescript'))).toBe(true);
   }, 120_000);
 
+  it('names the real cause when repoRoot has no package.json — npm silently hoisting to a parent project, not jest being broken', async () => {
+    delete process.env.CQP_JEST_PATH;
+    await rm(join(repoRoot, 'package.json'));
+    // A fake "npm" that reports success without installing anything — reproducing the real, live-observed case where the actual npm walked up to an ancestor package.json instead of repoRoot, leaving repoRoot's own node_modules untouched.
+    const fakeNpm = join(repoRoot, 'fake-npm.js');
+    await writeFile(fakeNpm, 'process.exit(0);');
+    process.env.CQP_NPM_PATH = fakeNpm;
+    const testFile = join(repoRoot, 'sample.generated.test.js');
+    await writeFile(testFile, `it('x', () => { expect(true).toBe(true); });`);
+
+    try {
+      await expect(runJest(repoRoot, [testFile])).rejects.toThrow(/no package\.json found/i);
+    } finally {
+      delete process.env.CQP_NPM_PATH;
+    }
+  });
+
   it('surfaces a clear ToolNotFoundError for npm itself when auto-install has no way to run', async () => {
     delete process.env.CQP_JEST_PATH;
     process.env.CQP_NPM_PATH = join(repoRoot, 'definitely-not-a-real-npm.exe');
