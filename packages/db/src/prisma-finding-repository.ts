@@ -79,78 +79,88 @@ export class PrismaFindingRepository implements FindingRepository {
     return rows.map((row) => this.toDomain(row));
   }
 
-  /** See docs/adr/0021 for the full match/update/insert/history semantics. */
+  /**
+   * See docs/adr/0021 for the full match/update/insert/history semantics.
+   * A generous `timeout` (Prisma's interactive-transaction default is 5000ms)
+   * — a per-developer worker (docs/adr/0031) reaches Postgres over Railway's
+   * public proxy, not the low-latency private network a Railway-hosted
+   * worker uses, so this transaction's few sequential round trips can
+   * legitimately take longer than 5s without anything being wrong.
+   */
   async upsertFromScan(input: UpsertFindingInput): Promise<Finding> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.finding.findUnique({
-        where: { repoId_fingerprint: { repoId: input.repoId, fingerprint: input.fingerprint } },
-      });
+    const row = await this.prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.finding.findUnique({
+          where: { repoId_fingerprint: { repoId: input.repoId, fingerprint: input.fingerprint } },
+        });
 
-      const sharedData = {
-        category: categoryToDb(input.category),
-        source: input.source,
-        ruleId: input.ruleId,
-        title: input.title,
-        severity: severityToDb(input.severity),
-        confidence: confidenceToDb(input.confidence),
-        cwe: input.cwe ?? null,
-        owaspCategory: input.owaspCategory ?? null,
-        rootCause: input.rootCause,
-        riskDescription: input.riskDescription,
-        recommendedFix: input.recommendedFix,
-        exampleCode: input.exampleCode ?? null,
-      };
-      const locations = input.locations.map((loc) => ({
-        filePath: loc.filePath,
-        startLine: loc.startLine,
-        endLine: loc.endLine ?? null,
-        startColumn: loc.startColumn ?? null,
-        endColumn: loc.endColumn ?? null,
-      }));
-      const references = input.references.map((ref) => ({ title: ref.title, url: ref.url }));
+        const sharedData = {
+          category: categoryToDb(input.category),
+          source: input.source,
+          ruleId: input.ruleId,
+          title: input.title,
+          severity: severityToDb(input.severity),
+          confidence: confidenceToDb(input.confidence),
+          cwe: input.cwe ?? null,
+          owaspCategory: input.owaspCategory ?? null,
+          rootCause: input.rootCause,
+          riskDescription: input.riskDescription,
+          recommendedFix: input.recommendedFix,
+          exampleCode: input.exampleCode ?? null,
+        };
+        const locations = input.locations.map((loc) => ({
+          filePath: loc.filePath,
+          startLine: loc.startLine,
+          endLine: loc.endLine ?? null,
+          startColumn: loc.startColumn ?? null,
+          endColumn: loc.endColumn ?? null,
+        }));
+        const references = input.references.map((ref) => ({ title: ref.title, url: ref.url }));
 
-      const finding = existing
-        ? await tx.finding.update({
-            where: { id: existing.id },
-            data: {
-              ...sharedData,
-              lastSeenScanId: input.scanId,
-              // A finding that disappeared and reappeared is live again,
-              // not history — see docs/adr/0021.
-              status: 'OPEN',
-              locations: { deleteMany: {}, create: locations },
-              references: { deleteMany: {}, create: references },
-            },
-            include: findingInclude,
-          })
-        : await tx.finding.create({
-            data: {
-              ...sharedData,
-              orgId: input.orgId,
-              repoId: input.repoId,
-              fingerprint: input.fingerprint,
-              firstSeenScanId: input.scanId,
-              lastSeenScanId: input.scanId,
-              status: 'OPEN',
-              locations: { create: locations },
-              references: { create: references },
-            },
-            include: findingInclude,
-          });
+        const finding = existing
+          ? await tx.finding.update({
+              where: { id: existing.id },
+              data: {
+                ...sharedData,
+                lastSeenScanId: input.scanId,
+                // A finding that disappeared and reappeared is live again,
+                // not history — see docs/adr/0021.
+                status: 'OPEN',
+                locations: { deleteMany: {}, create: locations },
+                references: { deleteMany: {}, create: references },
+              },
+              include: findingInclude,
+            })
+          : await tx.finding.create({
+              data: {
+                ...sharedData,
+                orgId: input.orgId,
+                repoId: input.repoId,
+                fingerprint: input.fingerprint,
+                firstSeenScanId: input.scanId,
+                lastSeenScanId: input.scanId,
+                status: 'OPEN',
+                locations: { create: locations },
+                references: { create: references },
+              },
+              include: findingInclude,
+            });
 
-      await tx.findingHistory.upsert({
-        where: { findingId_scanId: { findingId: finding.id, scanId: input.scanId } },
-        create: {
-          findingId: finding.id,
-          scanId: input.scanId,
-          status: finding.status,
-          severity: finding.severity,
-        },
-        update: { status: finding.status, severity: finding.severity, occurredAt: new Date() },
-      });
+        await tx.findingHistory.upsert({
+          where: { findingId_scanId: { findingId: finding.id, scanId: input.scanId } },
+          create: {
+            findingId: finding.id,
+            scanId: input.scanId,
+            status: finding.status,
+            severity: finding.severity,
+          },
+          update: { status: finding.status, severity: finding.severity, occurredAt: new Date() },
+        });
 
-      return finding;
-    });
+        return finding;
+      },
+      { timeout: 15_000 },
+    );
 
     return this.toDomain(row);
   }
