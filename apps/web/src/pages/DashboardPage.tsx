@@ -3,13 +3,30 @@ import { Link } from 'react-router-dom';
 import { useCreateRepo, useRepos } from '../api/hooks.js';
 import { DirectoryBrowser } from '../components/DirectoryBrowser.js';
 
+/**
+ * A developer's workerId is effectively constant across every repo they add
+ * from this browser — remembering it avoids the trap where an empty field
+ * silently falls back to 'default' (a shared/Railway worker, not this
+ * machine) the moment Browse… is clicked (docs/adr/0032).
+ */
+const LAST_WORKER_ID_KEY = 'cqp:lastWorkerId';
+
 export function DashboardPage() {
   const reposQuery = useRepos();
   const createRepo = useCreateRepo();
   const [name, setName] = useState('');
   const [localPath, setLocalPath] = useState('');
-  const [workerId, setWorkerId] = useState('');
+  const [workerId, setWorkerId] = useState(() => localStorage.getItem(LAST_WORKER_ID_KEY) ?? '');
   const [browsing, setBrowsing] = useState(false);
+
+  function handleWorkerIdChange(value: string) {
+    setWorkerId(value);
+    if (value.trim().length > 0) {
+      localStorage.setItem(LAST_WORKER_ID_KEY, value.trim());
+    } else {
+      localStorage.removeItem(LAST_WORKER_ID_KEY);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +42,6 @@ export function DashboardPage() {
     }
     setName('');
     setLocalPath('');
-    setWorkerId('');
   }
 
   return (
@@ -65,10 +81,16 @@ export function DashboardPage() {
         </div>
         <input
           value={workerId}
-          onChange={(e) => setWorkerId(e.target.value)}
+          onChange={(e) => handleWorkerIdChange(e.target.value)}
           placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
           className="w-full rounded border px-3 py-2 text-sm"
         />
+        {workerId.trim().length === 0 && (
+          <p className="text-xs text-amber-600">
+            No Worker ID set — Browse… and any jobs for this repo will use the shared
+            &quot;default&quot; worker, not this machine.
+          </p>
+        )}
         {browsing && (
           <DirectoryBrowser
             {...(localPath.trim().length > 0 ? { initialPath: localPath } : {})}
