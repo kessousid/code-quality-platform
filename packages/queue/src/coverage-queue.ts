@@ -6,9 +6,10 @@ import type { CoverageJobData, CoverageQueue, CoverageQueueRegistry } from '@cqp
  * docs/adr/0031) — a separate BullMQ queue so a coverage-gate run never
  * blocks scan/unit-test throughput or vice versa, namespaced by workerId
  * so a job never reaches a worker that can't see the repo's files.
+ * Separated by `-`, not `:` — see scan-queue.ts's scanQueueName for why.
  */
 export function coverageQueueName(workerId: string): string {
-  return `coverage-runs:${workerId}`;
+  return `coverage-runs-${workerId}`;
 }
 
 export function createCoverageBullQueue(

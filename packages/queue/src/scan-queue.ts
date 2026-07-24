@@ -12,10 +12,14 @@ import type { ScanJobData, ScanQueue, ScanQueueRegistry } from '@cqp/core';
  * Namespaced by `workerId` (see docs/adr/0031) — a repo's jobs must only
  * ever reach the one worker instance that actually has its files on
  * disk, so each worker gets its own real BullMQ queue rather than every
- * worker instance competing for jobs on one shared queue.
+ * worker instance competing for jobs on one shared queue. Separated by
+ * `-`, not `:` — BullMQ rejects `:` in queue names outright (it uses
+ * `:` internally as its own Redis key delimiter), which only surfaced
+ * once this ran against real BullMQ/Redis in production, not against
+ * the in-memory test doubles.
  */
 export function scanQueueName(workerId: string): string {
-  return `scans:${workerId}`;
+  return `scans-${workerId}`;
 }
 
 export function createScanBullQueue(

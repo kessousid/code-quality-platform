@@ -5,10 +5,11 @@ import type { UnitTestJobData, UnitTestQueue, UnitTestQueueRegistry } from '@cqp
  * Mirrors scan-queue.ts (docs/adr/0021, docs/adr/0023, docs/adr/0031) — a
  * separate BullMQ queue so a slow LLM-backed unit-test run never blocks
  * scan throughput or vice versa, namespaced by workerId so a job never
- * reaches a worker that can't see the repo's files.
+ * reaches a worker that can't see the repo's files. Separated by `-`,
+ * not `:` — see scan-queue.ts's scanQueueName for why.
  */
 export function unitTestQueueName(workerId: string): string {
-  return `unit-tests:${workerId}`;
+  return `unit-tests-${workerId}`;
 }
 
 export function createUnitTestBullQueue(
