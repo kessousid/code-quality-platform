@@ -8,10 +8,16 @@ import { DirectoryBrowser } from './DirectoryBrowser.js';
 interface GenerateUnitTestsSectionProps {
   repoId: string;
   localPath: string | undefined;
+  /** Which worker's filesystem to browse for a target (see docs/adr/0032) — this repo's own workerId, not necessarily 'default'. */
+  workerId: string | undefined;
 }
 
 /** Split out of RepoDetailPage to keep that component's own branching simple (see docs/adr/0024, docs/adr/0026). */
-export function GenerateUnitTestsSection({ repoId, localPath }: GenerateUnitTestsSectionProps) {
+export function GenerateUnitTestsSection({
+  repoId,
+  localPath,
+  workerId,
+}: GenerateUnitTestsSectionProps) {
   const unitTestRunsQuery = useUnitTestRuns(repoId);
   const createUnitTestRun = useCreateUnitTestRun();
   const [targetPath, setTargetPath] = useState('');
@@ -79,6 +85,7 @@ export function GenerateUnitTestsSection({ repoId, localPath }: GenerateUnitTest
             <DirectoryBrowser
               includeFiles
               {...(localPath ? { initialPath: localPath } : {})}
+              {...(workerId ? { workerId } : {})}
               onSelect={handleBrowseSelect}
               onClose={() => setBrowsingTarget(false)}
             />

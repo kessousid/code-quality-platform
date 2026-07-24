@@ -1,11 +1,19 @@
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import type { PrismaClient } from '@cqp/db';
-import type { CoverageJobData, ScanJobData, UnitTestJobData } from '@cqp/core';
+import type {
+  BrowseDirectoryRequest,
+  BrowseDirectoryResult,
+  CoverageJobData,
+  ScanJobData,
+  UnitTestJobData,
+} from '@cqp/core';
 import {
   createCoverageBullWorker,
+  createDirectoryBrowseBullWorker,
   createScanBullWorker,
   createUnitTestBullWorker,
 } from '@cqp/queue';
+import { processBrowseDirectoryJob } from './jobs/browse-directory.job.js';
 import { processHealthcheckJob, type HealthcheckJobData } from './jobs/healthcheck.job.js';
 import { processRunScanJob } from './jobs/run-scan.job.js';
 import { processRunUnitTestGenerationJob } from './jobs/run-unit-test-generation.job.js';
@@ -71,6 +79,23 @@ export function createCoverageWorker(
   return createCoverageBullWorker(
     connection,
     async (job) => processRunCoverageGateJob(prisma, job.data),
+    workerId,
+  );
+}
+
+/**
+ * A fourth, separate queue (docs/adr/0032) — the folder picker needs a real
+ * response back (not just a fire-and-forget enqueue like the three above),
+ * so this worker's return value IS the answer the API is waiting on via
+ * `BullMqDirectoryBrowseQueue#browse`.
+ */
+export function createDirectoryBrowseWorker(
+  connection: ConnectionOptions,
+  workerId: string,
+): Worker<BrowseDirectoryRequest, BrowseDirectoryResult> {
+  return createDirectoryBrowseBullWorker(
+    connection,
+    async (job) => processBrowseDirectoryJob(job.data),
     workerId,
   );
 }

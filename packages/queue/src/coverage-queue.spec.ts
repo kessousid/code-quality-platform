@@ -26,9 +26,7 @@ afterEach(() => {
 describe('coverageQueueName', () => {
   it('produces a name BullMQ actually accepts for a variety of real workerId shapes', () => {
     for (const workerId of ['default', 'keshav-laptop', 'worker_2', 'machine123']) {
-      expect(() =>
-        createCoverageBullQueue(unreachableConnection(), coverageQueueName(workerId)),
-      ).not.toThrow();
+      expect(() => createCoverageBullQueue(unreachableConnection(), workerId)).not.toThrow();
     }
   });
 

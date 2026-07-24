@@ -109,14 +109,25 @@ export interface BrowseDirectoryResult {
   entries: DirectoryEntry[];
 }
 
-/** Backs the folder/file picker on the "add repo" and "generate unit tests" forms — see docs/adr/0023, docs/adr/0024. */
-export function useBrowseDirectory(path: string | undefined, includeFiles = false) {
+/**
+ * Backs the folder/file picker on the "add repo" and "generate unit tests"
+ * forms — see docs/adr/0023, docs/adr/0024. `workerId` (docs/adr/0032)
+ * routes the browse request to that specific worker's own filesystem
+ * instead of the API's — required once the API and the repo's worker can
+ * be different machines; omit it only for a genuinely single-machine setup.
+ */
+export function useBrowseDirectory(
+  path: string | undefined,
+  includeFiles = false,
+  workerId?: string,
+) {
   return useQuery({
-    queryKey: ['fs-browse', path, includeFiles],
+    queryKey: ['fs-browse', path, includeFiles, workerId],
     queryFn: () => {
       const params = new URLSearchParams();
       if (path) params.set('path', path);
       if (includeFiles) params.set('includeFiles', 'true');
+      if (workerId) params.set('workerId', workerId);
       const query = params.toString();
       return apiGet<BrowseDirectoryResult>(`/fs/browse${query ? `?${query}` : ''}`);
     },

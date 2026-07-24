@@ -11,7 +11,8 @@
     { "path": "../correlation" },
     { "path": "../scan-engine" },
     { "path": "../unit-test-engine" },
-    { "path": "../coverage-engine" }
+    { "path": "../coverage-engine" },
+    { "path": "../filesystem-browser" }
   ],
   "include": ["src"]
 }

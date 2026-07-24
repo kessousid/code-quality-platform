@@ -63,9 +63,16 @@ export function DashboardPage() {
             Browse…
           </button>
         </div>
+        <input
+          value={workerId}
+          onChange={(e) => setWorkerId(e.target.value)}
+          placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
+          className="w-full rounded border px-3 py-2 text-sm"
+        />
         {browsing && (
           <DirectoryBrowser
             {...(localPath.trim().length > 0 ? { initialPath: localPath } : {})}
+            workerId={workerId.trim().length > 0 ? workerId.trim() : 'default'}
             onSelect={(path) => {
               setLocalPath(path);
               setBrowsing(false);
@@ -73,12 +80,6 @@ export function DashboardPage() {
             onClose={() => setBrowsing(false)}
           />
         )}
-        <input
-          value={workerId}
-          onChange={(e) => setWorkerId(e.target.value)}
-          placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
-          className="w-full rounded border px-3 py-2 text-sm"
-        />
       </form>
 
       {reposQuery.isLoading && <p className="text-sm text-neutral-500">Loading repos…</p>}

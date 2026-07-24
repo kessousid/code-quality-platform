@@ -41,6 +41,9 @@ importers:
       '@cqp/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@cqp/filesystem-browser':
+        specifier: workspace:*
+        version: link:../../packages/filesystem-browser
       '@cqp/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -199,6 +202,9 @@ importers:
       '@cqp/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@cqp/filesystem-browser':
+        specifier: workspace:*
+        version: link:../../packages/filesystem-browser
       '@cqp/gemini-test-generator':
         specifier: workspace:*
         version: link:../../packages/gemini-test-generator
@@ -239,6 +245,9 @@ importers:
       '@cqp/enrichment':
         specifier: workspace:*
         version: link:../enrichment
+      '@cqp/filesystem-browser':
+        specifier: workspace:*
+        version: link:../filesystem-browser
       '@cqp/reporting':
         specifier: workspace:*
         version: link:../reporting
@@ -351,6 +360,22 @@ importers:
       '@cqp/correlation':
         specifier: workspace:*
         version: link:../correlation
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/filesystem-browser:
+    dependencies:
+      '@cqp/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

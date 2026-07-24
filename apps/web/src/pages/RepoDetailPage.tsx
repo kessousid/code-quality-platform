@@ -31,7 +31,11 @@ export function RepoDetailPage() {
               Generate unit tests with Gemini (secondary)
             </summary>
             <div className="mt-3 space-y-6">
-              <GenerateUnitTestsSection repoId={repoId} localPath={repoQuery.data?.localPath} />
+              <GenerateUnitTestsSection
+                repoId={repoId}
+                localPath={repoQuery.data?.localPath}
+                workerId={repoQuery.data?.workerId}
+              />
             </div>
           </details>
         </>

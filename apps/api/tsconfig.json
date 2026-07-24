@@ -12,7 +12,8 @@
     { "path": "../../packages/application" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/reporting" },
-    { "path": "../../packages/queue" }
+    { "path": "../../packages/queue" },
+    { "path": "../../packages/filesystem-browser" }
   ],
   "include": ["src"]
 }

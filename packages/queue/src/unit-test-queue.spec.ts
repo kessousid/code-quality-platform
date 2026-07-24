@@ -26,9 +26,7 @@ afterEach(() => {
 describe('unitTestQueueName', () => {
   it('produces a name BullMQ actually accepts for a variety of real workerId shapes', () => {
     for (const workerId of ['default', 'keshav-laptop', 'worker_2', 'machine123']) {
-      expect(() =>
-        createUnitTestBullQueue(unreachableConnection(), unitTestQueueName(workerId)),
-      ).not.toThrow();
+      expect(() => createUnitTestBullQueue(unreachableConnection(), workerId)).not.toThrow();
     }
   });
 

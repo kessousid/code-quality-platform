@@ -9,6 +9,7 @@
     { "path": "../../packages/db" },
     { "path": "../../packages/application" },
     { "path": "../../packages/queue" },
+    { "path": "../../packages/filesystem-browser" },
     { "path": "../../packages/gemini-test-generator" },
     { "path": "../../packages/script-test-generator" }
   ],

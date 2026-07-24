@@ -1,23 +1,27 @@
 import { useState } from 'react';
 import { useBrowseDirectory } from '../api/hooks.js';
+import { ApiError } from '../api/client.js';
 
 interface DirectoryBrowserProps {
   initialPath?: string;
   /** Also list files, not just directories — needed to pick a single-file unit-test target (see docs/adr/0024). Clicking a file selects it immediately; clicking a directory navigates into it. */
   includeFiles?: boolean;
+  /** Which worker's own filesystem to browse (see docs/adr/0032) — omit only for a genuinely single-machine setup where the API can read the right disk directly. */
+  workerId?: string;
   onSelect: (path: string) => void;
   onClose: () => void;
 }
 
-/** Inline folder/file picker (see docs/adr/0023, docs/adr/0024) — browses the machine the API/worker run on, since there's no clone-from-remote yet (ADR-0003). */
+/** Inline folder/file picker (see docs/adr/0023, docs/adr/0024, docs/adr/0032) — browses the specified worker's filesystem, since the API and a repo's worker are no longer guaranteed to be the same machine. */
 export function DirectoryBrowser({
   initialPath,
   includeFiles = false,
+  workerId,
   onSelect,
   onClose,
 }: DirectoryBrowserProps) {
   const [path, setPath] = useState(initialPath);
-  const browseQuery = useBrowseDirectory(path, includeFiles);
+  const browseQuery = useBrowseDirectory(path, includeFiles, workerId);
 
   return (
     <div className="rounded-lg border bg-white p-3 shadow-sm">
@@ -36,7 +40,9 @@ export function DirectoryBrowser({
 
       {browseQuery.isError && (
         <p className="mb-2 text-xs text-red-600">
-          Could not read that folder. Try a different path.
+          {browseQuery.error instanceof ApiError
+            ? browseQuery.error.message
+            : 'Could not read that folder. Try a different path.'}
         </p>
       )}
 
