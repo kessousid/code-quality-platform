@@ -81,11 +81,14 @@ export class PrismaFindingRepository implements FindingRepository {
 
   /**
    * See docs/adr/0021 for the full match/update/insert/history semantics.
-   * A generous `timeout` (Prisma's interactive-transaction default is 5000ms)
-   * — a per-developer worker (docs/adr/0031) reaches Postgres over Railway's
-   * public proxy, not the low-latency private network a Railway-hosted
-   * worker uses, so this transaction's few sequential round trips can
-   * legitimately take longer than 5s without anything being wrong.
+   * Generous `timeout` *and* `maxWait` (Prisma's interactive-transaction
+   * defaults are 5000ms/2000ms) — a per-developer worker (docs/adr/0031)
+   * reaches Postgres over Railway's public proxy, not the low-latency
+   * private network a Railway-hosted worker uses, so both "run the
+   * transaction body" and "acquire a connection to start it" can
+   * legitimately take longer than the defaults without anything being
+   * wrong. Hitting either one previously aborted the whole scan partway
+   * through persisting findings (docs/adr/0031's rollout surfaced both).
    */
   async upsertFromScan(input: UpsertFindingInput): Promise<Finding> {
     const row = await this.prisma.$transaction(
@@ -159,7 +162,7 @@ export class PrismaFindingRepository implements FindingRepository {
 
         return finding;
       },
-      { timeout: 15_000 },
+      { maxWait: 10_000, timeout: 15_000 },
     );
 
     return this.toDomain(row);
