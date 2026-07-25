@@ -9,13 +9,13 @@ describe('ListCronRunsUseCase', () => {
     await cronRunRepository.create({
       orgId: 'org_1',
       cronId: 'cod-candidate-search',
-      cronName: 'get cod candidates',
+      cronName: 'Get COD Candidates',
       environment: 'dev',
     });
     await cronRunRepository.create({
       orgId: 'org_2',
       cronId: 'cod-candidate-search',
-      cronName: 'get cod candidates',
+      cronName: 'Get COD Candidates',
       environment: 'dev',
     });
 

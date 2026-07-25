@@ -20,7 +20,7 @@ describe('CronsPage', () => {
   it('triggers a cron through the real POST endpoint and shows the result, then lists it in history', async () => {
     renderWithProviders(<CronsPage />);
 
-    await waitFor(() => expect(screen.getByText('get cod candidates')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Get COD Candidates')).toBeInTheDocument());
 
     const user = userEvent.setup();
     await user.selectOptions(
@@ -34,13 +34,13 @@ describe('CronsPage', () => {
     expect(server.cronRuns).toHaveLength(1);
     expect(server.cronRuns[0]?.cronId).toBe('cod-candidate-search');
     // one in the select option, one in the history entry
-    expect(screen.getAllByText('get cod candidates')).toHaveLength(2);
+    expect(screen.getAllByText('Get COD Candidates')).toHaveLength(2);
   });
 
   it('404s clearly when triggering an unknown cron', async () => {
     server.cronRuns.length = 0;
     renderWithProviders(<CronsPage />);
-    await waitFor(() => expect(screen.getByText('get cod candidates')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Get COD Candidates')).toBeInTheDocument());
 
     // No real UI path to select an unknown cronId, so this exercises the
     // server contract directly — the use-case-level 404 mapping is already

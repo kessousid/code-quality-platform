@@ -195,7 +195,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   const cronDefinitions: CronDefinitionFixture[] = [
     {
       id: 'cod-candidate-search',
-      name: 'get cod candidates',
+      name: 'Get COD Candidates',
       path: '/api/v1/cron/cod/candidate-search',
     },
   ];

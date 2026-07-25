@@ -13,19 +13,31 @@ export interface CronDefinition {
 /**
  * Hardcoded, not DB-managed (see docs/adr/0033) — sourced from a one-off
  * Postman export of a completely separate external system's cron jobs;
- * this list changes rarely and has no admin UI need.
+ * this list changes rarely and has no admin UI need. The July 2026 export
+ * also had a "COD/assignedcandidate" item with the exact same method,
+ * host, and path as candidate-scoring-assign below — a true duplicate,
+ * not a separate real endpoint, so it's deliberately not listed here.
  */
 export const CRON_DEFINITIONS: CronDefinition[] = [
-  { id: 'candidate-outreach', name: 'candidate outreach CRON', path: '/api/v1/outreach/trigger' },
+  { id: 'candidate-outreach', name: 'Candidate Outreach CRON', path: '/api/v1/outreach/trigger' },
   {
     id: 'candidate-scoring-assign',
-    name: 'candidate scoring and moving to assigned CRON',
+    name: 'Candidate scoring and moving to assigned CRON',
     path: '/api/v1/cron/cod/assigncandidate/curated-noncurated',
   },
   {
     id: 'cod-candidate-search',
-    name: 'get cod candidates',
+    name: 'Get COD Candidates',
     path: '/api/v1/cron/cod/candidate-search',
+  },
+  {
+    // Postman's export uses a {{CURATAL_DEV_INTERVIEW}} variable for this
+    // one's host, but it resolves to the exact same host as every other
+    // cron here (confirmed directly) — same CRON_ENVIRONMENT_BASE_URLS
+    // switching applies, no separate host needed.
+    id: 'cod-interviewed-candidate',
+    name: 'cod-interviewed-candidate',
+    path: '/api/v1/cron/cod/assigncandidate/interviewed-candidates',
   },
 ];
 

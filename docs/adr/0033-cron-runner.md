@@ -7,11 +7,11 @@ Accepted
 ## Context
 
 A completely separate, unrelated external system (a recruiting platform,
-"COD") has 3 known cron jobs, sourced from a one-off Postman export
-(`candidate outreach CRON`, `candidate scoring and moving to assigned
-CRON`, `get cod candidates`). Today the only way to run one on-demand is
-manually via Postman, per developer, with no shared history of who ran
-what, when, or against which environment.
+"COD") has known cron jobs, sourced from Postman exports (a July 2026
+re-export for Dev added a fourth, `cod-interviewed-candidate`, on top of
+the original three). Today the only way to run one on-demand is manually
+via Postman, per developer, with no shared history of who ran what, when,
+or against which environment.
 
 ## Decision
 
@@ -20,12 +20,15 @@ Staging — Prod deliberately excluded, see below), click Run, and see the
 result**, with a persisted history of past runs.
 
 **Cron definitions are hardcoded in `@cqp/core` (`CRON_DEFINITIONS`,
-`CRON_ENVIRONMENT_BASE_URLS`), not DB-managed.** They come from a one-off
-Postman export and change rarely; there's no admin-UI need yet. Adding a
-fourth cron or a new environment is a code change, not a migration.
+`CRON_ENVIRONMENT_BASE_URLS`), not DB-managed.** They come from Postman
+exports and change rarely; there's no admin-UI need yet. Adding a cron or
+a new environment is a code change, not a migration. One entry from the
+July 2026 re-export (`COD/assignedcandidate`) was a true duplicate of
+`candidate-scoring-assign` — same method, host, and path — and was left
+out deliberately, not missed.
 
 **Execution is synchronous/blocking, not queued.** The sample Postman
-response for "get cod candidates" shows the external endpoint itself runs
+response for "Get COD Candidates" shows the external endpoint itself runs
 synchronously and returns a complete JSON result when done. So `POST
 /cron-runs` simply awaits the real outbound call — the browser's own
 request-pending state (spinner + elapsed-seconds counter) during that
@@ -61,8 +64,8 @@ candidate data from this tool.
 - `CronRun.triggeredByUserId` is optional and left unpopulated today —
   no `@CurrentUser()` decorator exists anywhere in `apps/api`, the same
   gap already present on `Scan.triggeredByUserId`.
-- Only the read/report-style "get cod candidates" cron is safe to smoke
-  test automatically; `candidate-outreach` and
-  `candidate-scoring-assign` have real side effects on live candidate
-  data and are only ever triggered deliberately, by a person, from the
-  UI.
+- Only the read/report-style "Get COD Candidates" cron is safe to smoke
+  test automatically; `candidate-outreach`, `candidate-scoring-assign`,
+  and `cod-interviewed-candidate` have real side effects on live
+  candidate data and are only ever triggered deliberately, by a person,
+  from the UI.

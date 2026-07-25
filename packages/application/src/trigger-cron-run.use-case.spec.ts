@@ -36,7 +36,7 @@ describe('TriggerCronRunUseCase', () => {
     expect(run.statusCode).toBe(200);
     expect(run.responseBody).toBe('{"ok":true}');
     expect(run.errorMessage).toBeUndefined();
-    expect(run.cronName).toBe('get cod candidates');
+    expect(run.cronName).toBe('Get COD Candidates');
     expect(run.completedAt).toBeInstanceOf(Date);
   });
 
@@ -84,10 +84,31 @@ describe('TriggerCronRunUseCase', () => {
       {
         definition: {
           id: 'candidate-outreach',
-          name: 'candidate outreach CRON',
+          name: 'Candidate Outreach CRON',
           path: '/api/v1/outreach/trigger',
         },
         baseUrl: 'https://staging.curatal.com',
+      },
+    ]);
+  });
+
+  it('resolves the interview-service cron (July 2026 re-export) to the same per-environment base URLs as every other cron', async () => {
+    const { useCase, cronExecutor } = setup();
+
+    await useCase.execute({
+      orgId: 'org_1',
+      cronId: 'cod-interviewed-candidate',
+      environment: 'dev',
+    });
+
+    expect(cronExecutor.calls).toEqual([
+      {
+        definition: {
+          id: 'cod-interviewed-candidate',
+          name: 'cod-interviewed-candidate',
+          path: '/api/v1/cron/cod/assigncandidate/interviewed-candidates',
+        },
+        baseUrl: 'https://curatal-dev.openturf.dev',
       },
     ]);
   });

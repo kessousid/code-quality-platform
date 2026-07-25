@@ -36,7 +36,7 @@ describe('CronRunController', () => {
     });
 
     expect(run.status).toBe('succeeded');
-    expect(run.cronName).toBe('get cod candidates');
+    expect(run.cronName).toBe('Get COD Candidates');
   });
 
   it('404s a trigger request for an unknown cronId', async () => {
