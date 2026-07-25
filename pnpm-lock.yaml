@@ -38,6 +38,9 @@ importers:
       '@cqp/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cqp/cron-client':
+        specifier: workspace:*
+        version: link:../../packages/cron-client
       '@cqp/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -323,6 +326,22 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.20.1)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.32.0)
+
+  packages/cron-client:
+    dependencies:
+      '@cqp/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

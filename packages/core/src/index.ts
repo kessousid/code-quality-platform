@@ -19,3 +19,4 @@ export * from './coverage-file-result.js';
 export * from './coverage-report.js';
 export * from './coverage-queue.js';
 export * from './directory-browse.js';
+export * from './cron-run.js';

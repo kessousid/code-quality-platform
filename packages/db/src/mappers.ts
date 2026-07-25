@@ -15,6 +15,8 @@ import {
   CoverageFileStatus as DbCoverageFileStatus,
   CoverageReportFormat as DbCoverageReportFormat,
   TestGeneratorType as DbTestGeneratorType,
+  CronEnvironment as DbCronEnvironment,
+  CronRunStatus as DbCronRunStatus,
 } from '@prisma/client';
 import type {
   Severity as CoreSeverity,
@@ -33,6 +35,8 @@ import type {
   CoverageFileStatus as CoreCoverageFileStatus,
   CoverageReportFormat as CoreCoverageReportFormat,
   TestGeneratorType as CoreTestGeneratorType,
+  CronEnvironment as CoreCronEnvironment,
+  CronRunStatus as CoreCronRunStatus,
 } from '@cqp/core';
 
 /**
@@ -201,4 +205,20 @@ export function testGeneratorTypeToDb(generator: CoreTestGeneratorType): DbTestG
 
 export function testGeneratorTypeFromDb(generator: DbTestGeneratorType): CoreTestGeneratorType {
   return generator.toLowerCase() as CoreTestGeneratorType;
+}
+
+export function cronEnvironmentToDb(environment: CoreCronEnvironment): DbCronEnvironment {
+  return environment.toUpperCase() as DbCronEnvironment;
+}
+
+export function cronEnvironmentFromDb(environment: DbCronEnvironment): CoreCronEnvironment {
+  return environment.toLowerCase() as CoreCronEnvironment;
+}
+
+export function cronRunStatusToDb(status: CoreCronRunStatus): DbCronRunStatus {
+  return status.toUpperCase() as DbCronRunStatus;
+}
+
+export function cronRunStatusFromDb(status: DbCronRunStatus): CoreCronRunStatus {
+  return status.toLowerCase() as CoreCronRunStatus;
 }

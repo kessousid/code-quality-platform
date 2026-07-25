@@ -39,3 +39,5 @@ export * from './generate-coverage-report.use-case.js';
 export * from './get-coverage-report.use-case.js';
 export * from './get-coverage-report-content.use-case.js';
 export * from './list-coverage-reports-by-run.use-case.js';
+export * from './trigger-cron-run.use-case.js';
+export * from './list-cron-runs.use-case.js';

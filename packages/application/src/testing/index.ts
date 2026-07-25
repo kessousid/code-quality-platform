@@ -18,3 +18,5 @@ export * from './in-memory-coverage-file-result-repository.js';
 export * from './in-memory-coverage-report-repository.js';
 export * from './in-memory-coverage-queue.js';
 export * from './in-memory-directory-browse-queue.js';
+export * from './in-memory-cron-run-repository.js';
+export * from './in-memory-cron-executor.js';

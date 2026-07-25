@@ -7,6 +7,9 @@ import type {
   CoverageRun,
   CreateRepoInput,
   CreateScanInput,
+  CronDefinition,
+  CronEnvironment,
+  CronRun,
   Finding,
   GeneratedTestFile,
   PaginatedResult,
@@ -465,4 +468,34 @@ export async function downloadCoverageReport(report: CoverageReport): Promise<vo
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+export interface CronsListResponse {
+  crons: CronDefinition[];
+  environments: CronEnvironment[];
+}
+
+/** See docs/adr/0033 — definitions are static, not org-scoped, so this is the same for every org. */
+export function useCrons() {
+  return useQuery({
+    queryKey: ['crons'],
+    queryFn: () => apiGet<CronsListResponse>('/crons'),
+  });
+}
+
+/** Blocking on purpose (docs/adr/0033) — the mutation's own pending state IS the "live status" while the external call runs. */
+export function useTriggerCronRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { cronId: string; environment: CronEnvironment }) =>
+      apiPost<CronRun>('/cron-runs', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cron-runs'] }),
+  });
+}
+
+export function useCronRuns(page = 1, pageSize = 25) {
+  return useQuery({
+    queryKey: ['cron-runs', page, pageSize],
+    queryFn: () => apiGet<PaginatedResult<CronRun>>(`/cron-runs?page=${page}&pageSize=${pageSize}`),
+  });
 }

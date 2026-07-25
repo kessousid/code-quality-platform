@@ -9,6 +9,7 @@ import { ReportModule } from './reports/report.module.js';
 import { FsModule } from './fs/fs.module.js';
 import { UnitTestModule } from './unit-tests/unit-test.module.js';
 import { CoverageModule } from './coverage/coverage.module.js';
+import { CronModule } from './crons/cron.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { CoverageModule } from './coverage/coverage.module.js';
     FsModule,
     UnitTestModule,
     CoverageModule,
+    CronModule,
   ],
 })
 export class AppModule {}

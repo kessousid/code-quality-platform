@@ -76,6 +76,26 @@ export interface CoverageRun {
   errorMessage?: string;
 }
 
+export interface CronDefinitionFixture {
+  id: string;
+  name: string;
+  path: string;
+}
+
+export interface CronRunFixture {
+  id: string;
+  orgId: string;
+  cronId: string;
+  cronName: string;
+  environment: string;
+  status: string;
+  createdAt: string;
+  statusCode?: number;
+  responseBody?: string;
+  errorMessage?: string;
+  completedAt?: string;
+}
+
 export interface LocalApiServer {
   baseUrl: string;
   close: () => Promise<void>;
@@ -92,6 +112,8 @@ export interface LocalApiServer {
   coverageRuns: CoverageRun[];
   coverageFileResultsByRun: Map<string, unknown[]>;
   coverageReportsByRun: Map<string, unknown[]>;
+  cronDefinitions: CronDefinitionFixture[];
+  cronRuns: CronRunFixture[];
 }
 
 interface Report {
@@ -170,6 +192,14 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   const coverageFileResultsByRun = new Map<string, unknown[]>();
   const coverageReportsByRun = new Map<string, CoverageReport[]>();
   const coverageReportContent = new Map<string, string>();
+  const cronDefinitions: CronDefinitionFixture[] = [
+    {
+      id: 'cod-candidate-search',
+      name: 'get cod candidates',
+      path: '/api/v1/cron/cod/candidate-search',
+    },
+  ];
+  const cronRuns: CronRunFixture[] = [];
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -520,6 +550,40 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
       return;
     }
 
+    if (method === 'GET' && pathname === '/crons') {
+      send(res, 200, { crons: cronDefinitions, environments: ['dev', 'staging'] });
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/cron-runs') {
+      const input = (await readJsonBody(req)) as Record<string, unknown>;
+      const definition = cronDefinitions.find((c) => c.id === input.cronId);
+      if (!definition) {
+        send(res, 404, { message: `Cron not found: ${input.cronId}` });
+        return;
+      }
+      const run: CronRunFixture = {
+        id: id('cronrun'),
+        orgId: 'org_1',
+        cronId: definition.id,
+        cronName: definition.name,
+        environment: (input.environment as string) ?? 'dev',
+        status: 'succeeded',
+        statusCode: 200,
+        responseBody: JSON.stringify({ status: 200, message: 'ok', data: { jobsProcessed: 1 } }),
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      };
+      cronRuns.unshift(run);
+      send(res, 201, run);
+      return;
+    }
+
+    if (method === 'GET' && pathname === '/cron-runs') {
+      send(res, 200, { data: cronRuns, total: cronRuns.length, page: 1, pageSize: 25 });
+      return;
+    }
+
     send(res, 404, { message: `no route for ${method} ${pathname}` });
   }
 
@@ -548,5 +612,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     coverageRuns,
     coverageFileResultsByRun,
     coverageReportsByRun,
+    cronDefinitions,
+    cronRuns,
   };
 }

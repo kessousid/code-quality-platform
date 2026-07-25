@@ -13,7 +13,8 @@
     { "path": "../../packages/storage" },
     { "path": "../../packages/reporting" },
     { "path": "../../packages/queue" },
-    { "path": "../../packages/filesystem-browser" }
+    { "path": "../../packages/filesystem-browser" },
+    { "path": "../../packages/cron-client" }
   ],
   "include": ["src"]
 }

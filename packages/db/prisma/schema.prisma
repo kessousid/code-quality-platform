@@ -125,6 +125,18 @@ enum CoverageReportFormat {
   PDF
 }
 
+/// Prod deliberately excluded for now — see docs/adr/0033.
+enum CronEnvironment {
+  DEV
+  STAGING
+}
+
+enum CronRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 model Org {
   id        String   @id @default(cuid())
   name      String
@@ -143,6 +155,7 @@ model Org {
   unitTestReports UnitTestReport[]
   coverageRuns    CoverageRun[]
   coverageReports CoverageReport[]
+  cronRuns        CronRun[]
 
   @@map("orgs")
 }
@@ -543,4 +556,27 @@ model CoverageReport {
   @@unique([coverageRunId, format])
   @@index([orgId, coverageRunId])
   @@map("coverage_reports")
+}
+
+/// Static cron definitions live in code (@cqp/core CRON_DEFINITIONS), not
+/// here — this is only the run history, org-scoped but with no FK to a
+/// "cron" row since none exists (see docs/adr/0033).
+model CronRun {
+  id                String          @id @default(cuid())
+  orgId             String
+  cronId            String
+  cronName          String
+  environment       CronEnvironment
+  status            CronRunStatus   @default(RUNNING)
+  statusCode        Int?
+  responseBody      String?
+  errorMessage      String?
+  triggeredByUserId String?
+  createdAt         DateTime        @default(now())
+  completedAt       DateTime?
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@map("cron_runs")
 }

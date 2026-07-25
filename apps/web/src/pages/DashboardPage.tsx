@@ -46,7 +46,12 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <h1 className="text-xl font-semibold">Code Quality &amp; Security Assessment Platform</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Code Quality &amp; Security Assessment Platform</h1>
+        <Link to="/crons" className="text-sm text-blue-600 hover:underline">
+          Cron Runner
+        </Link>
+      </div>
 
       <form onSubmit={handleCreate} className="space-y-2">
         <div className="flex gap-2">

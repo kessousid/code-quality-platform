@@ -14,3 +14,4 @@ export * from './prisma-unit-test-report-repository.js';
 export * from './prisma-coverage-run-repository.js';
 export * from './prisma-coverage-file-result-repository.js';
 export * from './prisma-coverage-report-repository.js';
+export * from './prisma-cron-run-repository.js';

@@ -27,3 +27,6 @@ export const COVERAGE_QUEUE_REGISTRY = Symbol('COVERAGE_QUEUE_REGISTRY');
 export const COVERAGE_REPORT_REPOSITORY = Symbol('COVERAGE_REPORT_REPOSITORY');
 /** A per-workerId registry for the folder-picker's request/response round trip (see docs/adr/0032). */
 export const DIRECTORY_BROWSE_QUEUE_REGISTRY = Symbol('DIRECTORY_BROWSE_QUEUE_REGISTRY');
+export const CRON_RUN_REPOSITORY = Symbol('CRON_RUN_REPOSITORY');
+/** Real outbound HTTP call to the external COD platform, not a queue (see docs/adr/0033). */
+export const CRON_EXECUTOR = Symbol('CRON_EXECUTOR');

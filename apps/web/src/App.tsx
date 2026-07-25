@@ -6,6 +6,7 @@ import { ScanDetailPage } from './pages/ScanDetailPage.js';
 import { UnitTestRunDetailPage } from './pages/UnitTestRunDetailPage.js';
 import { CoverageRunDetailPage } from './pages/CoverageRunDetailPage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { CronsPage } from './pages/CronsPage.js';
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ export function App() {
           <Route path="/scans/:scanId" element={<ScanDetailPage />} />
           <Route path="/unit-tests/:runId" element={<UnitTestRunDetailPage />} />
           <Route path="/coverage-runs/:runId" element={<CoverageRunDetailPage />} />
+          <Route path="/crons" element={<CronsPage />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

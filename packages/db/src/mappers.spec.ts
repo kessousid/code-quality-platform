@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type {
   AnalysisCategory,
   Confidence,
+  CronEnvironment,
+  CronRunStatus,
   Finding,
   ReportFormat,
   RepoProvider,
@@ -14,6 +16,10 @@ import {
   categoryToDb,
   confidenceFromDb,
   confidenceToDb,
+  cronEnvironmentFromDb,
+  cronEnvironmentToDb,
+  cronRunStatusFromDb,
+  cronRunStatusToDb,
   findingStatusFromDb,
   findingStatusToDb,
   repoProviderFromDb,
@@ -49,6 +55,8 @@ const allScanModes: ScanMode[] = ['full', 'incremental'];
 const allScanStatuses: ScanStatus[] = ['queued', 'running', 'completed', 'failed'];
 const allRepoProviders: RepoProvider[] = ['local', 'github', 'gitlab'];
 const allReportFormats: ReportFormat[] = ['html', 'pdf', 'json', 'sarif'];
+const allCronEnvironments: CronEnvironment[] = ['dev', 'staging'];
+const allCronRunStatuses: CronRunStatus[] = ['running', 'succeeded', 'failed'];
 
 describe('enum mappers', () => {
   it('round-trips every Severity value', () => {
@@ -84,6 +92,18 @@ describe('enum mappers', () => {
   it('round-trips every ScanStatus value', () => {
     for (const status of allScanStatuses) {
       expect(scanStatusFromDb(scanStatusToDb(status))).toBe(status);
+    }
+  });
+
+  it('round-trips every CronEnvironment value', () => {
+    for (const environment of allCronEnvironments) {
+      expect(cronEnvironmentFromDb(cronEnvironmentToDb(environment))).toBe(environment);
+    }
+  });
+
+  it('round-trips every CronRunStatus value', () => {
+    for (const status of allCronRunStatuses) {
+      expect(cronRunStatusFromDb(cronRunStatusToDb(status))).toBe(status);
     }
   });
 
