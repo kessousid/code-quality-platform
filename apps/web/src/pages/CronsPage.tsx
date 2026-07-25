@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import type { CronEnvironment, CronRun } from '@cqp/core';
 import { useCronRuns, useCrons, useTriggerCronRun } from '../api/hooks.js';
 import { ApiError } from '../api/client.js';
@@ -28,8 +27,12 @@ function StatusBadge({ status }: { status: CronRun['status'] }) {
   return <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>{status}</span>;
 }
 
+interface CronsPageProps {
+  onChangeFeature?: () => void;
+}
+
 /** See docs/adr/0033 — this is a blocking HTTP call to an external system, not a queued job; the mutation's own pending state is the "live status." */
-export function CronsPage() {
+export function CronsPage({ onChangeFeature }: CronsPageProps = {}) {
   const cronsQuery = useCrons();
   const cronRunsQuery = useCronRuns();
   const triggerCronRun = useTriggerCronRun();
@@ -59,10 +62,18 @@ export function CronsPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <Link to="/" className="text-sm text-blue-600 hover:underline">
-        ← Back to dashboard
-      </Link>
-      <h1 className="text-xl font-semibold">Cron Runner</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Cron Runner</h1>
+        {onChangeFeature && (
+          <button
+            type="button"
+            onClick={onChangeFeature}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Switch feature
+          </button>
+        )}
+      </div>
       <p className="text-xs text-neutral-500">
         Triggers a real cron on the external COD platform for the chosen environment. This is a
         blocking call — a very slow cron could hit an HTTP timeout; see docs/adr/0033.

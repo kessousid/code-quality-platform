@@ -11,7 +11,7 @@ import { DirectoryBrowser } from '../components/DirectoryBrowser.js';
  */
 const LAST_WORKER_ID_KEY = 'cqp:lastWorkerId';
 
-export function DashboardPage() {
+export function DashboardPage({ onChangeFeature }: { onChangeFeature?: () => void } = {}) {
   const reposQuery = useRepos();
   const createRepo = useCreateRepo();
   const [name, setName] = useState('');
@@ -48,9 +48,15 @@ export function DashboardPage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Code Quality &amp; Security Assessment Platform</h1>
-        <Link to="/crons" className="text-sm text-blue-600 hover:underline">
-          Cron Runner
-        </Link>
+        {onChangeFeature && (
+          <button
+            type="button"
+            onClick={onChangeFeature}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Switch feature
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleCreate} className="space-y-2">

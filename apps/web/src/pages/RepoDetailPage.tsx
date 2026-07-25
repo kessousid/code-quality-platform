@@ -5,25 +5,48 @@ import { CodeQualitySecuritySection } from '../components/CodeQualitySecuritySec
 import { CoverageGateSection } from '../components/CoverageGateSection.js';
 import { GenerateUnitTestsSection } from '../components/GenerateUnitTestsSection.js';
 import { ModuleTabs, type RepoModule } from '../components/ModuleTabs.js';
+import type { AppFeature } from '../components/FeatureSelector.js';
 
-export function RepoDetailPage() {
+interface RepoDetailPageProps {
+  /** When set to one of the two repo-scoped features, only that section renders — no tab switcher. Unset (e.g. a direct deep link) falls back to the original both-tabs behavior. */
+  feature?: AppFeature;
+  onChangeFeature?: () => void;
+}
+
+export function RepoDetailPage({ feature, onChangeFeature }: RepoDetailPageProps = {}) {
   const { repoId } = useParams<{ repoId: string }>();
   const repoQuery = useRepo(repoId);
-  const [activeModule, setActiveModule] = useState<RepoModule>('code-quality-security');
+  const restrictedModule =
+    feature === 'code-quality-security' || feature === 'unit-testing' ? feature : undefined;
+  const [activeModule, setActiveModule] = useState<RepoModule>(
+    restrictedModule ?? 'code-quality-security',
+  );
+  const shownModule = restrictedModule ?? activeModule;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <Link to="/" className="text-sm text-blue-600 hover:underline">
-        ← All repos
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link to="/" className="text-sm text-blue-600 hover:underline">
+          ← All repos
+        </Link>
+        {onChangeFeature && (
+          <button
+            type="button"
+            onClick={onChangeFeature}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Switch feature
+          </button>
+        )}
+      </div>
       <h1 className="text-xl font-semibold">{repoQuery.data?.name ?? repoId}</h1>
 
-      <ModuleTabs active={activeModule} onChange={setActiveModule} />
+      {!restrictedModule && <ModuleTabs active={activeModule} onChange={setActiveModule} />}
 
-      {repoId && activeModule === 'code-quality-security' && (
+      {repoId && shownModule === 'code-quality-security' && (
         <CodeQualitySecuritySection repoId={repoId} />
       )}
-      {repoId && activeModule === 'unit-testing' && (
+      {repoId && shownModule === 'unit-testing' && (
         <>
           <CoverageGateSection repoId={repoId} defaultBranch={repoQuery.data?.defaultBranch} />
           <details>

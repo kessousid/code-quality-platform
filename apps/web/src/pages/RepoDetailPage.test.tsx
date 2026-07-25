@@ -271,4 +271,30 @@ describe('RepoDetailPage', () => {
     expect(screen.queryByText('No scans yet.')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Generate unit tests/).length).toBeGreaterThan(0);
   });
+
+  it('shows only the Code Quality & Security section, with no tab switcher, when that feature was chosen upfront', async () => {
+    renderWithProviders(<RepoDetailPage feature="code-quality-security" />, {
+      route: '/repos/repo_1',
+      path: '/repos/:repoId',
+    });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+
+    expect(screen.getByText('No scans yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Unit Testing' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Generate unit tests/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the Unit Testing section, with no tab switcher, when that feature was chosen upfront', async () => {
+    renderWithProviders(<RepoDetailPage feature="unit-testing" />, {
+      route: '/repos/repo_1',
+      path: '/repos/:repoId',
+    });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+
+    expect(screen.queryByText('No scans yet.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Code Quality & Security' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Generate unit tests/).length).toBeGreaterThan(0);
+  });
 });
