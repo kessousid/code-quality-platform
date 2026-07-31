@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -b",
     "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
     "lint": "eslint src",
     "typecheck": "tsc -b",
     "test": "vitest run --passWithNoTests"

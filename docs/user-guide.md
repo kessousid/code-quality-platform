@@ -23,6 +23,70 @@ machine running the worker** that you've already `git clone`d yourself.
 gets cloned, fetched, or pushed by this platform. You still `git push`
 yourself, as normal.
 
+## First time here? You need your own worker running
+
+This tool has no server-side copy of anyone's code. It only ever reads
+files on whichever machine happens to be running a **worker** process for
+that repo — the web app and API are hosted centrally, but they cannot see
+your laptop's disk at all. If you skip this step, every button that
+touches your files (Browse…, running a scan, generating tests, checking
+coverage) will either show someone else's machine's files or fail with
+"no worker responded."
+
+**One-time setup, per developer:**
+
+1. Clone this platform's own repo (not the project you want to
+   scan/test) and install dependencies:
+   ```
+   git clone https://github.com/kessousid/code-quality-platform.git
+   cd code-quality-platform
+   corepack enable
+   corepack pnpm install
+   corepack pnpm run build
+   ```
+2. Get the shared Railway `DATABASE_URL` and `REDIS_URL` (and a
+   `GEMINI_API_KEY` if you'll use AI-based test generation) from whoever
+   manages this deployment — these are the same for everyone, not
+   per-developer. Put them in a file named `.env.<you>-worker` at the
+   repo root (gitignored — never commit real credentials):
+   ```
+   DATABASE_URL=...
+   REDIS_URL=...
+   GEMINI_API_KEY=...
+   ```
+3. Pick a **Worker ID** unique to you — your name plus machine is enough
+   (`priya-laptop`, `raj-desktop`). Run your worker:
+   ```
+   set -a && source .env.<you>-worker && set +a
+   WORKER_ID=<you>-laptop corepack pnpm --filter @cqp/worker run start
+   ```
+   (PowerShell: load the file's variables into `$env:` instead of
+   `source`, then run the same `pnpm` command.)
+4. In the web app, whenever you add a repo or click **Browse…**, type
+   that same Worker ID into the **Worker ID** field first — it's
+   remembered in your browser afterward. A repo registered with your
+   Worker ID only ever touches files on your machine; one registered
+   with someone else's (or left blank, which means the shared `default`
+   worker) never will.
+
+**Keeping it running without thinking about it**: the command above exits
+the moment you close its terminal. To have it start automatically at
+login and restart itself if it crashes, register it as a Windows
+scheduled task instead of running the command by hand:
+
+```powershell
+# One-time, in an elevated PowerShell — replace <you>-laptop and the .env file path with your own
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"cd 'C:\path\to\code-quality-platform'; Get-Content '.env.<you>-worker' | ForEach-Object { if ($_ -match '^\s*([^#=][^=]*)=(.*)$') { [System.Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process') } }; $env:WORKER_ID='<you>-laptop'; corepack pnpm --filter @cqp/worker run start`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName "CQP-Worker-<You>" -Action $action -Trigger $trigger -Settings $settings
+```
+
+Note this runs the **built** worker, not the auto-reloading dev mode —
+after pulling new platform code, re-run `corepack pnpm run build` and
+restart the task (`Restart-ScheduledTask` or log off/on) for it to take
+effect.
+
 ## Registering a repo — the one rule that matters
 
 **One repo record = one real git root.** When you clone a project from

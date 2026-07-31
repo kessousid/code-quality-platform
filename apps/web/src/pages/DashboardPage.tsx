@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateRepo, useRepos } from '../api/hooks.js';
 import { DirectoryBrowser } from '../components/DirectoryBrowser.js';
+import { USER_GUIDE_URL } from '../components/FeatureSelector.js';
 
 /**
  * A developer's workerId is effectively constant across every repo they add
@@ -99,7 +100,16 @@ export function DashboardPage({ onChangeFeature }: { onChangeFeature?: () => voi
         {workerId.trim().length === 0 && (
           <p className="text-xs text-amber-600">
             No Worker ID set — Browse… and any jobs for this repo will use the shared
-            &quot;default&quot; worker, not this machine.
+            &quot;default&quot; worker, not this machine. Don&apos;t have a worker running yet?{' '}
+            <a
+              href={USER_GUIDE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="underline hover:no-underline"
+            >
+              See the setup guide
+            </a>
+            .
           </p>
         )}
         {browsing && (

@@ -2,6 +2,10 @@ import { useState } from 'react';
 
 export type AppFeature = 'code-quality-security' | 'unit-testing' | 'cron-runner';
 
+/** Setup instructions for a new teammate — this tool only sees files on whichever machine runs a worker for that repo, so first use needs a one-time local setup step. */
+export const USER_GUIDE_URL =
+  'https://github.com/kessousid/code-quality-platform/blob/main/docs/user-guide.md';
+
 const FEATURES: { value: AppFeature; label: string }[] = [
   { value: 'code-quality-security', label: 'Code Quality & Security' },
   { value: 'unit-testing', label: 'Unit Testing' },
@@ -43,6 +47,19 @@ export function FeatureSelector({ onSelect }: { onSelect: (feature: AppFeature) 
           Continue
         </button>
       </div>
+      <p className="text-xs text-neutral-500">
+        First time here?{' '}
+        <a
+          href={USER_GUIDE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-600 hover:underline"
+        >
+          Read the setup guide
+        </a>{' '}
+        — Code Quality &amp; Security and Unit Testing need a worker running on your own machine
+        before they can see your files.
+      </p>
     </div>
   );
 }
