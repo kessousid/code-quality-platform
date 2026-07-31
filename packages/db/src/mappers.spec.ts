@@ -10,6 +10,7 @@ import type {
   ScanMode,
   ScanStatus,
   Severity,
+  UnitTestReportFormat,
 } from '@cqp/core';
 import {
   categoryFromDb,
@@ -32,6 +33,8 @@ import {
   scanStatusToDb,
   severityFromDb,
   severityToDb,
+  unitTestReportFormatFromDb,
+  unitTestReportFormatToDb,
 } from './mappers.js';
 
 const allSeverities: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -53,6 +56,7 @@ const allCategories: AnalysisCategory[] = [
 const allStatuses: Finding['status'][] = ['open', 'fixed', 'ignored', 'false-positive'];
 const allScanModes: ScanMode[] = ['full', 'incremental'];
 const allScanStatuses: ScanStatus[] = ['queued', 'running', 'completed', 'failed'];
+const allUnitTestReportFormats: UnitTestReportFormat[] = ['json', 'html', 'pdf', 'xlsx'];
 const allRepoProviders: RepoProvider[] = ['local', 'github', 'gitlab'];
 const allReportFormats: ReportFormat[] = ['html', 'pdf', 'json', 'sarif'];
 const allCronEnvironments: CronEnvironment[] = ['dev', 'staging'];
@@ -92,6 +96,12 @@ describe('enum mappers', () => {
   it('round-trips every ScanStatus value', () => {
     for (const status of allScanStatuses) {
       expect(scanStatusFromDb(scanStatusToDb(status))).toBe(status);
+    }
+  });
+
+  it('round-trips every UnitTestReportFormat value', () => {
+    for (const format of allUnitTestReportFormats) {
+      expect(unitTestReportFormatFromDb(unitTestReportFormatToDb(format))).toBe(format);
     }
   });
 

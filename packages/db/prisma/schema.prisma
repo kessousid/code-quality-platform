@@ -98,6 +98,7 @@ enum UnitTestReportFormat {
   JSON
   HTML
   PDF
+  XLSX
 }
 
 /// Which JestTestGenerator implementation writes a run's tests — see docs/adr/0026.

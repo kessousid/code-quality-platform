@@ -108,7 +108,7 @@ export interface LocalApiServer {
   unitTestRuns: UnitTestRun[];
   resultsByRun: Map<string, unknown[]>;
   generatedFilesByRun: Map<string, unknown[]>;
-  unitTestReportsByRun: Map<string, unknown[]>;
+  unitTestReportsByRun: Map<string, UnitTestReport[]>;
   coverageRuns: CoverageRun[];
   coverageFileResultsByRun: Map<string, unknown[]>;
   coverageReportsByRun: Map<string, unknown[]>;
@@ -125,7 +125,7 @@ interface Report {
   createdAt: string;
 }
 
-interface UnitTestReport {
+export interface UnitTestReport {
   id: string;
   orgId: string;
   unitTestRunId: string;

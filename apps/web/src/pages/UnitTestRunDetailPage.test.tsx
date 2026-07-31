@@ -125,6 +125,13 @@ describe('UnitTestRunDetailPage', () => {
     await waitFor(() =>
       expect(within(jsonRow).getByRole('button', { name: 'Download' })).toBeInTheDocument(),
     );
-    expect(server.unitTestReportsByRun.get('run_3')).toHaveLength(1);
+    expect((server.unitTestReportsByRun.get('run_3') ?? []).map((r) => r.format)).toContain('json');
+    // The xlsx report auto-generates the moment this already-completed run's page loads (docs/adr/0034) — not just the json one clicked manually above.
+    await waitFor(() =>
+      expect((server.unitTestReportsByRun.get('run_3') ?? []).map((r) => r.format)).toContain(
+        'xlsx',
+      ),
+    );
+    expect(server.unitTestReportsByRun.get('run_3')).toHaveLength(2);
   });
 });

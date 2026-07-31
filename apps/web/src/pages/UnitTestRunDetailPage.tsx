@@ -53,7 +53,12 @@ export function UnitTestRunDetailPage() {
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-600">Reports</h2>
-        {runId && <UnitTestReportActions runId={runId} />}
+        {runId && (
+          <UnitTestReportActions
+            runId={runId}
+            {...(run?.status ? { runStatus: run.status } : {})}
+          />
+        )}
       </section>
     </div>
   );

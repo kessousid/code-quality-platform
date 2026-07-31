@@ -362,6 +362,7 @@ const UNIT_TEST_REPORT_EXTENSION: Record<UnitTestReportFormat, string> = {
   json: 'json',
   html: 'html',
   pdf: 'pdf',
+  xlsx: 'xlsx',
 };
 
 /** Downloads a unit test report's real bytes and saves them via a throwaway anchor — same as downloadReport above. */

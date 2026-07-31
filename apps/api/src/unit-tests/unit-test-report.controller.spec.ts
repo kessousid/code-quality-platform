@@ -128,6 +128,20 @@ describe('UnitTestReportController', () => {
     expect(getSent().subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
 
+  it('generates a real xlsx workbook via the controller and downloads it with the spreadsheet Content-Type', async () => {
+    const { controller, run } = await buildTestingModule();
+
+    const generated = await controller.generate('org_1', run.id, { format: 'xlsx' });
+    const { headers, res, getSent } = fakeResponse();
+    await controller.getContent('org_1', generated.id, res);
+
+    expect(headers['Content-Type']).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    // A real .xlsx is a zip archive — starts with the PK magic bytes.
+    expect(getSent().subarray(0, 2).toString('ascii')).toBe('PK');
+  });
+
   it('404s fetching an unknown report', async () => {
     const { controller } = await buildTestingModule();
     await expect(controller.getById('org_1', 'does-not-exist')).rejects.toThrow(NotFoundException);

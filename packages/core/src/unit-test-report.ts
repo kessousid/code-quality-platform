@@ -1,5 +1,5 @@
 /** Mirrors report.ts (docs/adr/0019) exactly, for UnitTestRun instead of Scan — see docs/adr/0024's follow-up: unit test results needed to become downloadable/shareable the same way scan reports already are. */
-export type UnitTestReportFormat = 'json' | 'html' | 'pdf';
+export type UnitTestReportFormat = 'json' | 'html' | 'pdf' | 'xlsx';
 
 export interface UnitTestReport {
   id: string;

@@ -16,6 +16,7 @@ const CONTENT_TYPE: Record<UnitTestReportFormat, string> = {
   json: 'application/json',
   html: 'text/html; charset=utf-8',
   pdf: 'application/pdf',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 /** Mirrors ReportController exactly (docs/adr/0019, docs/adr/0024) — see docs/adr/0019's note on why `@Res()` here is never passthrough: that mode JSON-serializes a returned Buffer into `{type,data}` instead of sending raw bytes. */
