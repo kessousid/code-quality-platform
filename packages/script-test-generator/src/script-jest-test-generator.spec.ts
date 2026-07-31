@@ -128,6 +128,62 @@ describe('ScriptJestTestGenerator', () => {
     expect(result.content).not.toContain('toEqual');
   });
 
+  it('handles a bare default export (`module.exports = fn`) — a real user-reported bug', async () => {
+    await writeFile(
+      join(repoRoot, 'sum.js'),
+      'function sum(a, b) {\n    return a + b;\n}\n\nmodule.exports = sum;\n',
+    );
+
+    const generator = new ScriptJestTestGenerator();
+    const result = await generator.generateTests({
+      sourceFilePath: 'sum.js',
+      sourceCode: '',
+      language: 'js',
+      functions: [fn({ name: 'sum', isDefaultExport: true, parameters: ['a', 'b'] })],
+      sourceFileAbsolutePath: join(repoRoot, 'sum.js'),
+    });
+
+    // Not `const { sum } = require(...)` — sum.js's module.exports IS the
+    // function itself, so destructuring a property called "sum" off of it
+    // finds nothing and every assertion (even the smoke-test fallback)
+    // fails with "not a function", regardless of what generation-time saw.
+    expect(result.content).toContain(`const sum = require('./sum');`);
+    expect(result.content).not.toContain('could not be safely executed at generation time');
+    expect(result.content).toContain('toEqual(5)'); // synthesizeArguments gives (2, 3) for two numeric-looking params
+  });
+
+  it('runs a bare-default-export generated test for real via Jest and confirms it actually passes', async () => {
+    await writeFile(join(repoRoot, 'package.json'), '{"name":"tmp-fixture"}');
+    await writeFile(
+      join(repoRoot, 'sum.js'),
+      'function sum(a, b) {\n    return a + b;\n}\n\nmodule.exports = sum;\n',
+    );
+
+    const generator = new ScriptJestTestGenerator();
+    const result = await generator.generateTests({
+      sourceFilePath: 'sum.js',
+      sourceCode: '',
+      language: 'js',
+      functions: [fn({ name: 'sum', isDefaultExport: true, parameters: ['a', 'b'] })],
+      sourceFileAbsolutePath: join(repoRoot, 'sum.js'),
+    });
+    await writeFile(join(repoRoot, 'sum.generated.test.js'), result.content);
+
+    const outputFile = join(repoRoot, '.jest-output.json');
+    await execFileAsync(
+      process.execPath,
+      [REAL_JEST_PATH, '--json', `--outputFile=${outputFile}`],
+      { cwd: repoRoot },
+    ).catch(() => {});
+
+    const raw = JSON.parse(await readFile(outputFile, 'utf-8')) as {
+      numPassedTests: number;
+      numFailedTests: number;
+    };
+    expect(raw.numPassedTests).toBe(1);
+    expect(raw.numFailedTests).toBe(0);
+  }, 30000);
+
   it('runs the generated test for real via Jest and confirms it actually passes', async () => {
     await writeFile(join(repoRoot, 'package.json'), '{"name":"tmp-fixture"}');
     await writeFile(

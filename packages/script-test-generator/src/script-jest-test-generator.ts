@@ -40,8 +40,21 @@ export class ScriptJestTestGenerator implements JestTestGenerator {
       blocks.push(await this.generateBlockFor(fn, mod));
     }
 
-    const importedNames = input.functions.map((f) => f.name).join(', ');
-    const content = `const { ${importedNames} } = require('./${importBase}');
+    // `module.exports = fn` (a bare default export, e.g. `module.exports =
+    // sum;`) can only ever produce a single extracted function — the
+    // generated test's own require() must match that real shape, or it
+    // destructures a property that doesn't exist and every assertion
+    // (including the smoke-test fallback) fails with "not a function",
+    // regardless of what generation-time execution actually saw.
+    const singleDefault =
+      input.functions.length === 1 && input.functions[0]!.isDefaultExport
+        ? input.functions[0]!
+        : null;
+    const importLine = singleDefault
+      ? `const ${singleDefault.name} = require('./${importBase}');`
+      : `const { ${input.functions.map((f) => f.name).join(', ')} } = require('./${importBase}');`;
+
+    const content = `${importLine}
 
 ${blocks.join('\n\n')}
 `;
@@ -64,7 +77,10 @@ ${blocks.join('\n\n')}
     fn: FunctionSignature,
     mod: Record<string, unknown> | null,
   ): Promise<string> {
-    const target = mod?.[fn.name];
+    // A bare `module.exports = fn` means `mod` itself IS the function —
+    // there's no `.fn.name` property to look up on it (see the import-line
+    // comment in generateTests for the matching generated-test-side fix).
+    const target = typeof mod === 'function' ? mod : mod?.[fn.name];
     if (typeof target !== 'function') {
       return this.smokeBlock(fn);
     }
