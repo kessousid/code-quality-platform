@@ -285,6 +285,16 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
 
     if (method === 'GET' && pathname === '/fs/browse') {
       const path = url.searchParams.get('path') ?? '/';
+      const workerId = url.searchParams.get('workerId');
+      // Real shape of the docs/adr/0032 timeout error, for tests exercising that failure path without an actual 10s wait.
+      if (workerId === 'unreachable-worker') {
+        send(res, 400, {
+          message: `No worker responded within 10000ms — is a worker actually running for this workerId?`,
+          error: 'Bad Request',
+          statusCode: 400,
+        });
+        return;
+      }
       const fixture = directories.get(path);
       if (!fixture) {
         send(res, 200, { path, parent: null, entries: [] });

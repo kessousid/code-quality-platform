@@ -134,6 +134,12 @@ export function useBrowseDirectory(
       const query = params.toString();
       return apiGet<BrowseDirectoryResult>(`/fs/browse${query ? `?${query}` : ''}`);
     },
+    // A failure here (bad path, or docs/adr/0032's "no worker responded within
+    // 10000ms") isn't transient — retrying the identical request won't change
+    // the outcome. Without this, React Query's default 3 retries turned an
+    // ~11s worker-timeout into a ~50s+ wait before the error ever showed,
+    // which just looked like Browse… was stuck on "Loading…" forever.
+    retry: false,
   });
 }
 

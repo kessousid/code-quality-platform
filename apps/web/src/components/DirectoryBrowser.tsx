@@ -27,7 +27,9 @@ export function DirectoryBrowser({
     <div className="rounded-lg border bg-white p-3 shadow-sm">
       <div className="mb-2 flex items-center justify-between gap-2">
         <code className="truncate text-xs text-neutral-600">
-          {browseQuery.data?.path ?? path ?? 'Loading…'}
+          {browseQuery.data?.path ??
+            path ??
+            (browseQuery.isError ? '(could not load)' : 'Loading…')}
         </code>
         <button
           type="button"
