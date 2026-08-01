@@ -53,32 +53,49 @@ export class RunQaAutomationSuiteUseCase {
       triggeredBy: input.triggeredBy,
     });
 
-    const schedule = await this.scheduleRepository.get(input.orgId);
-    const testsToRun = this.selectTests(input.triggeredBy, schedule);
+    // Everything below can throw for reasons that have nothing to do with
+    // an individual test (e.g. the browser itself fails to launch) — that
+    // must still mark the run failed and alert, not leave it stuck at
+    // 'running' forever with no test ever having gotten the chance to
+    // record its own per-test failure.
+    try {
+      const schedule = await this.scheduleRepository.get(input.orgId);
+      const testsToRun = this.selectTests(input.triggeredBy, schedule);
 
-    const results = await this.runTests(testsToRun);
-    for (const result of results) {
-      await this.resultRepository.create({ runId: run.id, ...result });
-    }
+      const results = await this.runTests(testsToRun);
+      for (const result of results) {
+        await this.resultRepository.create({ runId: run.id, ...result });
+      }
 
-    if (input.triggeredBy === 'scheduled' && testsToRun.some((t) => t.frequency === 'daily')) {
-      await this.scheduleRepository.update(input.orgId, { lastDailyCheckAt: new Date() });
-    }
+      if (input.triggeredBy === 'scheduled' && testsToRun.some((t) => t.frequency === 'daily')) {
+        await this.scheduleRepository.update(input.orgId, { lastDailyCheckAt: new Date() });
+      }
 
-    const failing = results.filter((r) => !r.passed);
-    const completed = await this.runRepository.complete(input.orgId, run.id, {
-      status: failing.length > 0 ? 'failed' : 'completed',
-    });
+      const failing = results.filter((r) => !r.passed);
+      const completed = await this.runRepository.complete(input.orgId, run.id, {
+        status: failing.length > 0 ? 'failed' : 'completed',
+      });
 
-    if (failing.length > 0) {
+      if (failing.length > 0) {
+        await this.emailSender.send({
+          to: this.alertEmailTo,
+          subject: `QA automation alert: ${failing.length} test(s) failed`,
+          body: failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n'),
+        });
+      }
+
+      return completed;
+    } catch (error) {
+      const completed = await this.runRepository.complete(input.orgId, run.id, {
+        status: 'failed',
+      });
       await this.emailSender.send({
         to: this.alertEmailTo,
-        subject: `QA automation alert: ${failing.length} test(s) failed`,
-        body: failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n'),
+        subject: 'QA automation alert: the run itself crashed',
+        body: `The run crashed before any test could complete: ${(error as Error).message}`,
       });
+      return completed;
     }
-
-    return completed;
   }
 
   private selectTests(

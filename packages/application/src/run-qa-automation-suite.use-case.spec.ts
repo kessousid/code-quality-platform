@@ -130,4 +130,27 @@ describe('RunQaAutomationSuiteUseCase', () => {
     expect(dailyResult?.passed).toBe(false);
     expect(dailyResult?.details).toContain('page.click timed out');
   });
+
+  it('marks the run failed and alerts, never leaving it stuck at "running", if the browser itself fails to launch', async () => {
+    const runRepository = new InMemoryQaAutomationRunRepository();
+    const resultRepository = new InMemoryQaAutomationTestResultRepository();
+    const scheduleRepository = new InMemoryQaAutomationScheduleRepository();
+    const emailSender = new InMemoryEmailSender();
+    const useCase = new RunQaAutomationSuiteUseCase(
+      runRepository,
+      resultRepository,
+      scheduleRepository,
+      [new FakePortalAutomationTest('every-run-test', 'Every-run test', 'every-run')],
+      () => Promise.reject(new Error("browserType.launch: Executable doesn't exist")),
+      emailSender,
+      ALERT_TO,
+    );
+
+    const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
+
+    expect(run.status).toBe('failed');
+    expect(run.completedAt).toBeInstanceOf(Date);
+    expect(emailSender.sent).toHaveLength(1);
+    expect(emailSender.sent[0]?.body).toContain("browserType.launch: Executable doesn't exist");
+  });
 });
