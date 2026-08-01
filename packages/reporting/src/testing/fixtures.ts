@@ -3,6 +3,8 @@ import type {
   CoverageRun,
   Finding,
   GeneratedTestFile,
+  QaAutomationRun,
+  QaAutomationTestResult,
   Repo,
   Scan,
   TestCaseResult,
@@ -111,6 +113,46 @@ export function makeTestCaseResults(): TestCaseResult[] {
       testName: 'fails on purpose',
       status: 'failed',
       failureMessage: 'Expected 3 but received 2',
+    }),
+  ];
+}
+
+export function makeQaAutomationRun(overrides: Partial<QaAutomationRun> = {}): QaAutomationRun {
+  return {
+    id: 'qarun_1',
+    orgId: 'org_1',
+    status: 'completed',
+    triggeredBy: 'manual',
+    startedAt: new Date('2026-07-01T00:00:00.000Z'),
+    completedAt: new Date('2026-07-01T00:01:00.000Z'),
+    createdAt: new Date('2026-07-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+export function makeQaAutomationTestResult(
+  overrides: Partial<QaAutomationTestResult> & { id: string },
+): QaAutomationTestResult {
+  return {
+    runId: 'qarun_1',
+    testId: 'slot-listing-pricing',
+    testName: 'Slot listing pricing matches Sunday/weekday business rule',
+    passed: true,
+    details: 'ok',
+    createdAt: new Date('2026-07-01T00:00:00.000Z'),
+    ...overrides,
+  };
+}
+
+export function makeQaAutomationTestResults(): QaAutomationTestResult[] {
+  return [
+    makeQaAutomationTestResult({ id: 'r1', testName: 'Every-run test', passed: true }),
+    makeQaAutomationTestResult({
+      id: 'r2',
+      testId: 'slot-booking-flow',
+      testName: 'Daily test',
+      passed: false,
+      details: 'Sunday had a free slot',
     }),
   ];
 }

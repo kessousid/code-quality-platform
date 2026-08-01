@@ -46,3 +46,7 @@ export * from './get-qa-automation-schedule.use-case.js';
 export * from './update-qa-automation-schedule.use-case.js';
 export * from './list-qa-automation-runs.use-case.js';
 export * from './get-qa-automation-run.use-case.js';
+export * from './generate-qa-automation-report.use-case.js';
+export * from './get-qa-automation-report.use-case.js';
+export * from './get-qa-automation-report-content.use-case.js';
+export * from './list-qa-automation-reports-by-run.use-case.js';

@@ -62,4 +62,24 @@ describe('QaAutomationPage', () => {
     );
     expect(screen.getByText('PASS')).toBeInTheDocument();
   });
+
+  it('generates a PDF report for a run through the real endpoint and can download it', async () => {
+    renderWithProviders(<QaAutomationPage />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+    await waitFor(() => expect(screen.getByText('completed')).toBeInTheDocument());
+    await user.click(screen.getByText('completed'));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Generate PDF report' })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate PDF report' }));
+
+    await waitFor(() => expect(server.qaAutomationReportsByRun.size).toBe(1));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Regenerate PDF report' })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
+  });
 });

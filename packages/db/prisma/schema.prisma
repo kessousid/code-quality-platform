@@ -149,6 +149,10 @@ enum QaAutomationTrigger {
   MANUAL
 }
 
+enum QaAutomationReportFormat {
+  PDF
+}
+
 model Org {
   id        String   @id @default(cuid())
   name      String
@@ -170,6 +174,7 @@ model Org {
   cronRuns        CronRun[]
   qaAutomationRuns     QaAutomationRun[]
   qaAutomationSchedule QaAutomationSchedule?
+  qaAutomationReports  QaAutomationReport[]
 
   @@map("orgs")
 }
@@ -609,6 +614,7 @@ model QaAutomationRun {
 
   org     Org                       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   results QaAutomationTestResult[]
+  reports QaAutomationReport[]
 
   @@index([orgId, createdAt])
   @@map("qa_automation_runs")
@@ -643,4 +649,21 @@ model QaAutomationSchedule {
   org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("qa_automation_schedules")
+}
+
+/// Mirrors UnitTestReport exactly, for QaAutomationRun instead of UnitTestRun.
+model QaAutomationReport {
+  id         String                   @id @default(cuid())
+  orgId      String
+  runId      String
+  format     QaAutomationReportFormat
+  storageKey String
+  createdAt  DateTime                 @default(now())
+
+  org Org             @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  run QaAutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, format])
+  @@index([orgId, runId])
+  @@map("qa_automation_reports")
 }

@@ -23,6 +23,7 @@ export * from './in-memory-cron-executor.js';
 export * from './in-memory-qa-automation-run-repository.js';
 export * from './in-memory-qa-automation-test-result-repository.js';
 export * from './in-memory-qa-automation-schedule-repository.js';
+export * from './in-memory-qa-automation-report-repository.js';
 export * from './in-memory-email-sender.js';
 export * from './fake-portal-automation-test.js';
 export * from './fake-qa-browser.js';

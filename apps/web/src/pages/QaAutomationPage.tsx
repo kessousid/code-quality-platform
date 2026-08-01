@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { QaAutomationRun } from '@cqp/core';
 import {
+  downloadQaAutomationReport,
+  useGenerateQaAutomationReport,
+  useQaAutomationReports,
   useQaAutomationRun,
   useQaAutomationRuns,
   useQaAutomationSchedule,
@@ -40,6 +43,34 @@ function RunResults({ runId }: { runId: string }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function RunReportActions({ runId }: { runId: string }) {
+  const reportsQuery = useQaAutomationReports(runId);
+  const generate = useGenerateQaAutomationReport(runId);
+  const report = reportsQuery.data?.[0];
+
+  return (
+    <div className="mt-2 flex items-center gap-2 border-t pt-2">
+      <button
+        type="button"
+        onClick={() => generate.mutate('pdf')}
+        disabled={generate.isPending}
+        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+      >
+        {report ? 'Regenerate PDF report' : 'Generate PDF report'}
+      </button>
+      {report && (
+        <button
+          type="button"
+          onClick={() => downloadQaAutomationReport(report)}
+          className="text-xs text-blue-600 hover:underline"
+        >
+          Download
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -175,7 +206,12 @@ export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}
                   {new Date(run.createdAt).toLocaleString()}
                 </span>
               </button>
-              {expandedRunId === run.id && <RunResults runId={run.id} />}
+              {expandedRunId === run.id && (
+                <>
+                  <RunResults runId={run.id} />
+                  <RunReportActions runId={run.id} />
+                </>
+              )}
             </li>
           ))}
           {runsQuery.data?.data.length === 0 && (

@@ -1,32 +1,43 @@
 import { Module } from '@nestjs/common';
 import type {
+  ObjectStorage,
+  QaAutomationReportRepository,
   QaAutomationRunRepository,
   QaAutomationScheduleRepository,
   QaAutomationTestResultRepository,
 } from '@cqp/core';
 import {
+  GenerateQaAutomationReportUseCase,
+  GetQaAutomationReportContentUseCase,
+  GetQaAutomationReportUseCase,
   GetQaAutomationRunUseCase,
   GetQaAutomationScheduleUseCase,
+  ListQaAutomationReportsByRunUseCase,
   ListQaAutomationRunsUseCase,
   UpdateQaAutomationScheduleUseCase,
 } from '@cqp/application';
 import {
+  PrismaQaAutomationReportRepository,
   PrismaQaAutomationRunRepository,
   PrismaQaAutomationScheduleRepository,
   PrismaQaAutomationTestResultRepository,
 } from '@cqp/db';
 import { createQaAutomationBullQueue, createRedisConnection } from '@cqp/queue';
+import { LocalFilesystemObjectStorage } from '@cqp/storage';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
+  OBJECT_STORAGE,
   QA_AUTOMATION_QUEUE,
+  QA_AUTOMATION_REPORT_REPOSITORY,
   QA_AUTOMATION_RUN_REPOSITORY,
   QA_AUTOMATION_SCHEDULE_REPOSITORY,
   QA_AUTOMATION_TEST_RESULT_REPOSITORY,
 } from '../tokens.js';
 import { QaAutomationController } from './qa-automation.controller.js';
+import { QaAutomationReportController } from './qa-automation-report.controller.js';
 
 @Module({
-  controllers: [QaAutomationController],
+  controllers: [QaAutomationController, QaAutomationReportController],
   providers: [
     {
       provide: QA_AUTOMATION_RUN_REPOSITORY,
@@ -78,6 +89,56 @@ import { QaAutomationController } from './qa-automation.controller.js';
         resultRepo: QaAutomationTestResultRepository,
       ) => new GetQaAutomationRunUseCase(runRepo, resultRepo),
       inject: [QA_AUTOMATION_RUN_REPOSITORY, QA_AUTOMATION_TEST_RESULT_REPOSITORY],
+    },
+    {
+      provide: QA_AUTOMATION_REPORT_REPOSITORY,
+      useFactory: (prisma: PrismaService) => new PrismaQaAutomationReportRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      // Dev/single-instance adapter — mirrors ReportModule/UnitTestModule exactly.
+      provide: OBJECT_STORAGE,
+      useFactory: () =>
+        new LocalFilesystemObjectStorage(process.env.CQP_STORAGE_ROOT ?? './.data/storage'),
+    },
+    {
+      provide: ListQaAutomationReportsByRunUseCase,
+      useFactory: (repo: QaAutomationReportRepository) =>
+        new ListQaAutomationReportsByRunUseCase(repo),
+      inject: [QA_AUTOMATION_REPORT_REPOSITORY],
+    },
+    {
+      provide: GetQaAutomationReportUseCase,
+      useFactory: (repo: QaAutomationReportRepository) => new GetQaAutomationReportUseCase(repo),
+      inject: [QA_AUTOMATION_REPORT_REPOSITORY],
+    },
+    {
+      provide: GetQaAutomationReportContentUseCase,
+      useFactory: (
+        getQaAutomationReportUseCase: GetQaAutomationReportUseCase,
+        storage: ObjectStorage,
+      ) => new GetQaAutomationReportContentUseCase(getQaAutomationReportUseCase, storage),
+      inject: [GetQaAutomationReportUseCase, OBJECT_STORAGE],
+    },
+    {
+      provide: GenerateQaAutomationReportUseCase,
+      useFactory: (
+        runRepo: QaAutomationRunRepository,
+        resultRepo: QaAutomationTestResultRepository,
+        reportRepo: QaAutomationReportRepository,
+        storage: ObjectStorage,
+      ) =>
+        new GenerateQaAutomationReportUseCase(
+          new GetQaAutomationRunUseCase(runRepo, resultRepo),
+          reportRepo,
+          storage,
+        ),
+      inject: [
+        QA_AUTOMATION_RUN_REPOSITORY,
+        QA_AUTOMATION_TEST_RESULT_REPOSITORY,
+        QA_AUTOMATION_REPORT_REPOSITORY,
+        OBJECT_STORAGE,
+      ],
     },
   ],
 })

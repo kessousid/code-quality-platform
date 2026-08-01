@@ -122,6 +122,15 @@ export interface QaAutomationRunFixture {
   completedAt?: string;
 }
 
+export interface QaAutomationReportFixture {
+  id: string;
+  orgId: string;
+  runId: string;
+  format: string;
+  storageKey: string;
+  createdAt: string;
+}
+
 export interface LocalApiServer {
   baseUrl: string;
   close: () => Promise<void>;
@@ -143,6 +152,7 @@ export interface LocalApiServer {
   qaAutomationSchedule: QaAutomationScheduleFixture;
   qaAutomationRuns: QaAutomationRunFixture[];
   qaAutomationResultsByRun: Map<string, QaAutomationTestResultFixture[]>;
+  qaAutomationReportsByRun: Map<string, QaAutomationReportFixture[]>;
 }
 
 interface Report {
@@ -184,7 +194,11 @@ function send(
   contentType = 'application/json',
 ): void {
   res.writeHead(status, { 'Content-Type': contentType });
-  res.end(typeof body === 'string' ? body : JSON.stringify(body));
+  if (typeof body === 'string' || Buffer.isBuffer(body)) {
+    res.end(body);
+    return;
+  }
+  res.end(JSON.stringify(body));
 }
 
 function sendOrNotFound(res: ServerResponse, body: unknown): void {
@@ -232,6 +246,8 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   const qaAutomationSchedule: QaAutomationScheduleFixture = { intervalHours: 12, enabled: true };
   const qaAutomationRuns: QaAutomationRunFixture[] = [];
   const qaAutomationResultsByRun = new Map<string, QaAutomationTestResultFixture[]>();
+  const qaAutomationReportsByRun = new Map<string, QaAutomationReportFixture[]>();
+  const qaAutomationReportContent = new Map<string, Buffer>();
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -690,6 +706,43 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
       return;
     }
 
+    const qaReportsListMatch = pathname.match(/^\/qa-automation\/runs\/([^/]+)\/reports$/);
+    if (method === 'GET' && qaReportsListMatch) {
+      send(res, 200, qaAutomationReportsByRun.get(qaReportsListMatch[1]!) ?? []);
+      return;
+    }
+    if (method === 'POST' && qaReportsListMatch) {
+      const runId = qaReportsListMatch[1]!;
+      const { format } = (await readJsonBody(req)) as { format?: string };
+      const report: QaAutomationReportFixture = {
+        id: id('qa-automation-report'),
+        orgId: 'org_1',
+        runId,
+        format: format ?? 'pdf',
+        storageKey: `k/${runId}/${format}`,
+        createdAt: new Date().toISOString(),
+      };
+      const list = qaAutomationReportsByRun.get(runId) ?? [];
+      qaAutomationReportsByRun.set(runId, [
+        ...list.filter((r) => r.format !== report.format),
+        report,
+      ]);
+      qaAutomationReportContent.set(report.id, Buffer.from('%PDF-1.4 fake report content'));
+      send(res, 201, report);
+      return;
+    }
+
+    const qaReportContentMatch = pathname.match(/^\/qa-automation-reports\/([^/]+)\/content$/);
+    if (method === 'GET' && qaReportContentMatch) {
+      const body = qaAutomationReportContent.get(qaReportContentMatch[1]!);
+      if (body === undefined) {
+        send(res, 404, { message: 'not found' });
+        return;
+      }
+      send(res, 200, body, 'application/pdf');
+      return;
+    }
+
     send(res, 404, { message: `no route for ${method} ${pathname}` });
   }
 
@@ -723,5 +776,6 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     qaAutomationSchedule,
     qaAutomationRuns,
     qaAutomationResultsByRun,
+    qaAutomationReportsByRun,
   };
 }

@@ -33,5 +33,6 @@ export const CRON_EXECUTOR = Symbol('CRON_EXECUTOR');
 export const QA_AUTOMATION_RUN_REPOSITORY = Symbol('QA_AUTOMATION_RUN_REPOSITORY');
 export const QA_AUTOMATION_TEST_RESULT_REPOSITORY = Symbol('QA_AUTOMATION_TEST_RESULT_REPOSITORY');
 export const QA_AUTOMATION_SCHEDULE_REPOSITORY = Symbol('QA_AUTOMATION_SCHEDULE_REPOSITORY');
+export const QA_AUTOMATION_REPORT_REPOSITORY = Symbol('QA_AUTOMATION_REPORT_REPOSITORY');
 /** The raw BullMQ producer Queue itself (not a port) — apps/api calls its real upsertJobScheduler/removeJobScheduler directly (see docs/adr/0035). */
 export const QA_AUTOMATION_QUEUE = Symbol('QA_AUTOMATION_QUEUE');

@@ -5,6 +5,7 @@ import type {
   CronEnvironment,
   CronRunStatus,
   Finding,
+  QaAutomationReportFormat,
   QaAutomationRunStatus,
   QaAutomationTrigger,
   ReportFormat,
@@ -25,6 +26,8 @@ import {
   cronRunStatusToDb,
   findingStatusFromDb,
   findingStatusToDb,
+  qaAutomationReportFormatFromDb,
+  qaAutomationReportFormatToDb,
   qaAutomationRunStatusFromDb,
   qaAutomationRunStatusToDb,
   qaAutomationTriggerFromDb,
@@ -69,6 +72,7 @@ const allCronEnvironments: CronEnvironment[] = ['dev', 'staging'];
 const allCronRunStatuses: CronRunStatus[] = ['running', 'succeeded', 'failed'];
 const allQaAutomationRunStatuses: QaAutomationRunStatus[] = ['running', 'completed', 'failed'];
 const allQaAutomationTriggers: QaAutomationTrigger[] = ['scheduled', 'manual'];
+const allQaAutomationReportFormats: QaAutomationReportFormat[] = ['pdf'];
 
 describe('enum mappers', () => {
   it('round-trips every Severity value', () => {
@@ -134,6 +138,12 @@ describe('enum mappers', () => {
   it('round-trips every QaAutomationTrigger value', () => {
     for (const trigger of allQaAutomationTriggers) {
       expect(qaAutomationTriggerFromDb(qaAutomationTriggerToDb(trigger))).toBe(trigger);
+    }
+  });
+
+  it('round-trips every QaAutomationReportFormat value', () => {
+    for (const format of allQaAutomationReportFormats) {
+      expect(qaAutomationReportFormatFromDb(qaAutomationReportFormatToDb(format))).toBe(format);
     }
   });
 

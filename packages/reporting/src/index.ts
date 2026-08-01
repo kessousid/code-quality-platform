@@ -7,3 +7,6 @@ export * from './unit-test-generator-registry.js';
 export * from './coverage-generator.js';
 export * from './coverage-report-model.js';
 export * from './coverage-generator-registry.js';
+export * from './qa-automation-generator.js';
+export * from './qa-automation-report-model.js';
+export * from './qa-automation-generator-registry.js';

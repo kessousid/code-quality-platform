@@ -13,6 +13,8 @@ import type {
   Finding,
   GeneratedTestFile,
   PaginatedResult,
+  QaAutomationReport,
+  QaAutomationReportFormat,
   QaAutomationRun,
   QaAutomationSchedule,
   QaAutomationTestResult,
@@ -556,4 +558,36 @@ export function useQaAutomationRun(runId: string | undefined) {
     queryFn: () => apiGet<QaAutomationRunWithResults>(`/qa-automation/runs/${runId}`),
     enabled: runId !== undefined,
   });
+}
+
+/** Mirrors useUnitTestReports/useGenerateUnitTestReport/downloadUnitTestReport — same pattern for QaAutomationRun instead of UnitTestRun. */
+export function useQaAutomationReports(runId: string | undefined) {
+  return useQuery({
+    queryKey: ['qa-automation-reports', runId],
+    queryFn: () => apiGet<QaAutomationReport[]>(`/qa-automation/runs/${runId}/reports`),
+    enabled: runId !== undefined,
+  });
+}
+
+export function useGenerateQaAutomationReport(runId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (format: QaAutomationReportFormat) =>
+      apiPost<QaAutomationReport>(`/qa-automation/runs/${runId}/reports`, { format }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-reports', runId] }),
+  });
+}
+
+/** Downloads a QA automation report's real bytes and saves them via a throwaway anchor — same as downloadUnitTestReport. */
+export async function downloadQaAutomationReport(report: QaAutomationReport): Promise<void> {
+  const blob = await apiGetBlob(`/qa-automation-reports/${report.id}/content`);
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `qa-automation-report-${report.runId}.${report.format}`;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
