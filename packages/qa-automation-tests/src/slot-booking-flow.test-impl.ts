@@ -31,13 +31,20 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     await loginAndReachBookingScreen(page, this.credentials);
     await selectCalendarDate(page, nextNonSunday());
 
-    const priorityResult = await this.checkPriorityPaymentScreen(page);
-    if (!priorityResult.passed) return priorityResult;
-
+    // Free Slots first, deliberately — checkPriorityPaymentScreen ends by
+    // opening the real Razorpay iframe, which then covers the rest of the
+    // page and blocks any further interaction with it (confirmed by a
+    // real production failure: the Free Slots button was still visible
+    // but its click was rejected because the iframe intercepted the
+    // pointer event). Nothing needs to happen on this page after the
+    // payment screen is confirmed, so that check is safe to run last.
     const freeResult = await this.checkFreeScheduleOption(page);
     if (!freeResult.passed) return freeResult;
 
-    return { passed: true, details: `${priorityResult.details}; ${freeResult.details}` };
+    const priorityResult = await this.checkPriorityPaymentScreen(page);
+    if (!priorityResult.passed) return priorityResult;
+
+    return { passed: true, details: `${freeResult.details}; ${priorityResult.details}` };
   }
 
   private async checkPriorityPaymentScreen(page: Page): Promise<PortalAutomationTestResult> {
