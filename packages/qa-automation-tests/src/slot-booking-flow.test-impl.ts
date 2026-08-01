@@ -5,6 +5,7 @@ import type {
   PortalCredentials,
 } from './portal-automation-test.js';
 import {
+  findSlotPanel,
   loginAndReachBookingScreen,
   nextNonSunday,
   selectCalendarDate,
@@ -40,7 +41,7 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
   }
 
   private async checkPriorityPaymentScreen(page: Page): Promise<PortalAutomationTestResult> {
-    const panel = page.locator('div').filter({ hasText: 'Priority Flexible Slots' }).last();
+    const panel = await findSlotPanel(page, 'Priority Flexible Slots');
     const timeButton = panel
       .getByRole('button')
       .filter({ hasText: /^\d{1,2}:\d{2}\s*(AM|PM)$/i })
@@ -84,7 +85,7 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
   }
 
   private async checkFreeScheduleOption(page: Page): Promise<PortalAutomationTestResult> {
-    const panel = page.locator('div').filter({ hasText: 'Free Slots' }).last();
+    const panel = await findSlotPanel(page, 'Free Slots');
     const timeButton = panel
       .getByRole('button')
       .filter({ hasText: /^\d{1,2}:\d{2}\s*(AM|PM)$/i })
