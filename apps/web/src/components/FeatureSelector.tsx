@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export type AppFeature = 'code-quality-security' | 'unit-testing' | 'cron-runner';
+export type AppFeature = 'code-quality-security' | 'unit-testing' | 'cron-runner' | 'qa-automation';
 
 /** Setup instructions for a new teammate — this tool only sees files on whichever machine runs a worker for that repo, so first use needs a one-time local setup step. */
 export const USER_GUIDE_URL =
@@ -10,6 +10,7 @@ const FEATURES: { value: AppFeature; label: string }[] = [
   { value: 'code-quality-security', label: 'Code Quality & Security' },
   { value: 'unit-testing', label: 'Unit Testing' },
   { value: 'cron-runner', label: 'Cron Runner' },
+  { value: 'qa-automation', label: 'Production QA Automation' },
 ];
 
 /**

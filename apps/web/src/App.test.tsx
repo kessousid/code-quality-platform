@@ -7,6 +7,10 @@ import { startLocalApiServer, type LocalApiServer } from './test/local-api-serve
 let server: LocalApiServer;
 
 beforeEach(async () => {
+  // BrowserRouter reads the real jsdom `window.location`, which persists
+  // across tests in this file — without resetting it, a previous test's
+  // navigation (e.g. to /crons) leaks into the next test's initial route.
+  window.history.pushState({}, '', '/');
   server = await startLocalApiServer();
   import.meta.env.VITE_API_BASE_URL = server.baseUrl;
 });
@@ -41,6 +45,17 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => expect(screen.getByText('Cron Runner')).toBeInTheDocument());
+    expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
+  });
+
+  it('takes the Production QA Automation feature straight to /qa-automation, skipping the dashboard', async () => {
+    render(<App />);
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Feature' }), 'qa-automation');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByText('Production QA Automation')).toBeInTheDocument());
     expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
   });
 });

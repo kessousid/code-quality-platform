@@ -13,6 +13,9 @@ import type {
   Finding,
   GeneratedTestFile,
   PaginatedResult,
+  QaAutomationRun,
+  QaAutomationSchedule,
+  QaAutomationTestResult,
   Report,
   ReportFormat,
   Repo,
@@ -25,7 +28,7 @@ import type {
   UnitTestTarget,
 } from '@cqp/core';
 import type { ReportSummary } from '@cqp/reporting';
-import { apiGet, apiGetBlob, apiPost } from './client.js';
+import { apiGet, apiGetBlob, apiPost, apiPut } from './client.js';
 
 export function useRepos(page = 1, pageSize = 25) {
   return useQuery({
@@ -504,5 +507,53 @@ export function useCronRuns(page = 1, pageSize = 25) {
   return useQuery({
     queryKey: ['cron-runs', page, pageSize],
     queryFn: () => apiGet<PaginatedResult<CronRun>>(`/cron-runs?page=${page}&pageSize=${pageSize}`),
+  });
+}
+
+export function useQaAutomationSchedule() {
+  return useQuery({
+    queryKey: ['qa-automation-schedule'],
+    queryFn: () => apiGet<QaAutomationSchedule>('/qa-automation/schedule'),
+  });
+}
+
+export function useUpdateQaAutomationSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { intervalHours?: number; enabled?: boolean }) =>
+      apiPut<QaAutomationSchedule>('/qa-automation/schedule', input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-schedule'] }),
+  });
+}
+
+/** Fire-and-forget — the real run happens asynchronously on apps/qa-automation; refetching run history after a short delay is how the new run shows up. */
+export function useTriggerQaAutomationRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<{ status: 'queued' }>('/qa-automation/runs'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-runs'] }),
+  });
+}
+
+export function useQaAutomationRuns(page = 1, pageSize = 25) {
+  return useQuery({
+    queryKey: ['qa-automation-runs', page, pageSize],
+    queryFn: () =>
+      apiGet<PaginatedResult<QaAutomationRun>>(
+        `/qa-automation/runs?page=${page}&pageSize=${pageSize}`,
+      ),
+  });
+}
+
+export interface QaAutomationRunWithResults extends QaAutomationRun {
+  results: QaAutomationTestResult[];
+}
+
+/** Only fetched once a run row is expanded — the list endpoint doesn't carry per-test results. */
+export function useQaAutomationRun(runId: string | undefined) {
+  return useQuery({
+    queryKey: ['qa-automation-run', runId],
+    queryFn: () => apiGet<QaAutomationRunWithResults>(`/qa-automation/runs/${runId}`),
+    enabled: runId !== undefined,
   });
 }

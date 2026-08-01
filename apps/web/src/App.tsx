@@ -8,6 +8,7 @@ import { UnitTestRunDetailPage } from './pages/UnitTestRunDetailPage.js';
 import { CoverageRunDetailPage } from './pages/CoverageRunDetailPage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { CronsPage } from './pages/CronsPage.js';
+import { QaAutomationPage } from './pages/QaAutomationPage.js';
 import { FeatureSelector, type AppFeature } from './components/FeatureSelector.js';
 
 const queryClient = new QueryClient();
@@ -35,6 +36,8 @@ export function App() {
                 <FeatureSelector onSelect={setFeature} />
               ) : feature === 'cron-runner' ? (
                 <Navigate to="/crons" replace />
+              ) : feature === 'qa-automation' ? (
+                <Navigate to="/qa-automation" replace />
               ) : (
                 <DashboardPage onChangeFeature={resetFeature} />
               )
@@ -53,6 +56,10 @@ export function App() {
           <Route path="/unit-tests/:runId" element={<UnitTestRunDetailPage />} />
           <Route path="/coverage-runs/:runId" element={<CoverageRunDetailPage />} />
           <Route path="/crons" element={<CronsPage onChangeFeature={resetFeature} />} />
+          <Route
+            path="/qa-automation"
+            element={<QaAutomationPage onChangeFeature={resetFeature} />}
+          />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

@@ -29,7 +29,8 @@
     "@cqp/scan-engine": "workspace:*",
     "@cqp/unit-test-engine": "workspace:*",
     "@cqp/coverage-engine": "workspace:*",
-    "@cqp/filesystem-browser": "workspace:*"
+    "@cqp/filesystem-browser": "workspace:*",
+    "@cqp/qa-automation-tests": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

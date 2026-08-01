@@ -96,6 +96,32 @@ export interface CronRunFixture {
   completedAt?: string;
 }
 
+export interface QaAutomationScheduleFixture {
+  intervalHours: number;
+  enabled: boolean;
+  lastDailyCheckAt?: string;
+}
+
+export interface QaAutomationTestResultFixture {
+  id: string;
+  runId: string;
+  testId: string;
+  testName: string;
+  passed: boolean;
+  details: string;
+  createdAt: string;
+}
+
+export interface QaAutomationRunFixture {
+  id: string;
+  orgId: string;
+  status: string;
+  triggeredBy: string;
+  startedAt: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface LocalApiServer {
   baseUrl: string;
   close: () => Promise<void>;
@@ -114,6 +140,9 @@ export interface LocalApiServer {
   coverageReportsByRun: Map<string, unknown[]>;
   cronDefinitions: CronDefinitionFixture[];
   cronRuns: CronRunFixture[];
+  qaAutomationSchedule: QaAutomationScheduleFixture;
+  qaAutomationRuns: QaAutomationRunFixture[];
+  qaAutomationResultsByRun: Map<string, QaAutomationTestResultFixture[]>;
 }
 
 interface Report {
@@ -200,6 +229,9 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     },
   ];
   const cronRuns: CronRunFixture[] = [];
+  const qaAutomationSchedule: QaAutomationScheduleFixture = { intervalHours: 12, enabled: true };
+  const qaAutomationRuns: QaAutomationRunFixture[] = [];
+  const qaAutomationResultsByRun = new Map<string, QaAutomationTestResultFixture[]>();
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -594,6 +626,70 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
       return;
     }
 
+    if (method === 'GET' && pathname === '/qa-automation/schedule') {
+      send(res, 200, qaAutomationSchedule);
+      return;
+    }
+
+    if (method === 'PUT' && pathname === '/qa-automation/schedule') {
+      const input = (await readJsonBody(req)) as unknown as {
+        intervalHours?: number;
+        enabled?: boolean;
+      };
+      if (input.intervalHours !== undefined)
+        qaAutomationSchedule.intervalHours = input.intervalHours;
+      if (input.enabled !== undefined) qaAutomationSchedule.enabled = input.enabled;
+      send(res, 200, qaAutomationSchedule);
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/qa-automation/runs') {
+      const run: QaAutomationRunFixture = {
+        id: id('qarun'),
+        orgId: 'org_1',
+        status: 'completed',
+        triggeredBy: 'manual',
+        startedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      };
+      qaAutomationRuns.unshift(run);
+      qaAutomationResultsByRun.set(run.id, [
+        {
+          id: id('qaresult'),
+          runId: run.id,
+          testId: 'slot-listing-pricing',
+          testName: 'Slot listing pricing matches Sunday/weekday business rule',
+          passed: true,
+          details: 'ok',
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      send(res, 201, { status: 'queued' });
+      return;
+    }
+
+    if (method === 'GET' && pathname === '/qa-automation/runs') {
+      send(res, 200, {
+        data: qaAutomationRuns,
+        total: qaAutomationRuns.length,
+        page: 1,
+        pageSize: 25,
+      });
+      return;
+    }
+
+    const qaRunMatch = pathname.match(/^\/qa-automation\/runs\/([^/]+)$/);
+    if (method === 'GET' && qaRunMatch) {
+      const run = qaAutomationRuns.find((r) => r.id === qaRunMatch[1]);
+      if (!run) {
+        send(res, 404, { message: `QaAutomationRun not found: ${qaRunMatch[1]}` });
+        return;
+      }
+      send(res, 200, { ...run, results: qaAutomationResultsByRun.get(run.id) ?? [] });
+      return;
+    }
+
     send(res, 404, { message: `no route for ${method} ${pathname}` });
   }
 
@@ -624,5 +720,8 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     coverageReportsByRun,
     cronDefinitions,
     cronRuns,
+    qaAutomationSchedule,
+    qaAutomationRuns,
+    qaAutomationResultsByRun,
   };
 }

@@ -41,3 +41,8 @@ export * from './get-coverage-report-content.use-case.js';
 export * from './list-coverage-reports-by-run.use-case.js';
 export * from './trigger-cron-run.use-case.js';
 export * from './list-cron-runs.use-case.js';
+export * from './run-qa-automation-suite.use-case.js';
+export * from './get-qa-automation-schedule.use-case.js';
+export * from './update-qa-automation-schedule.use-case.js';
+export * from './list-qa-automation-runs.use-case.js';
+export * from './get-qa-automation-run.use-case.js';

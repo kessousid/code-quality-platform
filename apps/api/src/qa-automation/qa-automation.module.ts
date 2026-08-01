@@ -1,0 +1,84 @@
+import { Module } from '@nestjs/common';
+import type {
+  QaAutomationRunRepository,
+  QaAutomationScheduleRepository,
+  QaAutomationTestResultRepository,
+} from '@cqp/core';
+import {
+  GetQaAutomationRunUseCase,
+  GetQaAutomationScheduleUseCase,
+  ListQaAutomationRunsUseCase,
+  UpdateQaAutomationScheduleUseCase,
+} from '@cqp/application';
+import {
+  PrismaQaAutomationRunRepository,
+  PrismaQaAutomationScheduleRepository,
+  PrismaQaAutomationTestResultRepository,
+} from '@cqp/db';
+import { createQaAutomationBullQueue, createRedisConnection } from '@cqp/queue';
+import { PrismaService } from '../prisma/prisma.service.js';
+import {
+  QA_AUTOMATION_QUEUE,
+  QA_AUTOMATION_RUN_REPOSITORY,
+  QA_AUTOMATION_SCHEDULE_REPOSITORY,
+  QA_AUTOMATION_TEST_RESULT_REPOSITORY,
+} from '../tokens.js';
+import { QaAutomationController } from './qa-automation.controller.js';
+
+@Module({
+  controllers: [QaAutomationController],
+  providers: [
+    {
+      provide: QA_AUTOMATION_RUN_REPOSITORY,
+      useFactory: (prisma: PrismaService) => new PrismaQaAutomationRunRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      provide: QA_AUTOMATION_TEST_RESULT_REPOSITORY,
+      useFactory: (prisma: PrismaService) =>
+        new PrismaQaAutomationTestResultRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      provide: QA_AUTOMATION_SCHEDULE_REPOSITORY,
+      useFactory: (prisma: PrismaService) =>
+        new PrismaQaAutomationScheduleRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      // The real BullMQ producer Queue — apps/qa-automation consumes the
+      // same queue name/job shape via @cqp/queue (see docs/adr/0035).
+      provide: QA_AUTOMATION_QUEUE,
+      useFactory: () => {
+        const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+        return createQaAutomationBullQueue(createRedisConnection(redisUrl));
+      },
+    },
+    {
+      provide: GetQaAutomationScheduleUseCase,
+      useFactory: (repo: QaAutomationScheduleRepository) =>
+        new GetQaAutomationScheduleUseCase(repo),
+      inject: [QA_AUTOMATION_SCHEDULE_REPOSITORY],
+    },
+    {
+      provide: UpdateQaAutomationScheduleUseCase,
+      useFactory: (repo: QaAutomationScheduleRepository) =>
+        new UpdateQaAutomationScheduleUseCase(repo),
+      inject: [QA_AUTOMATION_SCHEDULE_REPOSITORY],
+    },
+    {
+      provide: ListQaAutomationRunsUseCase,
+      useFactory: (repo: QaAutomationRunRepository) => new ListQaAutomationRunsUseCase(repo),
+      inject: [QA_AUTOMATION_RUN_REPOSITORY],
+    },
+    {
+      provide: GetQaAutomationRunUseCase,
+      useFactory: (
+        runRepo: QaAutomationRunRepository,
+        resultRepo: QaAutomationTestResultRepository,
+      ) => new GetQaAutomationRunUseCase(runRepo, resultRepo),
+      inject: [QA_AUTOMATION_RUN_REPOSITORY, QA_AUTOMATION_TEST_RESULT_REPOSITORY],
+    },
+  ],
+})
+export class QaAutomationModule {}

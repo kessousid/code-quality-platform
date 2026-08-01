@@ -12,7 +12,8 @@
     { "path": "../scan-engine" },
     { "path": "../unit-test-engine" },
     { "path": "../coverage-engine" },
-    { "path": "../filesystem-browser" }
+    { "path": "../filesystem-browser" },
+    { "path": "../qa-automation-tests" }
   ],
   "include": ["src"]
 }

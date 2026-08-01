@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/application" },
+    { "path": "../../packages/queue" },
+    { "path": "../../packages/qa-automation-tests" },
+    { "path": "../../packages/email" }
+  ],
+  "include": ["src"]
+}

@@ -17,6 +17,8 @@ import {
   TestGeneratorType as DbTestGeneratorType,
   CronEnvironment as DbCronEnvironment,
   CronRunStatus as DbCronRunStatus,
+  QaAutomationRunStatus as DbQaAutomationRunStatus,
+  QaAutomationTrigger as DbQaAutomationTrigger,
 } from '@prisma/client';
 import type {
   Severity as CoreSeverity,
@@ -37,6 +39,8 @@ import type {
   TestGeneratorType as CoreTestGeneratorType,
   CronEnvironment as CoreCronEnvironment,
   CronRunStatus as CoreCronRunStatus,
+  QaAutomationRunStatus as CoreQaAutomationRunStatus,
+  QaAutomationTrigger as CoreQaAutomationTrigger,
 } from '@cqp/core';
 
 /**
@@ -221,4 +225,24 @@ export function cronRunStatusToDb(status: CoreCronRunStatus): DbCronRunStatus {
 
 export function cronRunStatusFromDb(status: DbCronRunStatus): CoreCronRunStatus {
   return status.toLowerCase() as CoreCronRunStatus;
+}
+
+export function qaAutomationRunStatusToDb(
+  status: CoreQaAutomationRunStatus,
+): DbQaAutomationRunStatus {
+  return status.toUpperCase() as DbQaAutomationRunStatus;
+}
+
+export function qaAutomationRunStatusFromDb(
+  status: DbQaAutomationRunStatus,
+): CoreQaAutomationRunStatus {
+  return status.toLowerCase() as CoreQaAutomationRunStatus;
+}
+
+export function qaAutomationTriggerToDb(trigger: CoreQaAutomationTrigger): DbQaAutomationTrigger {
+  return trigger.toUpperCase() as DbQaAutomationTrigger;
+}
+
+export function qaAutomationTriggerFromDb(trigger: DbQaAutomationTrigger): CoreQaAutomationTrigger {
+  return trigger.toLowerCase() as CoreQaAutomationTrigger;
 }

@@ -5,6 +5,8 @@ import type {
   CronEnvironment,
   CronRunStatus,
   Finding,
+  QaAutomationRunStatus,
+  QaAutomationTrigger,
   ReportFormat,
   RepoProvider,
   ScanMode,
@@ -23,6 +25,10 @@ import {
   cronRunStatusToDb,
   findingStatusFromDb,
   findingStatusToDb,
+  qaAutomationRunStatusFromDb,
+  qaAutomationRunStatusToDb,
+  qaAutomationTriggerFromDb,
+  qaAutomationTriggerToDb,
   repoProviderFromDb,
   repoProviderToDb,
   reportFormatFromDb,
@@ -61,6 +67,8 @@ const allRepoProviders: RepoProvider[] = ['local', 'github', 'gitlab'];
 const allReportFormats: ReportFormat[] = ['html', 'pdf', 'json', 'sarif'];
 const allCronEnvironments: CronEnvironment[] = ['dev', 'staging'];
 const allCronRunStatuses: CronRunStatus[] = ['running', 'succeeded', 'failed'];
+const allQaAutomationRunStatuses: QaAutomationRunStatus[] = ['running', 'completed', 'failed'];
+const allQaAutomationTriggers: QaAutomationTrigger[] = ['scheduled', 'manual'];
 
 describe('enum mappers', () => {
   it('round-trips every Severity value', () => {
@@ -114,6 +122,18 @@ describe('enum mappers', () => {
   it('round-trips every CronRunStatus value', () => {
     for (const status of allCronRunStatuses) {
       expect(cronRunStatusFromDb(cronRunStatusToDb(status))).toBe(status);
+    }
+  });
+
+  it('round-trips every QaAutomationRunStatus value', () => {
+    for (const status of allQaAutomationRunStatuses) {
+      expect(qaAutomationRunStatusFromDb(qaAutomationRunStatusToDb(status))).toBe(status);
+    }
+  });
+
+  it('round-trips every QaAutomationTrigger value', () => {
+    for (const trigger of allQaAutomationTriggers) {
+      expect(qaAutomationTriggerFromDb(qaAutomationTriggerToDb(trigger))).toBe(trigger);
     }
   });
 

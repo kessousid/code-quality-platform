@@ -138,6 +138,17 @@ enum CronRunStatus {
   FAILED
 }
 
+enum QaAutomationRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum QaAutomationTrigger {
+  SCHEDULED
+  MANUAL
+}
+
 model Org {
   id        String   @id @default(cuid())
   name      String
@@ -157,6 +168,8 @@ model Org {
   coverageRuns    CoverageRun[]
   coverageReports CoverageReport[]
   cronRuns        CronRun[]
+  qaAutomationRuns     QaAutomationRun[]
+  qaAutomationSchedule QaAutomationSchedule?
 
   @@map("orgs")
 }
@@ -580,4 +593,54 @@ model CronRun {
 
   @@index([orgId, createdAt])
   @@map("cron_runs")
+}
+
+/// See docs/adr/0035 — one run = the whole registered @cqp/qa-automation-tests
+/// suite executing once; QaAutomationTestResult rows record each test's own
+/// outcome, same parent/child split as Scan/Finding.
+model QaAutomationRun {
+  id          String                 @id @default(cuid())
+  orgId       String
+  status      QaAutomationRunStatus  @default(RUNNING)
+  triggeredBy QaAutomationTrigger
+  startedAt   DateTime               @default(now())
+  completedAt DateTime?
+  createdAt   DateTime               @default(now())
+
+  org     Org                       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  results QaAutomationTestResult[]
+
+  @@index([orgId, createdAt])
+  @@map("qa_automation_runs")
+}
+
+model QaAutomationTestResult {
+  id        String   @id @default(cuid())
+  runId     String
+  testId    String
+  testName  String
+  passed    Boolean
+  details   String
+  createdAt DateTime @default(now())
+
+  run QaAutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("qa_automation_test_results")
+}
+
+/// Single row per org — source of truth for the BullMQ repeatable job's
+/// interval; apps/api calls upsertJobScheduler whenever intervalHours
+/// changes (see docs/adr/0035). lastDailyCheckAt gates 'daily'-frequency
+/// tests so they run once per calendar day, not on every scheduled tick.
+model QaAutomationSchedule {
+  orgId            String    @id
+  intervalHours    Int       @default(12)
+  enabled          Boolean   @default(true)
+  lastDailyCheckAt DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("qa_automation_schedules")
 }

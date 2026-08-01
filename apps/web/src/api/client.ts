@@ -61,6 +61,13 @@ export function apiPost<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: 'PUT',
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
 /** Content download — never JSON, so it bypasses `request()`'s `res.json()` assumption. */
 export async function apiGetBlob(path: string): Promise<Blob> {
   const res = await fetch(`${baseUrl()}${path}`, { credentials: 'include' });
