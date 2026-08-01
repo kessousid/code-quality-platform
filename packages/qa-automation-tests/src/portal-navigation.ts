@@ -135,9 +135,29 @@ const TIME_PATTERN = /^\d{1,2}:\d{2}\s*(AM|PM)$/i;
  * Scopes to the panel whose own heading is `sectionHeading` ("Priority
  * Flexible Slots" / "Free Slots") and reads its real slot-time buttons —
  * not the calendar's day cells or unrelated buttons elsewhere on the page.
+ *
+ * The heading itself is a bare `<p>`, not a `div` — `div.filter({hasText})`
+ * matches 18 divs on this page, and `.last()` (confirmed against a real
+ * production failure) resolves to the *header row* div wrapping only the
+ * `<p>`, with zero buttons, not the panel that actually holds the time
+ * buttons. Climbing ancestor `<div>`s from the heading until the first
+ * one that actually contains a button reliably lands on the real panel —
+ * verified directly against the live DOM for both a slot-filled panel and
+ * the empty "Free Slots on Sunday" case (there it lands one level higher,
+ * on a div containing only the "Schedule Interview" button, which the
+ * time-pattern filter below already excludes).
  */
 export async function readSlotTimes(page: Page, sectionHeading: string): Promise<SlotTime[]> {
-  const panel = page.locator('div').filter({ hasText: sectionHeading }).last();
+  const heading = page.getByText(sectionHeading, { exact: true }).first();
+  let panel = heading;
+  for (let level = 1; level <= 8; level += 1) {
+    const ancestor = heading.locator(`xpath=ancestor::div[${level}]`);
+    if ((await ancestor.count()) === 0) break;
+    if ((await ancestor.getByRole('button').count()) > 0) {
+      panel = ancestor;
+      break;
+    }
+  }
   const buttonTexts = await panel.getByRole('button').allInnerTexts();
   return buttonTexts
     .map((t) => t.trim())
