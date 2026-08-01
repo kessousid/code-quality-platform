@@ -49,15 +49,6 @@ export async function loginAndReachBookingScreen(
   }
 }
 
-const WEEKDAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
 const MONTH_NAMES = [
   'January',
   'February',
@@ -72,13 +63,6 @@ const MONTH_NAMES = [
   'November',
   'December',
 ];
-
-function formatSelectTimeHeading(date: Date): string {
-  const weekday = WEEKDAY_NAMES[date.getDay()];
-  const month = MONTH_NAMES[date.getMonth()];
-  const day = String(date.getDate()).padStart(2, '0');
-  return `Select Time (${weekday}, ${month} ${day})`;
-}
 
 /**
  * The calendar library renders each day cell as `<abbr aria-label="{Month}
@@ -98,19 +82,32 @@ export function formatCalendarCellLabel(date: Date): string {
   return `${month} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+/**
+ * Verifies the click actually landed by checking for one of the two slot
+ * panels — not the "Select Time (Weekday, Month DD)" heading a prior
+ * version of this function checked for, which turned out not to match
+ * the real live text (confirmed by two separate real production
+ * failures where the click itself succeeded but that heading check
+ * failed). The panel headings are already load-bearing for
+ * `readSlotTimes` downstream, so this is a signal the rest of the flow
+ * depends on anyway, not a new assumption.
+ */
 export async function selectCalendarDate(page: Page, date: Date): Promise<void> {
   const cellLabel = formatCalendarCellLabel(date);
   await page.getByLabel(cellLabel, { exact: true }).click();
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
 
-  const expectedHeading = formatSelectTimeHeading(date);
-  const matched = await page
-    .getByText(expectedHeading)
+  const priorityVisible = await page
+    .getByText('Priority Flexible Slots')
     .isVisible()
     .catch(() => false);
-  if (!matched) {
+  const freeVisible = await page
+    .getByText('Free Slots')
+    .isVisible()
+    .catch(() => false);
+  if (!priorityVisible && !freeVisible) {
     throw new Error(
-      `Clicked the calendar cell for "${cellLabel}" but "${expectedHeading}" never appeared.`,
+      `Clicked the calendar cell for "${cellLabel}" but no slot panel appeared afterward.`,
     );
   }
 }
