@@ -81,31 +81,38 @@ function formatSelectTimeHeading(date: Date): string {
 }
 
 /**
- * Clicks the calendar cell for `date`'s day-of-month, then verifies the
- * real "Select Time (Weekday, Month DD)" heading now shown matches —
- * the calendar renders a 6-week grid that can show the same day number
- * twice (current month + adjacent overflow), so a plain "click the first
- * match" isn't reliable on its own; this checks and retries the second
- * occurrence before giving up loudly.
+ * The calendar library renders each day cell as `<abbr aria-label="{Month}
+ * {Day}, {Year}">` (no zero-padding, e.g. "September 2, 2026") — confirmed
+ * from a real production failure: matching by the visible day-number text
+ * alone (the original approach here) is ambiguous, since the widget shows
+ * a full 6-week grid including grayed-out, disabled overflow days from
+ * adjacent months that can share the same day number (e.g. clicking "2"
+ * hit the September 2 overflow cell instead of August 2, and Playwright
+ * spent the full 30s retrying a click on a cell that's disabled by
+ * design). The aria-label already disambiguates the exact date uniquely,
+ * so this targets it directly instead of guessing among same-numbered
+ * cells.
  */
+export function formatCalendarCellLabel(date: Date): string {
+  const month = MONTH_NAMES[date.getMonth()];
+  return `${month} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
 export async function selectCalendarDate(page: Page, date: Date): Promise<void> {
-  const dayText = String(date.getDate());
+  const cellLabel = formatCalendarCellLabel(date);
+  await page.getByLabel(cellLabel, { exact: true }).click();
+  await page.waitForTimeout(1500);
+
   const expectedHeading = formatSelectTimeHeading(date);
-  const dayCells = page.getByText(dayText, { exact: true });
-
-  for (let i = 0; i < (await dayCells.count()); i += 1) {
-    await dayCells.nth(i).click();
-    await page.waitForTimeout(1500);
-    const matched = await page
-      .getByText(expectedHeading)
-      .isVisible()
-      .catch(() => false);
-    if (matched) return;
+  const matched = await page
+    .getByText(expectedHeading)
+    .isVisible()
+    .catch(() => false);
+  if (!matched) {
+    throw new Error(
+      `Clicked the calendar cell for "${cellLabel}" but "${expectedHeading}" never appeared.`,
+    );
   }
-
-  throw new Error(
-    `Could not select ${expectedHeading} on the calendar — none of the "${dayText}" cells led to that heading.`,
-  );
 }
 
 export interface SlotTime {
