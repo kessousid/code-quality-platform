@@ -94,7 +94,20 @@ export function formatCalendarCellLabel(date: Date): string {
  */
 export async function selectCalendarDate(page: Page, date: Date): Promise<void> {
   const cellLabel = formatCalendarCellLabel(date);
-  await page.getByLabel(cellLabel, { exact: true }).click();
+  const cell = page.getByLabel(cellLabel, { exact: true });
+
+  // A real production run hit a disabled cell (confirmed by the exact
+  // "element is not enabled" retry log) and burned the full 30s default
+  // click timeout retrying it pointlessly — checking first fails in
+  // milliseconds with a clear reason instead. A disabled cell here means
+  // the site itself hasn't made this date bookable yet, not a selector bug.
+  if (!(await cell.isEnabled())) {
+    throw new Error(
+      `Calendar cell for "${cellLabel}" is disabled — the site hasn't made this date bookable yet.`,
+    );
+  }
+
+  await cell.click();
   await page.waitForTimeout(2000);
 
   const priorityVisible = await page
