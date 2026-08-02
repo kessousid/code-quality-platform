@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatCalendarCellLabel,
   nextNonSunday,
-  nextSunday,
   parseSlotTime,
+  upcomingDates,
 } from './portal-navigation.js';
 
 describe('formatCalendarCellLabel', () => {
@@ -29,20 +29,11 @@ describe('parseSlotTime', () => {
   });
 });
 
-describe('nextSunday', () => {
-  it('returns a real Sunday strictly after the given date', () => {
+describe('upcomingDates', () => {
+  it('returns the next N real calendar days, starting tomorrow', () => {
     const from = new Date(2026, 6, 17); // Friday, July 17 2026
-    const result = nextSunday(from);
-    expect(result.getDay()).toBe(0);
-    expect(result.getTime()).toBeGreaterThan(from.getTime());
-    expect(result.getDate()).toBe(19);
-  });
-
-  it('skips forward a full week when starting from a Sunday', () => {
-    const from = new Date(2026, 6, 19); // Sunday, July 19 2026
-    const result = nextSunday(from);
-    expect(result.getDay()).toBe(0);
-    expect(result.getDate()).toBe(26);
+    const result = upcomingDates(3, from);
+    expect(result.map((d) => d.getDate())).toEqual([18, 19, 20]);
   });
 });
 

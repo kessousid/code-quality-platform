@@ -6,21 +6,24 @@ import type {
 } from './portal-automation-test.js';
 import {
   loginAndReachBookingScreen,
-  nextNonSunday,
-  nextSunday,
   readSlotTimes,
   selectCalendarDate,
+  upcomingDates,
 } from './portal-navigation.js';
 
 const NINE_AM = 9 * 60;
 const SEVEN_PM = 19 * 60;
+const DAYS_TO_CHECK = 3;
 
 /**
  * See docs/adr/0035. Cheap, no real-world side effect — safe to run on
  * every scheduled tick. Checks the business rule directly against real
  * production data: Sunday must be all-paid (no Free Slots), every other
  * day must have Free Slots strictly within 9 AM–7 PM and Priority slots
- * at-or-outside that window.
+ * at-or-outside that window. Only ever looks at the next 2–3 days — a
+ * real production run hit a date the site hadn't made bookable yet when
+ * reaching further ahead for "the next Sunday", so per the user this
+ * stays within the near-term window instead.
  */
 export class SlotListingPricingTest implements PortalAutomationTest {
   readonly id = 'slot-listing-pricing';
@@ -32,17 +35,20 @@ export class SlotListingPricingTest implements PortalAutomationTest {
   async run(page: Page): Promise<PortalAutomationTestResult> {
     await loginAndReachBookingScreen(page, this.credentials);
 
-    const sundayResult = await this.checkSunday(page);
-    if (!sundayResult.passed) return sundayResult;
+    const details: string[] = [];
+    for (const date of upcomingDates(DAYS_TO_CHECK)) {
+      const result =
+        date.getDay() === 0
+          ? await this.checkSunday(page, date)
+          : await this.checkWeekday(page, date);
+      if (!result.passed) return result;
+      details.push(result.details);
+    }
 
-    const weekdayResult = await this.checkNonSunday(page);
-    if (!weekdayResult.passed) return weekdayResult;
-
-    return { passed: true, details: `${sundayResult.details}; ${weekdayResult.details}` };
+    return { passed: true, details: details.join('; ') };
   }
 
-  private async checkSunday(page: Page): Promise<PortalAutomationTestResult> {
-    const date = nextSunday();
+  private async checkSunday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
     await selectCalendarDate(page, date);
     const free = await readSlotTimes(page, 'Free Slots');
     const priority = await readSlotTimes(page, 'Priority Flexible Slots');
@@ -65,8 +71,7 @@ export class SlotListingPricingTest implements PortalAutomationTest {
     };
   }
 
-  private async checkNonSunday(page: Page): Promise<PortalAutomationTestResult> {
-    const date = nextNonSunday();
+  private async checkWeekday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
     await selectCalendarDate(page, date);
     const free = await readSlotTimes(page, 'Free Slots');
     const priority = await readSlotTimes(page, 'Priority Flexible Slots');

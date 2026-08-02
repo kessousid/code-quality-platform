@@ -195,16 +195,26 @@ function addDays(date: Date, days: number): Date {
   return copy;
 }
 
-/** The next real Sunday, starting the search from tomorrow (never "today", so a test never depends on how much of today has already elapsed). */
-export function nextSunday(from: Date = new Date()): Date {
-  let candidate = addDays(from, 1);
-  while (candidate.getDay() !== 0) candidate = addDays(candidate, 1);
-  return candidate;
+/**
+ * The next `count` real calendar days, starting tomorrow (never "today",
+ * so a test never depends on how much of today has already elapsed).
+ * Real production runs hit calendar cells the site hadn't made bookable
+ * yet when reaching further ahead (`nextSunday()` could land up to 6
+ * days out) — per the user, checks should stay within the next 2–3
+ * days, so tests iterate this instead of searching arbitrarily far
+ * forward for a specific weekday.
+ */
+export function upcomingDates(count: number, from: Date = new Date()): Date[] {
+  const dates: Date[] = [];
+  for (let i = 1; i <= count; i += 1) dates.push(addDays(from, i));
+  return dates;
 }
 
-/** The next real non-Sunday day, starting the search from tomorrow. */
+/** The next non-Sunday day within the next 3 days — at most one of any 3 consecutive days is a Sunday, so this always finds one. */
 export function nextNonSunday(from: Date = new Date()): Date {
-  let candidate = addDays(from, 1);
-  while (candidate.getDay() === 0) candidate = addDays(candidate, 1);
+  const candidate = upcomingDates(3, from).find((d) => d.getDay() !== 0);
+  if (!candidate) {
+    throw new Error('No non-Sunday day found within the next 3 days — this should never happen.');
+  }
   return candidate;
 }
