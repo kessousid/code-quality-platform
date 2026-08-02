@@ -83,6 +83,22 @@ export function formatCalendarCellLabel(date: Date): string {
 }
 
 /**
+ * Whether `date`'s calendar cell is present and enabled — `isEnabled()`
+ * (like `isVisible()`) checks current DOM state immediately rather than
+ * auto-waiting, so this resolves in milliseconds even when the cell
+ * doesn't exist at all (e.g. a date outside the currently displayed
+ * month). A missing/disabled cell means the site itself hasn't made
+ * that date available for booking yet, not a selector bug — confirmed
+ * directly against a real production failure where the exact same date
+ * was selectable a few days earlier but not once it became the
+ * upcoming Sunday.
+ */
+export async function isDateBookable(page: Page, date: Date): Promise<boolean> {
+  const cellLabel = formatCalendarCellLabel(date);
+  return page.getByLabel(cellLabel, { exact: true }).isEnabled();
+}
+
+/**
  * Verifies the click actually landed by checking for one of the two slot
  * panels — not the "Select Time (Weekday, Month DD)" heading a prior
  * version of this function checked for, which turned out not to match
@@ -94,19 +110,18 @@ export function formatCalendarCellLabel(date: Date): string {
  */
 export async function selectCalendarDate(page: Page, date: Date): Promise<void> {
   const cellLabel = formatCalendarCellLabel(date);
-  const cell = page.getByLabel(cellLabel, { exact: true });
 
   // A real production run hit a disabled cell (confirmed by the exact
   // "element is not enabled" retry log) and burned the full 30s default
   // click timeout retrying it pointlessly — checking first fails in
-  // milliseconds with a clear reason instead. A disabled cell here means
-  // the site itself hasn't made this date bookable yet, not a selector bug.
-  if (!(await cell.isEnabled())) {
+  // milliseconds with a clear reason instead.
+  if (!(await isDateBookable(page, date))) {
     throw new Error(
       `Calendar cell for "${cellLabel}" is disabled — the site hasn't made this date bookable yet.`,
     );
   }
 
+  const cell = page.getByLabel(cellLabel, { exact: true });
   await cell.click();
   await page.waitForTimeout(2000);
 

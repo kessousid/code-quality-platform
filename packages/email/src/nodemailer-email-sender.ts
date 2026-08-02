@@ -32,8 +32,18 @@ export class NodemailerEmailSender implements EmailSender {
     await this.transporter.sendMail({
       from: this.fromAddress,
       to: input.to,
+      ...(input.cc !== undefined ? { cc: input.cc } : {}),
       subject: input.subject,
       text: input.body,
+      ...(input.attachments !== undefined
+        ? {
+            attachments: input.attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content,
+              ...(a.contentType !== undefined ? { contentType: a.contentType } : {}),
+            })),
+          }
+        : {}),
     });
   }
 }

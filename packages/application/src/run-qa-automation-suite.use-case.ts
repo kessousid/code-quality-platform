@@ -7,6 +7,7 @@ import type {
   QaAutomationTestResultRepository,
   QaAutomationTrigger,
 } from '@cqp/core';
+import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import type { PortalAutomationTest } from '@cqp/qa-automation-tests';
 
 /**
@@ -45,6 +46,7 @@ export class RunQaAutomationSuiteUseCase {
     private readonly browserFactory: QaBrowserFactory,
     private readonly emailSender: EmailSender,
     private readonly alertEmailTo: string,
+    private readonly alertEmailCc?: string,
   ) {}
 
   async execute(input: RunQaAutomationSuiteInput): Promise<QaAutomationRun> {
@@ -77,10 +79,22 @@ export class RunQaAutomationSuiteUseCase {
       });
 
       if (failing.length > 0) {
+        const persistedResults = await this.resultRepository.listByRun(run.id);
+        const model = buildQaAutomationReportModel(completed, persistedResults);
+        const reportPdf = await getQaAutomationReportGenerator('pdf').generate(model);
+
         await this.emailSender.send({
           to: this.alertEmailTo,
+          ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
           subject: `QA automation alert: ${failing.length} test(s) failed`,
           body: failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n'),
+          attachments: [
+            {
+              filename: `qa-automation-report-${run.id}.pdf`,
+              content: reportPdf,
+              contentType: 'application/pdf',
+            },
+          ],
         });
       }
 
@@ -91,6 +105,7 @@ export class RunQaAutomationSuiteUseCase {
       });
       await this.emailSender.send({
         to: this.alertEmailTo,
+        ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
         subject: 'QA automation alert: the run itself crashed',
         body: `The run crashed before any test could complete: ${(error as Error).message}`,
       });

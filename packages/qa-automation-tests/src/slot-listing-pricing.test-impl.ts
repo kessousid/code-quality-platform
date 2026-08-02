@@ -5,6 +5,7 @@ import type {
   PortalCredentials,
 } from './portal-automation-test.js';
 import {
+  isDateBookable,
   loginAndReachBookingScreen,
   readSlotTimes,
   selectCalendarDate,
@@ -48,7 +49,22 @@ export class SlotListingPricingTest implements PortalAutomationTest {
     return { passed: true, details: details.join('; ') };
   }
 
+  /**
+   * Explicitly checks whether Sunday can be selected at all before
+   * checking its pricing — per the user: a candidate booking earlier in
+   * the week (e.g. on a Monday) may not get the option to pick a Sunday
+   * slot in the first place if the site hasn't opened that date for
+   * booking yet, which is itself worth surfacing distinctly from a
+   * pricing-rule violation.
+   */
   private async checkSunday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
+    if (!(await isDateBookable(page, date))) {
+      return {
+        passed: false,
+        details: `Sunday (${date.toDateString()}) is not open for booking — a candidate would not get the option to select this date at all.`,
+      };
+    }
+
     await selectCalendarDate(page, date);
     const free = await readSlotTimes(page, 'Free Slots');
     const priority = await readSlotTimes(page, 'Priority Flexible Slots');

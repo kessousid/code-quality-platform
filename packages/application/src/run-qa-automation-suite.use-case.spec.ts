@@ -67,6 +67,50 @@ describe('RunQaAutomationSuiteUseCase', () => {
     expect(emailSender.sent[0]?.body).toContain('Daily test');
   });
 
+  it('attaches a real PDF report to the failing-test alert email', async () => {
+    const { dailyTest, emailSender, useCase } = setup();
+    dailyTest.result = { passed: false, details: 'Sunday had a free slot' };
+
+    const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
+
+    const sent = emailSender.sent[0];
+    expect(sent?.attachments).toHaveLength(1);
+    expect(sent?.attachments?.[0]?.filename).toBe(`qa-automation-report-${run.id}.pdf`);
+    expect(sent?.attachments?.[0]?.content.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+  });
+
+  it('CCs the configured address on a failure alert when one is set', async () => {
+    const runRepository = new InMemoryQaAutomationRunRepository();
+    const resultRepository = new InMemoryQaAutomationTestResultRepository();
+    const scheduleRepository = new InMemoryQaAutomationScheduleRepository();
+    const emailSender = new InMemoryEmailSender();
+    const failingTest = new FakePortalAutomationTest('t1', 'Test', 'every-run');
+    failingTest.result = { passed: false, details: 'boom' };
+    const useCase = new RunQaAutomationSuiteUseCase(
+      runRepository,
+      resultRepository,
+      scheduleRepository,
+      [failingTest],
+      createFakeQaBrowserFactory().factory,
+      emailSender,
+      ALERT_TO,
+      'cc@example.com',
+    );
+
+    await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
+
+    expect(emailSender.sent[0]?.cc).toBe('cc@example.com');
+  });
+
+  it('omits cc on a failure alert when none is configured', async () => {
+    const { emailSender, dailyTest, useCase } = setup();
+    dailyTest.result = { passed: false, details: 'boom' };
+
+    await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
+
+    expect(emailSender.sent[0]?.cc).toBeUndefined();
+  });
+
   it('persists a QaAutomationTestResult per test', async () => {
     const { resultRepository, useCase } = setup();
 

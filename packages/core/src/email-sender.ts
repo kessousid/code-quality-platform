@@ -1,7 +1,15 @@
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendEmailInput {
   to: string;
   subject: string;
   body: string;
+  cc?: string;
+  attachments?: EmailAttachment[];
 }
 
 /**

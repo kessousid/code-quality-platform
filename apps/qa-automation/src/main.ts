@@ -54,6 +54,7 @@ async function main(): Promise<void> {
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
   });
   const alertEmailTo = requireEnv('ALERT_EMAIL_TO');
+  const alertEmailCc = process.env.ALERT_EMAIL_CC;
 
   const useCase = new RunQaAutomationSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
     },
     emailSender,
     alertEmailTo,
+    alertEmailCc,
   );
 
   const worker = createQaAutomationBullWorker(connection, async (job: Job<QaAutomationJobData>) =>
