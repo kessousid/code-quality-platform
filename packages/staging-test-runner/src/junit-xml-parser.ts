@@ -48,6 +48,14 @@ export function parseJunitXml(xml: string): StagingTestResult[] {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     textNodeName: '#text',
+    // fast-xml-parser's default entity-expansion guard (maxTotalExpansions:
+    // 1000) is meant to stop a malicious/adversarial XML payload — this XML
+    // is our own pytest subprocess's real output, not untrusted input, and
+    // a real report with hundreds of failure messages/tracebacks (each
+    // full of &amp;/&lt;/&quot; from HTML/JS content in test names) easily
+    // exceeds 1000 entities legitimately. Raised generously, not disabled
+    // outright, so an actually-malformed/adversarial file still gets caught.
+    processEntities: { maxTotalExpansions: 100_000, maxExpandedLength: 10_000_000 },
   });
   const parsed = parser.parse(xml) as RawRoot;
   const suites = toArray(parsed.testsuites?.testsuite ?? parsed.testsuite);

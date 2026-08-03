@@ -63,4 +63,32 @@ describe('parseJunitXml', () => {
       },
     ]);
   });
+
+  it('parses a real-world-sized report with far more than 1000 escaped entities without throwing', () => {
+    // A real production run against the ~15,600-line curatal_tests suite hit
+    // fast-xml-parser's default entity-expansion guard (maxTotalExpansions:
+    // 1000) — many failure messages/tracebacks legitimately contain lots of
+    // &amp;/&lt;/&quot; from HTML/JS content in test names. 1200 testcases,
+    // each with one failure message containing 2 escaped entities, is 2400
+    // total expansions — comfortably over the old default, comfortably
+    // under the new one.
+    const testcases = Array.from(
+      { length: 1200 },
+      (_, i) =>
+        `<testcase classname="tests.test_bulk" name="test_${i}" time="0.1">
+      <failure message="Expected &quot;a &amp; b&quot; but got something else">Expected &quot;a &amp; b&quot;</failure>
+    </testcase>`,
+    ).join('\n');
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" errors="0" failures="1200" skipped="0" tests="1200" time="600">
+    ${testcases}
+  </testsuite>
+</testsuites>`;
+
+    const results = parseJunitXml(xml);
+
+    expect(results).toHaveLength(1200);
+    expect(results.every((r) => !r.passed)).toBe(true);
+  });
 });
