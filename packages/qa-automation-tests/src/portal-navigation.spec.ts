@@ -30,23 +30,23 @@ describe('parseSlotTime', () => {
 });
 
 describe('upcomingDates', () => {
-  it('returns the next N real calendar days, starting tomorrow', () => {
+  it('returns the next N real calendar days, starting today', () => {
     const from = new Date(2026, 6, 17); // Friday, July 17 2026
     const result = upcomingDates(3, from);
-    expect(result.map((d) => d.getDate())).toEqual([18, 19, 20]);
+    expect(result.map((d) => d.getDate())).toEqual([17, 18, 19]);
   });
 });
 
 describe('nextNonSunday', () => {
-  it('returns tomorrow when tomorrow is not a Sunday', () => {
+  it('returns today when today is not a Sunday', () => {
     const from = new Date(2026, 6, 17); // Friday, July 17 2026
     const result = nextNonSunday(from);
     expect(result.getDay()).not.toBe(0);
-    expect(result.getDate()).toBe(18);
+    expect(result.getDate()).toBe(17);
   });
 
-  it('skips Sunday when starting from a Saturday', () => {
-    const from = new Date(2026, 6, 18); // Saturday, July 18 2026
+  it('returns tomorrow when today is a Sunday', () => {
+    const from = new Date(2026, 6, 19); // Sunday, July 19 2026
     const result = nextNonSunday(from);
     expect(result.getDay()).not.toBe(0);
     expect(result.getDate()).toBe(20);

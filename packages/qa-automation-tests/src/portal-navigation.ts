@@ -211,25 +211,32 @@ function addDays(date: Date, days: number): Date {
 }
 
 /**
- * The next `count` real calendar days, starting tomorrow (never "today",
- * so a test never depends on how much of today has already elapsed).
- * Real production runs hit calendar cells the site hadn't made bookable
- * yet when reaching further ahead (`nextSunday()` could land up to 6
- * days out) — per the user, checks should stay within the next 2–3
- * days, so tests iterate this instead of searching arbitrarily far
- * forward for a specific weekday.
+ * The next `count` real calendar days, starting TODAY — per the user,
+ * production only ever makes today and tomorrow bookable at all, so a
+ * window that started at tomorrow (skipping today entirely) missed a
+ * real bookable day, and a window reaching further than tomorrow hit
+ * calendar cells the site hadn't made bookable yet (`nextSunday()`
+ * could previously land up to 6 days out looking for a specific
+ * weekday). Tests iterate this instead of searching arbitrarily far
+ * forward.
  */
 export function upcomingDates(count: number, from: Date = new Date()): Date[] {
   const dates: Date[] = [];
-  for (let i = 1; i <= count; i += 1) dates.push(addDays(from, i));
+  for (let i = 0; i < count; i += 1) dates.push(addDays(from, i));
   return dates;
 }
 
-/** The next non-Sunday day within the next 3 days — at most one of any 3 consecutive days is a Sunday, so this always finds one. */
+/**
+ * The first non-Sunday day among the real bookable window (today and
+ * tomorrow) — at most one of any 2 consecutive days is a Sunday, so this
+ * always finds one, and may return today itself if today isn't Sunday.
+ */
 export function nextNonSunday(from: Date = new Date()): Date {
-  const candidate = upcomingDates(3, from).find((d) => d.getDay() !== 0);
+  const candidate = upcomingDates(2, from).find((d) => d.getDay() !== 0);
   if (!candidate) {
-    throw new Error('No non-Sunday day found within the next 3 days — this should never happen.');
+    throw new Error(
+      'No non-Sunday day found within the bookable window — this should never happen.',
+    );
   }
   return candidate;
 }

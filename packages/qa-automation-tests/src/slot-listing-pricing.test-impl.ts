@@ -17,7 +17,8 @@ const SEVEN_AM = 7 * 60;
 const NINE_AM = 9 * 60;
 const SEVEN_PM = 19 * 60;
 const NINE_PM = 21 * 60;
-const DAYS_TO_CHECK = 3;
+/** The site only ever makes today and tomorrow bookable — see upcomingDates(). */
+const DAYS_TO_CHECK = 2;
 
 /**
  * Paid-only windows on a weekday: 7–9 AM and 7–9 PM (both ends
@@ -50,10 +51,10 @@ function dateLabel(date: Date): string {
  * 7 AM (updated per the user from the original "everything before 9 AM
  * or after 7 PM is paid" rule, which was flagging real overnight free
  * slots as violations when they were actually correct). Only ever
- * looks at the next 2–3 days — a real production run hit a date the
- * site hadn't made bookable yet when reaching further ahead for "the
- * next Sunday", so per the user this stays within the near-term window
- * instead.
+ * looks at today and tomorrow — per the user, that's the entire real
+ * bookable window on the site; reaching any further (an earlier 3-day
+ * window, and before that "the next Sunday" up to 6 days out) hit
+ * calendar cells the site hadn't made bookable at all.
  *
  * Every checked day is evaluated (not stopped at the first failure) and
  * its real date, weekday, and full Free/Priority slot lists are always
