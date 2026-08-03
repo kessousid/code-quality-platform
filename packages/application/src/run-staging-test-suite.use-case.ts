@@ -71,6 +71,11 @@ export class RunStagingTestSuiteUseCase {
 
       return completed;
     } catch (error) {
+      // The alert email is the intended notification channel, but a crash
+      // this early (before any test result exists) has no other visible
+      // trace otherwise — logging it too means it shows up in the worker's
+      // own console output, not only in an inbox.
+      console.error(`[staging run ${run.id}] crashed:`, error);
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'failed',
       });
