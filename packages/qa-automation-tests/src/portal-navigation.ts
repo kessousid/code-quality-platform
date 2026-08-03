@@ -9,9 +9,10 @@ const PORTAL_URL = 'https://portal.curatal.com/';
  * expand arrow has no discoverable accessible name (icon-only, no
  * aria-label found during exploration), so this is a real fragility
  * point: if the site's layout changes, this coordinate click is the
- * first thing to re-verify.
+ * first thing to re-verify. Shared by every test — each one navigates
+ * to its own screen from here via its own sidebar item.
  */
-export async function loginAndReachBookingScreen(
+export async function loginAndExpandSidebar(
   page: Page,
   credentials: PortalCredentials,
 ): Promise<void> {
@@ -25,6 +26,14 @@ export async function loginAndReachBookingScreen(
 
   await page.mouse.click(76, 109); // sidebar expand arrow — see note above
   await page.waitForTimeout(500);
+}
+
+export async function loginAndReachBookingScreen(
+  page: Page,
+  credentials: PortalCredentials,
+): Promise<void> {
+  await loginAndExpandSidebar(page, credentials);
+
   const myInterviewsVisible = await page
     .getByText('My Interviews', { exact: true })
     .isVisible()
@@ -47,6 +56,26 @@ export async function loginAndReachBookingScreen(
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.waitForTimeout(1000);
   }
+}
+
+/** Live-verified for the new Premium-upgrade test (docs/adr/0035) — "Jobs" is a sibling sidebar item to "My Interviews". */
+export async function loginAndReachJobsPage(
+  page: Page,
+  credentials: PortalCredentials,
+): Promise<void> {
+  await loginAndExpandSidebar(page, credentials);
+
+  const jobsVisible = await page
+    .getByText('Jobs', { exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (!jobsVisible) {
+    throw new Error(
+      'Could not find "Jobs" in the sidebar after expanding it — the site layout may have changed.',
+    );
+  }
+  await page.getByText('Jobs', { exact: true }).click();
+  await page.waitForTimeout(3000);
 }
 
 const MONTH_NAMES = [
