@@ -58,6 +58,43 @@ export async function loginAndReachBookingScreen(
   }
 }
 
+/**
+ * Live-verified for the Development Report download test (docs/adr/0035)
+ * — clicking "My Interviews" already lands on the Completed tab by
+ * default in production, but the explicit click here doesn't rely on
+ * that being true, in case the site's own default tab ever changes.
+ */
+export async function loginAndReachCompletedInterviewsTab(
+  page: Page,
+  credentials: PortalCredentials,
+): Promise<void> {
+  await loginAndExpandSidebar(page, credentials);
+
+  const myInterviewsVisible = await page
+    .getByText('My Interviews', { exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (!myInterviewsVisible) {
+    throw new Error(
+      'Could not find "My Interviews" in the sidebar after expanding it — the site layout may have changed.',
+    );
+  }
+  await page.getByText('My Interviews', { exact: true }).click();
+  await page.waitForTimeout(3000);
+
+  const completedTabVisible = await page
+    .getByText('Completed', { exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (!completedTabVisible) {
+    throw new Error(
+      'Could not find a "Completed" tab on the My Interviews page — the site layout may have changed.',
+    );
+  }
+  await page.getByText('Completed', { exact: true }).click();
+  await page.waitForTimeout(2500);
+}
+
 /** Live-verified for the new Premium-upgrade test (docs/adr/0035) — "Jobs" is a sibling sidebar item to "My Interviews". */
 export async function loginAndReachJobsPage(
   page: Page,
