@@ -39,7 +39,7 @@ function RunResults({ runId }: { runId: string }) {
             </span>
             <span className="font-medium">{result.testName}</span>
           </div>
-          <div className="text-neutral-500">{result.details}</div>
+          <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
         </li>
       ))}
     </ul>

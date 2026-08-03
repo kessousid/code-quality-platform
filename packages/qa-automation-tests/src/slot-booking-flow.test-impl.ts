@@ -29,7 +29,8 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
 
   async run(page: Page): Promise<PortalAutomationTestResult> {
     await loginAndReachBookingScreen(page, this.credentials);
-    await selectCalendarDate(page, nextNonSunday());
+    const date = nextNonSunday();
+    await selectCalendarDate(page, date);
 
     // Free Slots first, deliberately — checkPriorityPaymentScreen ends by
     // opening the real Razorpay iframe, which then covers the rest of the
@@ -38,16 +39,19 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     // but its click was rejected because the iframe intercepted the
     // pointer event). Nothing needs to happen on this page after the
     // payment screen is confirmed, so that check is safe to run last.
-    const freeResult = await this.checkFreeScheduleOption(page);
+    const freeResult = await this.checkFreeScheduleOption(page, date);
     if (!freeResult.passed) return freeResult;
 
-    const priorityResult = await this.checkPriorityPaymentScreen(page);
+    const priorityResult = await this.checkPriorityPaymentScreen(page, date);
     if (!priorityResult.passed) return priorityResult;
 
     return { passed: true, details: `${freeResult.details}; ${priorityResult.details}` };
   }
 
-  private async checkPriorityPaymentScreen(page: Page): Promise<PortalAutomationTestResult> {
+  private async checkPriorityPaymentScreen(
+    page: Page,
+    date: Date,
+  ): Promise<PortalAutomationTestResult> {
     const panel = await findSlotPanel(page, 'Priority Flexible Slots');
     const timeButton = panel
       .getByRole('button')
@@ -56,9 +60,10 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     if (!(await timeButton.isVisible().catch(() => false))) {
       return {
         passed: false,
-        details: 'No Priority Flexible Slots time button was available to test the payment flow',
+        details: `${date.toDateString()}: no Priority Flexible Slots time button was available to test the payment flow`,
       };
     }
+    const timeLabel = (await timeButton.innerText()).trim();
     await timeButton.click();
     await page.waitForTimeout(1000);
 
@@ -82,16 +87,19 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     if (!sawPaymentOptions || !sawPriceSummary) {
       return {
         passed: false,
-        details: `Priority slot payment screen did not show expected content (Payment Options: ${sawPaymentOptions}, Price Summary: ${sawPriceSummary})`,
+        details: `${date.toDateString()} (${timeLabel}): payment screen did not show expected content (Payment Options: ${sawPaymentOptions}, Price Summary: ${sawPriceSummary})`,
       };
     }
     return {
       passed: true,
-      details: 'Priority slot payment screen showed Payment Options and Price Summary as expected',
+      details: `${date.toDateString()} (${timeLabel}): priority slot payment screen showed Payment Options and Price Summary as expected`,
     };
   }
 
-  private async checkFreeScheduleOption(page: Page): Promise<PortalAutomationTestResult> {
+  private async checkFreeScheduleOption(
+    page: Page,
+    date: Date,
+  ): Promise<PortalAutomationTestResult> {
     const panel = await findSlotPanel(page, 'Free Slots');
     const timeButton = panel
       .getByRole('button')
@@ -100,9 +108,10 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     if (!(await timeButton.isVisible().catch(() => false))) {
       return {
         passed: false,
-        details: 'No Free Slots time button was available to test the scheduling option',
+        details: `${date.toDateString()}: no Free Slots time button was available to test the scheduling option`,
       };
     }
+    const timeLabel = (await timeButton.innerText()).trim();
     await timeButton.click();
     await page.waitForTimeout(1000);
 
@@ -113,14 +122,12 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     if (!scheduleButtonVisible) {
       return {
         passed: false,
-        details:
-          'Free Slots did not reveal a "Schedule Interview" button — never clicked, only checked visibility',
+        details: `${date.toDateString()} (${timeLabel}): Free Slots did not reveal a "Schedule Interview" button — never clicked, only checked visibility`,
       };
     }
     return {
       passed: true,
-      details:
-        '"Schedule Interview" button visible for a Free Slots time, as expected (not clicked)',
+      details: `${date.toDateString()} (${timeLabel}): "Schedule Interview" button visible for a Free Slots time, as expected (not clicked)`,
     };
   }
 }
