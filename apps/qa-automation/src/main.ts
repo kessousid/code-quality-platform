@@ -98,7 +98,12 @@ async function main(): Promise<void> {
   const stagingUseCase = new RunStagingTestSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
     new PrismaQaAutomationTestResultRepository(prisma),
-    new PytestStagingTestRunner({ repoUrl: requireEnv('STAGING_TESTS_REPO_URL') }),
+    new PytestStagingTestRunner({
+      repoUrl: requireEnv('STAGING_TESTS_REPO_URL'),
+      ...(process.env.STAGING_TESTS_GIT_TOKEN !== undefined
+        ? { gitToken: process.env.STAGING_TESTS_GIT_TOKEN }
+        : {}),
+    }),
     emailSender,
     alertEmailTo,
     alertEmailCc,

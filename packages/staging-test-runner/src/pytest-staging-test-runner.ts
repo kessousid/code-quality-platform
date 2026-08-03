@@ -24,6 +24,15 @@ function requireZeroExit(step: string, result: SubprocessResult): void {
 export interface PytestStagingTestRunnerOptions {
   /** The shared, externally-maintained repo (e.g. https://github.com/codewithVsingh/curatal_tests). */
   repoUrl: string;
+  /**
+   * Optional token embedded into the clone URL as the username (GitHub
+   * accepts a PAT this way with no password). Needed even for a public
+   * repo when cloning anonymously from a cloud/datacenter egress IP —
+   * GitHub can demand auth there once its anonymous-clone rate limit is
+   * hit, which otherwise fails with "could not read Username" (no TTY to
+   * prompt on). No special scopes needed, just an authenticated identity.
+   */
+  gitToken?: string;
   pythonCommand?: string;
   gitCommand?: string;
 }
@@ -45,6 +54,14 @@ export interface PytestStagingTestRunnerOptions {
 export class PytestStagingTestRunner implements StagingTestRunner {
   constructor(private readonly options: PytestStagingTestRunnerOptions) {}
 
+  /** Never logged/thrown anywhere — git's own clone progress output doesn't echo the source URL, so the token never appears in stdout/stderr either. */
+  private cloneUrl(): string {
+    if (!this.options.gitToken) return this.options.repoUrl;
+    const url = new URL(this.options.repoUrl);
+    url.username = this.options.gitToken;
+    return url.toString();
+  }
+
   async run(): Promise<StagingTestRunResult> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
     const repoDir = path.join(workDir, 'repo');
@@ -56,7 +73,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         'git clone',
         await runSubprocess(
           this.options.gitCommand ?? 'git',
-          ['clone', '--depth', '1', this.options.repoUrl, repoDir],
+          ['clone', '--depth', '1', this.cloneUrl(), repoDir],
           { cwd: workDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
         ),
       );
