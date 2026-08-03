@@ -55,7 +55,7 @@ describe('App', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Feature' }), 'qa-automation');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await waitFor(() => expect(screen.getByText('Production QA Automation')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('QA Automation')).toBeInTheDocument());
     expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
   });
 });

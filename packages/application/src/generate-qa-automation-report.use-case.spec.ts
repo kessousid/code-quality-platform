@@ -16,7 +16,11 @@ async function setUp() {
   const reportRepository = new InMemoryQaAutomationReportRepository();
   const objectStorage = new InMemoryObjectStorage();
 
-  const run = await runRepository.create({ orgId: 'org_1', triggeredBy: 'manual' });
+  const run = await runRepository.create({
+    orgId: 'org_1',
+    environment: 'production',
+    triggeredBy: 'manual',
+  });
   await resultRepository.create({
     runId: run.id,
     testId: 'slot-listing-pricing',

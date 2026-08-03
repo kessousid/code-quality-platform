@@ -18,4 +18,5 @@ export * from './prisma-cron-run-repository.js';
 export * from './prisma-qa-automation-run-repository.js';
 export * from './prisma-qa-automation-test-result-repository.js';
 export * from './prisma-qa-automation-schedule-repository.js';
+export * from './prisma-qa-automation-staging-schedule-repository.js';
 export * from './prisma-qa-automation-report-repository.js';

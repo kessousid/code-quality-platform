@@ -13,10 +13,12 @@ import type {
   Finding,
   GeneratedTestFile,
   PaginatedResult,
+  QaAutomationEnvironment,
   QaAutomationReport,
   QaAutomationReportFormat,
   QaAutomationRun,
   QaAutomationSchedule,
+  QaAutomationStagingSchedule,
   QaAutomationTestResult,
   Report,
   ReportFormat,
@@ -537,13 +539,44 @@ export function useTriggerQaAutomationRun() {
   });
 }
 
-export function useQaAutomationRuns(page = 1, pageSize = 25) {
+/** `environment` defaults to 'production' server-side too — passing it explicitly keeps the staging history view separate. */
+export function useQaAutomationRuns(
+  page = 1,
+  pageSize = 25,
+  environment: QaAutomationEnvironment = 'production',
+) {
   return useQuery({
-    queryKey: ['qa-automation-runs', page, pageSize],
+    queryKey: ['qa-automation-runs', environment, page, pageSize],
     queryFn: () =>
       apiGet<PaginatedResult<QaAutomationRun>>(
-        `/qa-automation/runs?page=${page}&pageSize=${pageSize}`,
+        `/qa-automation/runs?page=${page}&pageSize=${pageSize}&environment=${environment}`,
       ),
+  });
+}
+
+export function useQaAutomationStagingSchedule() {
+  return useQuery({
+    queryKey: ['qa-automation-staging-schedule'],
+    queryFn: () => apiGet<QaAutomationStagingSchedule>('/qa-automation/staging/schedule'),
+  });
+}
+
+export function useUpdateQaAutomationStagingSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { enabled?: boolean }) =>
+      apiPut<QaAutomationStagingSchedule>('/qa-automation/staging/schedule', input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['qa-automation-staging-schedule'] }),
+  });
+}
+
+/** Fire-and-forget, same shape as useTriggerQaAutomationRun — refetches the staging run history, not production's. */
+export function useTriggerQaAutomationStagingRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost<{ status: 'queued' }>('/qa-automation/staging/runs'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-runs', 'staging'] }),
   });
 }
 

@@ -121,6 +121,7 @@ export function makeQaAutomationRun(overrides: Partial<QaAutomationRun> = {}): Q
   return {
     id: 'qarun_1',
     orgId: 'org_1',
+    environment: 'production',
     status: 'completed',
     triggeredBy: 'manual',
     startedAt: new Date('2026-07-01T00:00:00.000Z'),

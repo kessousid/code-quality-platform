@@ -9,10 +9,17 @@ import {
 import {
   createRedisConnection,
   createQaAutomationBullWorker,
+  createQaAutomationStagingBullWorker,
   type QaAutomationJobData,
+  type QaAutomationStagingJobData,
 } from '@cqp/queue';
-import { RunQaAutomationSuiteUseCase, type QaBrowser } from '@cqp/application';
+import {
+  RunQaAutomationSuiteUseCase,
+  RunStagingTestSuiteUseCase,
+  type QaBrowser,
+} from '@cqp/application';
 import { createPortalAutomationTests } from '@cqp/qa-automation-tests';
+import { PytestStagingTestRunner } from '@cqp/staging-test-runner';
 import { NodemailerEmailSender } from '@cqp/email';
 
 function requireEnv(name: string): string {
@@ -33,12 +40,14 @@ function redisHost(redisUrl: string): string {
 }
 
 /**
- * Real bootstrap for the production QA automation service (docs/adr/0035).
- * One BullMQ Worker consumes both the repeatable scheduled job (upserted
- * by apps/api whenever the interval changes) and manual "Run now" jobs —
- * this process is a pure consumer, oblivious to which kind produced a
- * given job. One real Chromium instance is launched per job, closed in
- * RunQaAutomationSuiteUseCase's own `finally` regardless of outcome.
+ * Real bootstrap for the QA automation service (docs/adr/0035, docs/adr/0036).
+ * Runs two independent BullMQ Workers in this one process/container: the
+ * original production worker (one real Chromium instance launched per job,
+ * closed in RunQaAutomationSuiteUseCase's own `finally`) and a second
+ * staging worker that instead shells out to the external pytest suite via
+ * PytestStagingTestRunner. Each worker consumes both its repeatable
+ * scheduled job and manual "Run now" jobs, oblivious to which kind
+ * produced a given job.
  */
 async function main(): Promise<void> {
   const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
@@ -86,11 +95,38 @@ async function main(): Promise<void> {
     console.error(`[qa-automation] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
   });
 
-  console.log(`[qa-automation] listening on queue "qa-automation" via ${redisHost(redisUrl)}`);
+  const stagingUseCase = new RunStagingTestSuiteUseCase(
+    new PrismaQaAutomationRunRepository(prisma),
+    new PrismaQaAutomationTestResultRepository(prisma),
+    new PytestStagingTestRunner({ repoUrl: requireEnv('STAGING_TESTS_REPO_URL') }),
+    emailSender,
+    alertEmailTo,
+    alertEmailCc,
+  );
+
+  const stagingWorker = createQaAutomationStagingBullWorker(
+    connection,
+    async (job: Job<QaAutomationStagingJobData>) =>
+      stagingUseCase.execute({ orgId: job.data.orgId, triggeredBy: job.data.triggeredBy }),
+  );
+
+  stagingWorker.on('completed', (job) => {
+    console.log(
+      `[qa-automation-staging] job ${job.id} (org ${job.data.orgId}, ${job.data.triggeredBy}) completed`,
+    );
+  });
+  stagingWorker.on('failed', (job, error) => {
+    console.error(`[qa-automation-staging] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
+  });
+
+  console.log(
+    `[qa-automation] listening on queues "qa-automation" and "qa-automation-staging" via ${redisHost(redisUrl)}`,
+  );
 
   const shutdown = async (): Promise<void> => {
     console.log('[qa-automation] shutting down...');
     await worker.close();
+    await stagingWorker.close();
     await connection.quit();
     await prisma.$disconnect();
     process.exit(0);

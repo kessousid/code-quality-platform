@@ -1,5 +1,5 @@
 /** Mirrors unit-test-report.ts exactly, for QaAutomationRun instead of UnitTestRun. */
-export type QaAutomationReportFormat = 'pdf';
+export type QaAutomationReportFormat = 'pdf' | 'xlsx';
 
 export interface QaAutomationReport {
   id: string;

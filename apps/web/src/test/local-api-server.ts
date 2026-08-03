@@ -102,6 +102,10 @@ export interface QaAutomationScheduleFixture {
   lastDailyCheckAt?: string;
 }
 
+export interface QaAutomationStagingScheduleFixture {
+  enabled: boolean;
+}
+
 export interface QaAutomationTestResultFixture {
   id: string;
   runId: string;
@@ -115,6 +119,7 @@ export interface QaAutomationTestResultFixture {
 export interface QaAutomationRunFixture {
   id: string;
   orgId: string;
+  environment: string;
   status: string;
   triggeredBy: string;
   startedAt: string;
@@ -150,6 +155,7 @@ export interface LocalApiServer {
   cronDefinitions: CronDefinitionFixture[];
   cronRuns: CronRunFixture[];
   qaAutomationSchedule: QaAutomationScheduleFixture;
+  qaAutomationStagingSchedule: QaAutomationStagingScheduleFixture;
   qaAutomationRuns: QaAutomationRunFixture[];
   qaAutomationResultsByRun: Map<string, QaAutomationTestResultFixture[]>;
   qaAutomationReportsByRun: Map<string, QaAutomationReportFixture[]>;
@@ -244,6 +250,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   ];
   const cronRuns: CronRunFixture[] = [];
   const qaAutomationSchedule: QaAutomationScheduleFixture = { intervalHours: 12, enabled: true };
+  const qaAutomationStagingSchedule: QaAutomationStagingScheduleFixture = { enabled: true };
   const qaAutomationRuns: QaAutomationRunFixture[] = [];
   const qaAutomationResultsByRun = new Map<string, QaAutomationTestResultFixture[]>();
   const qaAutomationReportsByRun = new Map<string, QaAutomationReportFixture[]>();
@@ -659,10 +666,15 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
       return;
     }
 
-    if (method === 'POST' && pathname === '/qa-automation/runs') {
+    if (
+      method === 'POST' &&
+      (pathname === '/qa-automation/runs' || pathname === '/qa-automation/staging/runs')
+    ) {
+      const environment = pathname === '/qa-automation/staging/runs' ? 'staging' : 'production';
       const run: QaAutomationRunFixture = {
         id: id('qarun'),
         orgId: 'org_1',
+        environment,
         status: 'completed',
         triggeredBy: 'manual',
         startedAt: new Date().toISOString(),
@@ -686,12 +698,21 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     }
 
     if (method === 'GET' && pathname === '/qa-automation/runs') {
-      send(res, 200, {
-        data: qaAutomationRuns,
-        total: qaAutomationRuns.length,
-        page: 1,
-        pageSize: 25,
-      });
+      const environment = url.searchParams.get('environment') ?? 'production';
+      const filtered = qaAutomationRuns.filter((r) => r.environment === environment);
+      send(res, 200, { data: filtered, total: filtered.length, page: 1, pageSize: 25 });
+      return;
+    }
+
+    if (method === 'GET' && pathname === '/qa-automation/staging/schedule') {
+      send(res, 200, qaAutomationStagingSchedule);
+      return;
+    }
+
+    if (method === 'PUT' && pathname === '/qa-automation/staging/schedule') {
+      const input = (await readJsonBody(req)) as unknown as { enabled?: boolean };
+      if (input.enabled !== undefined) qaAutomationStagingSchedule.enabled = input.enabled;
+      send(res, 200, qaAutomationStagingSchedule);
       return;
     }
 
@@ -774,6 +795,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     cronDefinitions,
     cronRuns,
     qaAutomationSchedule,
+    qaAutomationStagingSchedule,
     qaAutomationRuns,
     qaAutomationResultsByRun,
     qaAutomationReportsByRun,

@@ -14,19 +14,26 @@ import type { Queue } from 'bullmq';
 import {
   GetQaAutomationRunUseCase,
   GetQaAutomationScheduleUseCase,
+  GetQaAutomationStagingScheduleUseCase,
   ListQaAutomationRunsUseCase,
   QaAutomationRunNotFoundError,
   UpdateQaAutomationScheduleUseCase,
+  UpdateQaAutomationStagingScheduleUseCase,
 } from '@cqp/application';
 import {
   enqueueManualQaAutomationRun,
+  enqueueManualQaAutomationStagingRun,
   removeQaAutomationSchedule,
+  removeQaAutomationStagingSchedule,
   upsertQaAutomationSchedule,
+  upsertQaAutomationStagingSchedule,
   type QaAutomationJobData,
+  type QaAutomationStagingJobData,
 } from '@cqp/queue';
 import { CurrentOrg } from '../auth/current-org.decorator.js';
-import { QA_AUTOMATION_QUEUE } from '../tokens.js';
+import { QA_AUTOMATION_QUEUE, QA_AUTOMATION_STAGING_QUEUE } from '../tokens.js';
 import { UpdateQaAutomationScheduleRequestDto } from './dto/update-qa-automation-schedule.dto.js';
+import { UpdateQaAutomationStagingScheduleRequestDto } from './dto/update-qa-automation-staging-schedule.dto.js';
 import { ListQaAutomationRunsQueryDto } from './dto/list-qa-automation-runs-query.dto.js';
 
 @ApiBearerAuth()
@@ -36,9 +43,13 @@ export class QaAutomationController {
   constructor(
     private readonly getScheduleUseCase: GetQaAutomationScheduleUseCase,
     private readonly updateScheduleUseCase: UpdateQaAutomationScheduleUseCase,
+    private readonly getStagingScheduleUseCase: GetQaAutomationStagingScheduleUseCase,
+    private readonly updateStagingScheduleUseCase: UpdateQaAutomationStagingScheduleUseCase,
     private readonly listRunsUseCase: ListQaAutomationRunsUseCase,
     private readonly getRunUseCase: GetQaAutomationRunUseCase,
     @Inject(QA_AUTOMATION_QUEUE) private readonly queue: Queue<QaAutomationJobData>,
+    @Inject(QA_AUTOMATION_STAGING_QUEUE)
+    private readonly stagingQueue: Queue<QaAutomationStagingJobData>,
   ) {}
 
   @Get('schedule')
@@ -66,10 +77,35 @@ export class QaAutomationController {
     return { status: 'queued' as const };
   }
 
+  @Get('staging/schedule')
+  async getStagingSchedule(@CurrentOrg() orgId: string) {
+    return this.getStagingScheduleUseCase.execute(orgId);
+  }
+
+  @Put('staging/schedule')
+  async updateStagingSchedule(
+    @CurrentOrg() orgId: string,
+    @Body() dto: UpdateQaAutomationStagingScheduleRequestDto,
+  ) {
+    const schedule = await this.updateStagingScheduleUseCase.execute(orgId, dto);
+    if (schedule.enabled) {
+      await upsertQaAutomationStagingSchedule(this.stagingQueue, orgId);
+    } else {
+      await removeQaAutomationStagingSchedule(this.stagingQueue, orgId);
+    }
+    return schedule;
+  }
+
+  @Post('staging/runs')
+  async triggerStagingRun(@CurrentOrg() orgId: string) {
+    await enqueueManualQaAutomationStagingRun(this.stagingQueue, orgId);
+    return { status: 'queued' as const };
+  }
+
   @Get('runs')
   async listRuns(@CurrentOrg() orgId: string, @Query() query: ListQaAutomationRunsQueryDto) {
-    const { page, pageSize } = query;
-    return this.listRunsUseCase.execute(orgId, { page, pageSize });
+    const { page, pageSize, environment } = query;
+    return this.listRunsUseCase.execute(orgId, { page, pageSize }, environment ?? 'production');
   }
 
   @Get('runs/:id')

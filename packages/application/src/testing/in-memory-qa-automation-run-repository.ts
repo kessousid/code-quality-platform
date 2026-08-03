@@ -4,6 +4,7 @@ import type {
   CreateQaAutomationRunInput,
   PaginatedResult,
   PaginationParams,
+  QaAutomationEnvironment,
   QaAutomationRun,
   QaAutomationRunRepository,
 } from '@cqp/core';
@@ -16,6 +17,7 @@ export class InMemoryQaAutomationRunRepository implements QaAutomationRunReposit
     const run: QaAutomationRun = {
       id: randomUUID(),
       orgId: input.orgId,
+      environment: input.environment,
       status: 'running',
       triggeredBy: input.triggeredBy,
       startedAt: new Date(),
@@ -33,9 +35,11 @@ export class InMemoryQaAutomationRunRepository implements QaAutomationRunReposit
   async list(
     orgId: string,
     pagination: PaginationParams,
+    environment?: QaAutomationEnvironment,
   ): Promise<PaginatedResult<QaAutomationRun>> {
     const all = [...this.runs.values()]
       .filter((r) => r.orgId === orgId)
+      .filter((r) => environment === undefined || r.environment === environment)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const start = (pagination.page - 1) * pagination.pageSize;

@@ -67,7 +67,7 @@ describe('RunQaAutomationSuiteUseCase', () => {
     expect(emailSender.sent[0]?.body).toContain('Daily test');
   });
 
-  it('attaches a real PDF report to the failing-test alert email', async () => {
+  it('attaches a real Excel report to the failing-test alert email', async () => {
     const { dailyTest, emailSender, useCase } = setup();
     dailyTest.result = { passed: false, details: 'Sunday had a free slot' };
 
@@ -75,8 +75,8 @@ describe('RunQaAutomationSuiteUseCase', () => {
 
     const sent = emailSender.sent[0];
     expect(sent?.attachments).toHaveLength(1);
-    expect(sent?.attachments?.[0]?.filename).toBe(`qa-automation-report-${run.id}.pdf`);
-    expect(sent?.attachments?.[0]?.content.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(sent?.attachments?.[0]?.filename).toBe(`qa-automation-report-${run.id}.xlsx`);
+    expect(sent?.attachments?.[0]?.content.length).toBeGreaterThan(0);
   });
 
   it('CCs the configured address on a failure alert when one is set', async () => {

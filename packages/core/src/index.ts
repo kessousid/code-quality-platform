@@ -22,4 +22,6 @@ export * from './directory-browse.js';
 export * from './cron-run.js';
 export * from './qa-automation-run.js';
 export * from './qa-automation-report.js';
+export * from './qa-automation-staging-schedule.js';
+export * from './staging-test-runner.js';
 export * from './email-sender.js';

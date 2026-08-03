@@ -17,6 +17,18 @@ RUN pnpm --filter @cqp/qa-automation... run build
 FROM mcr.microsoft.com/playwright:v1.48.0-jammy AS runtime
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
+
+# Additions for the external staging pytest suite (docs/adr/0036) — an
+# addition to this runtime image, not a base-image swap, so the already-
+# working production (Node/Playwright-JS) path is never put at risk. The
+# suite's own repo (and its own requirements.txt) is cloned fresh on every
+# run — never baked into the image, since it "keeps getting updated" by
+# others — but pre-installing the common packages + Chromium here means
+# most of a run's setup time is already paid for at build time.
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install --no-cache-dir pytest pytest-playwright playwright pytest-html
+RUN python3 -m playwright install --with-deps chromium
+
 WORKDIR /repo
 COPY --from=build /repo /repo
 ENV NODE_ENV=production

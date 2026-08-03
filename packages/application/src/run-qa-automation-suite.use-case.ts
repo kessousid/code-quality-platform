@@ -52,6 +52,7 @@ export class RunQaAutomationSuiteUseCase {
   async execute(input: RunQaAutomationSuiteInput): Promise<QaAutomationRun> {
     const run = await this.runRepository.create({
       orgId: input.orgId,
+      environment: 'production',
       triggeredBy: input.triggeredBy,
     });
 
@@ -81,7 +82,7 @@ export class RunQaAutomationSuiteUseCase {
       if (failing.length > 0) {
         const persistedResults = await this.resultRepository.listByRun(run.id);
         const model = buildQaAutomationReportModel(completed, persistedResults);
-        const reportPdf = await getQaAutomationReportGenerator('pdf').generate(model);
+        const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
         await this.emailSender.send({
           to: this.alertEmailTo,
@@ -90,9 +91,9 @@ export class RunQaAutomationSuiteUseCase {
           body: failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n'),
           attachments: [
             {
-              filename: `qa-automation-report-${run.id}.pdf`,
-              content: reportPdf,
-              contentType: 'application/pdf',
+              filename: `qa-automation-report-${run.id}.xlsx`,
+              content: reportXlsx,
+              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             },
           ],
         });

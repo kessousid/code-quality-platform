@@ -10,9 +10,18 @@ export type QaAutomationRunStatus = 'running' | 'completed' | 'failed';
 
 export type QaAutomationTrigger = 'scheduled' | 'manual';
 
+/**
+ * Which environment a run actually executed against — 'production' always
+ * goes through the existing TS test registry, 'staging' always goes
+ * through the external pytest subprocess (see @cqp/staging-test-runner).
+ * A property of the run, not of any individual test definition.
+ */
+export type QaAutomationEnvironment = 'production' | 'staging';
+
 export interface QaAutomationRun {
   id: string;
   orgId: string;
+  environment: QaAutomationEnvironment;
   status: QaAutomationRunStatus;
   triggeredBy: QaAutomationTrigger;
   startedAt: Date;
@@ -32,6 +41,7 @@ export interface QaAutomationTestResult {
 
 export interface CreateQaAutomationRunInput {
   orgId: string;
+  environment: QaAutomationEnvironment;
   triggeredBy: QaAutomationTrigger;
 }
 
@@ -50,8 +60,12 @@ export interface CreateQaAutomationTestResultInput {
 export interface QaAutomationRunRepository {
   create(input: CreateQaAutomationRunInput): Promise<QaAutomationRun>;
   findById(orgId: string, id: string): Promise<QaAutomationRun | null>;
-  /** Newest first — the run-history view. */
-  list(orgId: string, pagination: PaginationParams): Promise<PaginatedResult<QaAutomationRun>>;
+  /** Newest first — the run-history view. Filters to a single environment when given. */
+  list(
+    orgId: string,
+    pagination: PaginationParams,
+    environment?: QaAutomationEnvironment,
+  ): Promise<PaginatedResult<QaAutomationRun>>;
   /** Stamps completedAt on the terminal transition — same idempotent shape as ScanRepository.updateStatus. */
   complete(
     orgId: string,

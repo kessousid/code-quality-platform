@@ -4,6 +4,7 @@ import type {
   QaAutomationReportRepository,
   QaAutomationRunRepository,
   QaAutomationScheduleRepository,
+  QaAutomationStagingScheduleRepository,
   QaAutomationTestResultRepository,
 } from '@cqp/core';
 import {
@@ -12,17 +13,24 @@ import {
   GetQaAutomationReportUseCase,
   GetQaAutomationRunUseCase,
   GetQaAutomationScheduleUseCase,
+  GetQaAutomationStagingScheduleUseCase,
   ListQaAutomationReportsByRunUseCase,
   ListQaAutomationRunsUseCase,
   UpdateQaAutomationScheduleUseCase,
+  UpdateQaAutomationStagingScheduleUseCase,
 } from '@cqp/application';
 import {
   PrismaQaAutomationReportRepository,
   PrismaQaAutomationRunRepository,
   PrismaQaAutomationScheduleRepository,
+  PrismaQaAutomationStagingScheduleRepository,
   PrismaQaAutomationTestResultRepository,
 } from '@cqp/db';
-import { createQaAutomationBullQueue, createRedisConnection } from '@cqp/queue';
+import {
+  createQaAutomationBullQueue,
+  createQaAutomationStagingBullQueue,
+  createRedisConnection,
+} from '@cqp/queue';
 import { LocalFilesystemObjectStorage } from '@cqp/storage';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
@@ -31,6 +39,8 @@ import {
   QA_AUTOMATION_REPORT_REPOSITORY,
   QA_AUTOMATION_RUN_REPOSITORY,
   QA_AUTOMATION_SCHEDULE_REPOSITORY,
+  QA_AUTOMATION_STAGING_QUEUE,
+  QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY,
   QA_AUTOMATION_TEST_RESULT_REPOSITORY,
 } from '../tokens.js';
 import { QaAutomationController } from './qa-automation.controller.js';
@@ -76,6 +86,33 @@ import { QaAutomationReportController } from './qa-automation-report.controller.
       useFactory: (repo: QaAutomationScheduleRepository) =>
         new UpdateQaAutomationScheduleUseCase(repo),
       inject: [QA_AUTOMATION_SCHEDULE_REPOSITORY],
+    },
+    {
+      provide: QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY,
+      useFactory: (prisma: PrismaService) =>
+        new PrismaQaAutomationStagingScheduleRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      provide: GetQaAutomationStagingScheduleUseCase,
+      useFactory: (repo: QaAutomationStagingScheduleRepository) =>
+        new GetQaAutomationStagingScheduleUseCase(repo),
+      inject: [QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY],
+    },
+    {
+      provide: UpdateQaAutomationStagingScheduleUseCase,
+      useFactory: (repo: QaAutomationStagingScheduleRepository) =>
+        new UpdateQaAutomationStagingScheduleUseCase(repo),
+      inject: [QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY],
+    },
+    {
+      // The real BullMQ producer Queue for the staging suite — apps/qa-automation
+      // consumes the same queue name/job shape via @cqp/queue (see docs/adr/0036).
+      provide: QA_AUTOMATION_STAGING_QUEUE,
+      useFactory: () => {
+        const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+        return createQaAutomationStagingBullQueue(createRedisConnection(redisUrl));
+      },
     },
     {
       provide: ListQaAutomationRunsUseCase,

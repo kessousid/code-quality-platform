@@ -149,8 +149,14 @@ enum QaAutomationTrigger {
   MANUAL
 }
 
+enum QaAutomationEnvironment {
+  PRODUCTION
+  STAGING
+}
+
 enum QaAutomationReportFormat {
   PDF
+  XLSX
 }
 
 model Org {
@@ -172,9 +178,10 @@ model Org {
   coverageRuns    CoverageRun[]
   coverageReports CoverageReport[]
   cronRuns        CronRun[]
-  qaAutomationRuns     QaAutomationRun[]
-  qaAutomationSchedule QaAutomationSchedule?
-  qaAutomationReports  QaAutomationReport[]
+  qaAutomationRuns            QaAutomationRun[]
+  qaAutomationSchedule        QaAutomationSchedule?
+  qaAutomationStagingSchedule QaAutomationStagingSchedule?
+  qaAutomationReports         QaAutomationReport[]
 
   @@map("orgs")
 }
@@ -604,13 +611,14 @@ model CronRun {
 /// suite executing once; QaAutomationTestResult rows record each test's own
 /// outcome, same parent/child split as Scan/Finding.
 model QaAutomationRun {
-  id          String                 @id @default(cuid())
+  id          String                   @id @default(cuid())
   orgId       String
-  status      QaAutomationRunStatus  @default(RUNNING)
+  environment QaAutomationEnvironment  @default(PRODUCTION)
+  status      QaAutomationRunStatus    @default(RUNNING)
   triggeredBy QaAutomationTrigger
-  startedAt   DateTime               @default(now())
+  startedAt   DateTime                 @default(now())
   completedAt DateTime?
-  createdAt   DateTime               @default(now())
+  createdAt   DateTime                 @default(now())
 
   org     Org                       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   results QaAutomationTestResult[]
@@ -649,6 +657,19 @@ model QaAutomationSchedule {
   org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("qa_automation_schedules")
+}
+
+/// Staging's own schedule row (docs/adr/0036) — no interval field, since the
+/// cron pattern itself (once daily at midnight IST) is a fixed code
+/// constant, not user-configurable.
+model QaAutomationStagingSchedule {
+  orgId     String   @id
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("qa_automation_staging_schedules")
 }
 
 /// Mirrors UnitTestReport exactly, for QaAutomationRun instead of UnitTestRun.

@@ -1,0 +1,95 @@
+import { XMLParser } from 'fast-xml-parser';
+import type { StagingTestResult } from '@cqp/core';
+
+interface RawFailure {
+  '@_message'?: string;
+  '#text'?: string;
+}
+
+interface RawTestCase {
+  '@_classname'?: string;
+  '@_name': string;
+  failure?: RawFailure | RawFailure[];
+  error?: RawFailure | RawFailure[];
+  skipped?: RawFailure | RawFailure[];
+}
+
+interface RawTestSuite {
+  testcase?: RawTestCase | RawTestCase[];
+}
+
+interface RawRoot {
+  testsuites?: { testsuite?: RawTestSuite | RawTestSuite[] };
+  testsuite?: RawTestSuite | RawTestSuite[];
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function firstMessage(entries: RawFailure[]): string {
+  const entry = entries[0];
+  if (!entry) return '';
+  return entry['#text']?.trim() || entry['@_message'] || '';
+}
+
+/**
+ * Parses pytest's `--junitxml` output (both the legacy bare `<testsuite>`
+ * root and the xunit2-style `<testsuites>` wrapper pytest defaults to) into
+ * StagingTestResult rows. `testId` combines the JUnit `classname` + `name`
+ * attributes rather than pytest's own `::`-separated node-ID syntax, since
+ * JUnit XML never records that form directly — this is equally unique and
+ * stable for our purposes (matching a result back to the same real test
+ * run to run).
+ */
+export function parseJunitXml(xml: string): StagingTestResult[] {
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    textNodeName: '#text',
+  });
+  const parsed = parser.parse(xml) as RawRoot;
+  const suites = toArray(parsed.testsuites?.testsuite ?? parsed.testsuite);
+
+  const results: StagingTestResult[] = [];
+  for (const suite of suites) {
+    for (const testcase of toArray(suite.testcase)) {
+      const classname = testcase['@_classname'] ?? '';
+      const name = testcase['@_name'];
+      const testId = classname ? `${classname}::${name}` : name;
+
+      const failures = toArray(testcase.failure);
+      const errors = toArray(testcase.error);
+      const skipped = toArray(testcase.skipped);
+
+      if (failures.length > 0) {
+        results.push({
+          testId,
+          testName: name,
+          passed: false,
+          details: firstMessage(failures) || 'Test failed (no message recorded).',
+        });
+      } else if (errors.length > 0) {
+        results.push({
+          testId,
+          testName: name,
+          passed: false,
+          details: firstMessage(errors) || 'Test errored (no message recorded).',
+        });
+      } else if (skipped.length > 0) {
+        // Not a real failure — recorded as passed so a skipped test never
+        // triggers a false alert, but the detail still says it was skipped.
+        results.push({
+          testId,
+          testName: name,
+          passed: true,
+          details: `SKIPPED: ${firstMessage(skipped) || 'no reason recorded'}`,
+        });
+      } else {
+        results.push({ testId, testName: name, passed: true, details: 'Passed.' });
+      }
+    }
+  }
+  return results;
+}

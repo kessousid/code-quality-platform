@@ -5,6 +5,7 @@ import type {
   CronEnvironment,
   CronRunStatus,
   Finding,
+  QaAutomationEnvironment,
   QaAutomationReportFormat,
   QaAutomationRunStatus,
   QaAutomationTrigger,
@@ -26,6 +27,8 @@ import {
   cronRunStatusToDb,
   findingStatusFromDb,
   findingStatusToDb,
+  qaAutomationEnvironmentFromDb,
+  qaAutomationEnvironmentToDb,
   qaAutomationReportFormatFromDb,
   qaAutomationReportFormatToDb,
   qaAutomationRunStatusFromDb,
@@ -72,7 +75,8 @@ const allCronEnvironments: CronEnvironment[] = ['dev', 'staging'];
 const allCronRunStatuses: CronRunStatus[] = ['running', 'succeeded', 'failed'];
 const allQaAutomationRunStatuses: QaAutomationRunStatus[] = ['running', 'completed', 'failed'];
 const allQaAutomationTriggers: QaAutomationTrigger[] = ['scheduled', 'manual'];
-const allQaAutomationReportFormats: QaAutomationReportFormat[] = ['pdf'];
+const allQaAutomationReportFormats: QaAutomationReportFormat[] = ['pdf', 'xlsx'];
+const allQaAutomationEnvironments: QaAutomationEnvironment[] = ['production', 'staging'];
 
 describe('enum mappers', () => {
   it('round-trips every Severity value', () => {
@@ -144,6 +148,14 @@ describe('enum mappers', () => {
   it('round-trips every QaAutomationReportFormat value', () => {
     for (const format of allQaAutomationReportFormats) {
       expect(qaAutomationReportFormatFromDb(qaAutomationReportFormatToDb(format))).toBe(format);
+    }
+  });
+
+  it('round-trips every QaAutomationEnvironment value', () => {
+    for (const environment of allQaAutomationEnvironments) {
+      expect(qaAutomationEnvironmentFromDb(qaAutomationEnvironmentToDb(environment))).toBe(
+        environment,
+      );
     }
   });
 

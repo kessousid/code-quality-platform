@@ -36,3 +36,8 @@ export const QA_AUTOMATION_SCHEDULE_REPOSITORY = Symbol('QA_AUTOMATION_SCHEDULE_
 export const QA_AUTOMATION_REPORT_REPOSITORY = Symbol('QA_AUTOMATION_REPORT_REPOSITORY');
 /** The raw BullMQ producer Queue itself (not a port) — apps/api calls its real upsertJobScheduler/removeJobScheduler directly (see docs/adr/0035). */
 export const QA_AUTOMATION_QUEUE = Symbol('QA_AUTOMATION_QUEUE');
+export const QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY = Symbol(
+  'QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY',
+);
+/** The raw BullMQ producer Queue for the staging suite (see docs/adr/0036) — same non-port pattern as QA_AUTOMATION_QUEUE. */
+export const QA_AUTOMATION_STAGING_QUEUE = Symbol('QA_AUTOMATION_STAGING_QUEUE');

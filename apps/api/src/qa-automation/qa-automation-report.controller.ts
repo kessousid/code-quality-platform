@@ -14,6 +14,7 @@ import { GenerateQaAutomationReportRequestDto } from './dto/generate-qa-automati
 
 const CONTENT_TYPE: Record<QaAutomationReportFormat, string> = {
   pdf: 'application/pdf',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 /** Mirrors UnitTestReportController exactly (see its own note on why `@Res()` here is never passthrough). */

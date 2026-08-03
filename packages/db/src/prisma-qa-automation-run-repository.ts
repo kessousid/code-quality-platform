@@ -4,10 +4,13 @@ import type {
   CreateQaAutomationRunInput,
   PaginatedResult,
   PaginationParams,
+  QaAutomationEnvironment,
   QaAutomationRun,
   QaAutomationRunRepository,
 } from '@cqp/core';
 import {
+  qaAutomationEnvironmentFromDb,
+  qaAutomationEnvironmentToDb,
   qaAutomationRunStatusFromDb,
   qaAutomationRunStatusToDb,
   qaAutomationTriggerFromDb,
@@ -25,6 +28,7 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
     const row = await this.prisma.qaAutomationRun.create({
       data: {
         orgId: input.orgId,
+        environment: qaAutomationEnvironmentToDb(input.environment),
         triggeredBy: qaAutomationTriggerToDb(input.triggeredBy),
       },
     });
@@ -39,8 +43,14 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
   async list(
     orgId: string,
     pagination: PaginationParams,
+    environment?: QaAutomationEnvironment,
   ): Promise<PaginatedResult<QaAutomationRun>> {
-    const where = { orgId };
+    const where = {
+      orgId,
+      ...(environment !== undefined
+        ? { environment: qaAutomationEnvironmentToDb(environment) }
+        : {}),
+    };
     const skip = (pagination.page - 1) * pagination.pageSize;
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.qaAutomationRun.findMany({
@@ -83,6 +93,7 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
   private toDomain(row: {
     id: string;
     orgId: string;
+    environment: Parameters<typeof qaAutomationEnvironmentFromDb>[0];
     status: Parameters<typeof qaAutomationRunStatusFromDb>[0];
     triggeredBy: Parameters<typeof qaAutomationTriggerFromDb>[0];
     startedAt: Date;
@@ -92,6 +103,7 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
     return {
       id: row.id,
       orgId: row.orgId,
+      environment: qaAutomationEnvironmentFromDb(row.environment),
       status: qaAutomationRunStatusFromDb(row.status),
       triggeredBy: qaAutomationTriggerFromDb(row.triggeredBy),
       startedAt: row.startedAt,

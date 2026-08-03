@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { QaAutomationRun } from '@cqp/core';
+import type { QaAutomationEnvironment, QaAutomationReportFormat, QaAutomationRun } from '@cqp/core';
 import {
   downloadQaAutomationReport,
   useGenerateQaAutomationReport,
@@ -7,8 +7,11 @@ import {
   useQaAutomationRun,
   useQaAutomationRuns,
   useQaAutomationSchedule,
+  useQaAutomationStagingSchedule,
   useTriggerQaAutomationRun,
+  useTriggerQaAutomationStagingRun,
   useUpdateQaAutomationSchedule,
+  useUpdateQaAutomationStagingSchedule,
 } from '../api/hooks.js';
 import { ApiError } from '../api/client.js';
 
@@ -46,47 +49,120 @@ function RunResults({ runId }: { runId: string }) {
   );
 }
 
+const REPORT_FORMATS: QaAutomationReportFormat[] = ['pdf', 'xlsx'];
+
 function RunReportActions({ runId }: { runId: string }) {
   const reportsQuery = useQaAutomationReports(runId);
   const generate = useGenerateQaAutomationReport(runId);
-  const report = reportsQuery.data?.[0];
+  const existing = new Map((reportsQuery.data ?? []).map((r) => [r.format, r]));
 
   return (
     <div className="mt-2 flex items-center gap-2 border-t pt-2">
+      {REPORT_FORMATS.map((format) => {
+        const report = existing.get(format);
+        return (
+          <div key={format} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => generate.mutate(format)}
+              disabled={generate.isPending}
+              className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+            >
+              {report
+                ? `Regenerate ${format.toUpperCase()} report`
+                : `Generate ${format.toUpperCase()} report`}
+            </button>
+            {report && (
+              <button
+                type="button"
+                onClick={() => downloadQaAutomationReport(report)}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Download
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Shared by both the production and staging sections — filtered server-side by `environment`. */
+function RunHistoryList({ environment }: { environment: QaAutomationEnvironment }) {
+  const runsQuery = useQaAutomationRuns(1, 25, environment);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+
+  return (
+    <ul className="space-y-2">
+      {runsQuery.data?.data.map((run) => (
+        <li key={run.id} className="rounded-lg border p-3 text-sm">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 text-left"
+            onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
+          >
+            <StatusBadge status={run.status} />
+            <span className="text-xs text-neutral-500">{run.triggeredBy}</span>
+            <span className="text-xs text-neutral-500">
+              {new Date(run.createdAt).toLocaleString()}
+            </span>
+          </button>
+          {expandedRunId === run.id && (
+            <>
+              <RunResults runId={run.id} />
+              <RunReportActions runId={run.id} />
+            </>
+          )}
+        </li>
+      ))}
+      {runsQuery.data?.data.length === 0 && (
+        <p className="text-sm text-neutral-500">No runs yet.</p>
+      )}
+    </ul>
+  );
+}
+
+/** "Run now" trigger button, shared shape between production and staging (docs/adr/0035, docs/adr/0036). */
+function TriggerRunButton({
+  onTrigger,
+  isPending,
+  isSuccess,
+  error,
+}: {
+  onTrigger: () => void;
+  isPending: boolean;
+  isSuccess: boolean;
+  error: unknown;
+}) {
+  return (
+    <div>
       <button
         type="button"
-        onClick={() => generate.mutate('pdf')}
-        disabled={generate.isPending}
-        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+        onClick={onTrigger}
+        disabled={isPending}
+        className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
-        {report ? 'Regenerate PDF report' : 'Generate PDF report'}
+        Run now
       </button>
-      {report && (
-        <button
-          type="button"
-          onClick={() => downloadQaAutomationReport(report)}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          Download
-        </button>
+      {isSuccess && (
+        <p className="mt-2 text-sm text-neutral-600">Queued — check run history below shortly.</p>
+      )}
+      {error !== null && error !== undefined && (
+        <p className="mt-2 text-sm text-red-700">
+          {error instanceof ApiError ? error.message : 'Failed to trigger a run.'}
+        </p>
       )}
     </div>
   );
 }
 
-interface QaAutomationPageProps {
-  onChangeFeature?: () => void;
-}
-
-/** See docs/adr/0035 — the interval is stored server-side and adjustable here without a redeploy; "Run now" always runs the full suite regardless of frequency gating. */
-export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}) {
+function ProductionSection() {
   const scheduleQuery = useQaAutomationSchedule();
   const updateSchedule = useUpdateQaAutomationSchedule();
   const triggerRun = useTriggerQaAutomationRun();
-  const runsQuery = useQaAutomationRuns();
   const [intervalHours, setIntervalHours] = useState<number | ''>('');
   const [touchedInterval, setTouchedInterval] = useState(false);
-  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   const schedule = scheduleQuery.data;
 
@@ -107,19 +183,7 @@ export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Production QA Automation</h1>
-        {onChangeFeature && (
-          <button
-            type="button"
-            onClick={onChangeFeature}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Switch feature
-          </button>
-        )}
-      </div>
+    <section aria-label="Production QA Automation" className="space-y-6">
       <p className="text-xs text-neutral-500">
         Runs a real, extensible suite of checks against production (portal.curatal.com) on a
         schedule you control — see docs/adr/0035.
@@ -169,56 +233,98 @@ export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}
         )}
       </section>
 
-      <div>
-        <button
-          type="button"
-          onClick={() => triggerRun.mutate()}
-          disabled={triggerRun.isPending}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Run now
-        </button>
-        {triggerRun.isSuccess && (
-          <p className="mt-2 text-sm text-neutral-600">Queued — check run history below shortly.</p>
-        )}
-        {triggerRun.error && (
-          <p className="mt-2 text-sm text-red-700">
-            {triggerRun.error instanceof ApiError
-              ? triggerRun.error.message
-              : 'Failed to trigger a run.'}
-          </p>
-        )}
-      </div>
+      <TriggerRunButton
+        onTrigger={() => triggerRun.mutate()}
+        isPending={triggerRun.isPending}
+        isSuccess={triggerRun.isSuccess}
+        error={triggerRun.error}
+      />
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-600">Run history</h2>
-        <ul className="space-y-2">
-          {runsQuery.data?.data.map((run) => (
-            <li key={run.id} className="rounded-lg border p-3 text-sm">
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left"
-                onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
-              >
-                <StatusBadge status={run.status} />
-                <span className="text-xs text-neutral-500">{run.triggeredBy}</span>
-                <span className="text-xs text-neutral-500">
-                  {new Date(run.createdAt).toLocaleString()}
-                </span>
-              </button>
-              {expandedRunId === run.id && (
-                <>
-                  <RunResults runId={run.id} />
-                  <RunReportActions runId={run.id} />
-                </>
-              )}
-            </li>
-          ))}
-          {runsQuery.data?.data.length === 0 && (
-            <p className="text-sm text-neutral-500">No runs yet.</p>
-          )}
-        </ul>
+        <RunHistoryList environment="production" />
       </section>
+    </section>
+  );
+}
+
+/** No interval field — the staging cron pattern (once daily at midnight IST) is a fixed constant, not user-configurable (docs/adr/0036). */
+function StagingSection() {
+  const scheduleQuery = useQaAutomationStagingSchedule();
+  const updateSchedule = useUpdateQaAutomationStagingSchedule();
+  const triggerRun = useTriggerQaAutomationStagingRun();
+  const schedule = scheduleQuery.data;
+
+  return (
+    <section aria-label="Staging QA Automation" className="space-y-6">
+      <p className="text-xs text-neutral-500">
+        Runs the shared staging test suite (curatal_tests) against staging.curatal.com once daily at
+        12:00 AM IST, plus a manual "Run now" option — see docs/adr/0036.
+      </p>
+
+      <section className="space-y-3 rounded-lg border p-4">
+        <h2 className="text-sm font-semibold text-neutral-600">Schedule</h2>
+        <button
+          type="button"
+          onClick={() => updateSchedule.mutate({ enabled: !(schedule?.enabled ?? true) })}
+          disabled={updateSchedule.isPending}
+          className="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50"
+        >
+          {schedule?.enabled ? 'Disable' : 'Enable'}
+        </button>
+        {schedule && (
+          <p className="text-xs text-neutral-500">
+            Currently {schedule.enabled ? 'enabled' : 'disabled'} — runs daily at 12:00 AM IST when
+            enabled.
+          </p>
+        )}
+      </section>
+
+      <TriggerRunButton
+        onTrigger={() => triggerRun.mutate()}
+        isPending={triggerRun.isPending}
+        isSuccess={triggerRun.isSuccess}
+        error={triggerRun.error}
+      />
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-neutral-600">Run history</h2>
+        <RunHistoryList environment="staging" />
+      </section>
+    </section>
+  );
+}
+
+interface QaAutomationPageProps {
+  onChangeFeature?: () => void;
+}
+
+/** See docs/adr/0035 (production) and docs/adr/0036 (staging) — two independent environments, each with its own schedule and run history. */
+export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}) {
+  return (
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">QA Automation</h1>
+        {onChangeFeature && (
+          <button
+            type="button"
+            onClick={onChangeFeature}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Switch feature
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        <h2 className="text-lg font-semibold">Production</h2>
+        <ProductionSection />
+      </div>
+
+      <div className="space-y-6 border-t pt-6">
+        <h2 className="text-lg font-semibold">Staging</h2>
+        <StagingSection />
+      </div>
     </div>
   );
 }

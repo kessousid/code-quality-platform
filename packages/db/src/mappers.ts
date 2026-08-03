@@ -20,6 +20,7 @@ import {
   QaAutomationRunStatus as DbQaAutomationRunStatus,
   QaAutomationTrigger as DbQaAutomationTrigger,
   QaAutomationReportFormat as DbQaAutomationReportFormat,
+  QaAutomationEnvironment as DbQaAutomationEnvironment,
 } from '@prisma/client';
 import type {
   Severity as CoreSeverity,
@@ -43,6 +44,7 @@ import type {
   QaAutomationRunStatus as CoreQaAutomationRunStatus,
   QaAutomationTrigger as CoreQaAutomationTrigger,
   QaAutomationReportFormat as CoreQaAutomationReportFormat,
+  QaAutomationEnvironment as CoreQaAutomationEnvironment,
 } from '@cqp/core';
 
 /**
@@ -259,4 +261,16 @@ export function qaAutomationReportFormatFromDb(
   format: DbQaAutomationReportFormat,
 ): CoreQaAutomationReportFormat {
   return format.toLowerCase() as CoreQaAutomationReportFormat;
+}
+
+export function qaAutomationEnvironmentToDb(
+  environment: CoreQaAutomationEnvironment,
+): DbQaAutomationEnvironment {
+  return environment.toUpperCase() as DbQaAutomationEnvironment;
+}
+
+export function qaAutomationEnvironmentFromDb(
+  environment: DbQaAutomationEnvironment,
+): CoreQaAutomationEnvironment {
+  return environment.toLowerCase() as CoreQaAutomationEnvironment;
 }

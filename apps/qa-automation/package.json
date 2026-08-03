@@ -17,6 +17,7 @@
     "@cqp/application": "workspace:*",
     "@cqp/queue": "workspace:*",
     "@cqp/qa-automation-tests": "workspace:*",
+    "@cqp/staging-test-runner": "workspace:*",
     "@cqp/email": "workspace:*",
     "bullmq": "^5.34.0",
     "playwright": "1.48.0"
