@@ -48,7 +48,7 @@ describe('App', () => {
     expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
   });
 
-  it('takes the Production QA Automation feature straight to /qa-automation, skipping the dashboard', async () => {
+  it('takes the QA Automation feature straight to /qa-automation, skipping the dashboard', async () => {
     render(<App />);
 
     const user = userEvent.setup();

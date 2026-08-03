@@ -10,7 +10,7 @@ const FEATURES: { value: AppFeature; label: string }[] = [
   { value: 'code-quality-security', label: 'Code Quality & Security' },
   { value: 'unit-testing', label: 'Unit Testing' },
   { value: 'cron-runner', label: 'Cron Runner' },
-  { value: 'qa-automation', label: 'Production QA Automation' },
+  { value: 'qa-automation', label: 'QA Automation' },
 ];
 
 /**

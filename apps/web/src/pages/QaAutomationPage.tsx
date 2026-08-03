@@ -299,8 +299,12 @@ interface QaAutomationPageProps {
   onChangeFeature?: () => void;
 }
 
-/** See docs/adr/0035 (production) and docs/adr/0036 (staging) — two independent environments, each with its own schedule and run history. */
+type QaAutomationTab = 'production' | 'staging';
+
+/** See docs/adr/0035 (production) and docs/adr/0036 (staging) — two independent environments, switched between via the two buttons rather than shown stacked together. */
 export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}) {
+  const [activeTab, setActiveTab] = useState<QaAutomationTab>('production');
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -316,15 +320,30 @@ export function QaAutomationPage({ onChangeFeature }: QaAutomationPageProps = {}
         )}
       </div>
 
-      <div className="space-y-6">
-        <h2 className="text-lg font-semibold">Production</h2>
-        <ProductionSection />
+      <div className="flex gap-2 border-b pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('production')}
+          aria-pressed={activeTab === 'production'}
+          className={`rounded px-4 py-2 text-sm font-medium ${
+            activeTab === 'production' ? 'bg-blue-600 text-white' : 'border text-neutral-700'
+          }`}
+        >
+          Production
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('staging')}
+          aria-pressed={activeTab === 'staging'}
+          className={`rounded px-4 py-2 text-sm font-medium ${
+            activeTab === 'staging' ? 'bg-blue-600 text-white' : 'border text-neutral-700'
+          }`}
+        >
+          Staging
+        </button>
       </div>
 
-      <div className="space-y-6 border-t pt-6">
-        <h2 className="text-lg font-semibold">Staging</h2>
-        <StagingSection />
-      </div>
+      {activeTab === 'production' ? <ProductionSection /> : <StagingSection />}
     </div>
   );
 }
