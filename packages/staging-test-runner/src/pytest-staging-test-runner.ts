@@ -35,6 +35,15 @@ export interface PytestStagingTestRunnerOptions {
   gitToken?: string;
   pythonCommand?: string;
   gitCommand?: string;
+  /**
+   * The suite's own config.py hardcodes HEADLESS = False (its maintainers
+   * run it locally with a real display) — this repo has no way to change
+   * that without editing their file, which conflicts with always running
+   * their latest, unmodified version. `xvfb-run` gives the "headed"
+   * browser a virtual display to open instead, exactly as Playwright's own
+   * error message recommends when a headed launch has no XServer.
+   */
+  xvfbCommand?: string;
 }
 
 /**
@@ -100,9 +109,19 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       // all — that case still needs to surface the real stderr, not the
       // opaque ENOENT from the read below.
       const pytestResult = await runSubprocess(
-        python,
-        ['-m', 'pytest', 'tests', '-v', '--browser', 'chromium', `--junitxml=${reportPath}`],
-        { cwd: repoDir, envVarName: 'STAGING_TESTS_PYTHON_PATH' },
+        this.options.xvfbCommand ?? 'xvfb-run',
+        [
+          '-a',
+          python,
+          '-m',
+          'pytest',
+          'tests',
+          '-v',
+          '--browser',
+          'chromium',
+          `--junitxml=${reportPath}`,
+        ],
+        { cwd: repoDir, envVarName: 'STAGING_TESTS_XVFB_PATH' },
       );
 
       const xml = await readFile(reportPath, 'utf-8').catch(() => {

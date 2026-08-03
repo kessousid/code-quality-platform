@@ -25,7 +25,7 @@ RUN corepack enable
 # run — never baked into the image, since it "keeps getting updated" by
 # others — but pre-installing the common packages + Chromium here means
 # most of a run's setup time is already paid for at build time.
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y python3 python3-pip python3-venv xvfb && rm -rf /var/lib/apt/lists/*
 RUN python3 -m pip install --no-cache-dir pytest pytest-playwright playwright pytest-html
 RUN python3 -m playwright install --with-deps chromium
 
