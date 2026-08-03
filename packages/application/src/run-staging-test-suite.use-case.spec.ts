@@ -36,7 +36,7 @@ describe('RunStagingTestSuiteUseCase', () => {
     expect(emailSender.sent).toHaveLength(0);
   });
 
-  it('marks the run failed and sends exactly one alert with a real Excel attachment when a test fails', async () => {
+  it('marks the run completed (the suite did execute) and sends exactly one alert with a real Excel attachment when a test fails', async () => {
     const { testRunner, emailSender, useCase } = setup();
     testRunner.result = {
       results: [
@@ -47,7 +47,7 @@ describe('RunStagingTestSuiteUseCase', () => {
 
     const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
 
-    expect(run.status).toBe('failed');
+    expect(run.status).toBe('completed');
     expect(emailSender.sent).toHaveLength(1);
     const sent = emailSender.sent[0];
     expect(sent?.body).toContain('employer login');

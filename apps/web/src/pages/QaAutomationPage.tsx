@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { QaAutomationEnvironment, QaAutomationReportFormat, QaAutomationRun } from '@cqp/core';
+import {
+  QA_AUTOMATION_RUN_STATUS_LABELS,
+  type QaAutomationEnvironment,
+  type QaAutomationReportFormat,
+  type QaAutomationRun,
+} from '@cqp/core';
 import {
   downloadQaAutomationReport,
   useGenerateQaAutomationReport,
@@ -22,7 +27,11 @@ function StatusBadge({ status }: { status: QaAutomationRun['status'] }) {
       : status === 'failed'
         ? 'bg-red-100 text-red-800'
         : 'bg-neutral-100 text-neutral-600';
-  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>{status}</span>;
+  return (
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${color}`}>
+      {QA_AUTOMATION_RUN_STATUS_LABELS[status]}
+    </span>
+  );
 }
 
 function RunResults({ runId }: { runId: string }) {
@@ -32,20 +41,28 @@ function RunResults({ runId }: { runId: string }) {
   if (results.length === 0)
     return <p className="text-xs text-neutral-500">No test results recorded.</p>;
 
+  const passedCount = results.filter((r) => r.passed).length;
+  const failedCount = results.length - passedCount;
+
   return (
-    <ul className="mt-2 space-y-1 border-t pt-2">
-      {results.map((result) => (
-        <li key={result.id} className="text-xs">
-          <div className="flex items-center gap-2">
-            <span className={result.passed ? 'text-green-700' : 'text-red-700'}>
-              {result.passed ? 'PASS' : 'FAIL'}
-            </span>
-            <span className="font-medium">{result.testName}</span>
-          </div>
-          <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
-        </li>
-      ))}
-    </ul>
+    <div className="mt-2 border-t pt-2">
+      <p className="text-xs font-semibold text-neutral-700">
+        {passedCount} passed, {failedCount} failed (of {results.length})
+      </p>
+      <ul className="mt-1 space-y-1">
+        {results.map((result) => (
+          <li key={result.id} className="text-xs">
+            <div className="flex items-center gap-2">
+              <span className={result.passed ? 'text-green-700' : 'text-red-700'}>
+                {result.passed ? 'PASS' : 'FAIL'}
+              </span>
+              <span className="font-medium">{result.testName}</span>
+            </div>
+            <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

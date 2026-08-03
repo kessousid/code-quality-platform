@@ -74,9 +74,15 @@ export class RunQaAutomationSuiteUseCase {
         await this.scheduleRepository.update(input.orgId, { lastDailyCheckAt: new Date() });
       }
 
+      // Per the user: the run's own status reflects whether the suite
+      // actually executed, not whether every individual test passed —
+      // 'failed' is reserved for the run itself never getting the chance
+      // to run (the catch block below), not for real per-test failures
+      // recorded here. Those are still surfaced via the alert email and
+      // the persisted pass/fail counts, just not via this status field.
       const failing = results.filter((r) => !r.passed);
       const completed = await this.runRepository.complete(input.orgId, run.id, {
-        status: failing.length > 0 ? 'failed' : 'completed',
+        status: 'completed',
       });
 
       if (failing.length > 0) {

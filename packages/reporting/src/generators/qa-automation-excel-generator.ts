@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { QA_AUTOMATION_RUN_STATUS_LABELS } from '@cqp/core';
 import type { QaAutomationReportGenerator } from '../qa-automation-generator.js';
 import type { QaAutomationReportModel } from '../qa-automation-report-model.js';
 
@@ -20,7 +21,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     ];
     summary.addRows([
       { field: 'Run ID', value: run.id },
-      { field: 'Status', value: run.status },
+      { field: 'Status', value: QA_AUTOMATION_RUN_STATUS_LABELS[run.status] },
       { field: 'Triggered By', value: run.triggeredBy },
       { field: 'Started', value: run.startedAt.toISOString() },
       {

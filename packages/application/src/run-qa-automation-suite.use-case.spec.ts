@@ -55,13 +55,13 @@ describe('RunQaAutomationSuiteUseCase', () => {
     expect(emailSender.sent).toHaveLength(0);
   });
 
-  it('marks the run failed and sends exactly one alert naming the failing test', async () => {
+  it('marks the run completed (the suite did execute) and sends exactly one alert naming the failing test', async () => {
     const { dailyTest, emailSender, useCase } = setup();
     dailyTest.result = { passed: false, details: 'Sunday had a free slot' };
 
     const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
 
-    expect(run.status).toBe('failed');
+    expect(run.status).toBe('completed');
     expect(emailSender.sent).toHaveLength(1);
     expect(emailSender.sent[0]?.body).toContain('Sunday had a free slot');
     expect(emailSender.sent[0]?.body).toContain('Daily test');
@@ -160,7 +160,7 @@ describe('RunQaAutomationSuiteUseCase', () => {
     expect(browser.pagesOpened).toBe(2);
   });
 
-  it('records a failing result (without throwing) if a test itself throws', async () => {
+  it('records a failing result (without throwing) if a test itself throws, and still marks the run completed', async () => {
     const { dailyTest, resultRepository, useCase } = setup();
     dailyTest.run = async () => {
       throw new Error('page.click timed out');
@@ -170,7 +170,7 @@ describe('RunQaAutomationSuiteUseCase', () => {
     const results = await resultRepository.listByRun(run.id);
     const dailyResult = results.find((r) => r.testId === 'daily-test');
 
-    expect(run.status).toBe('failed');
+    expect(run.status).toBe('completed');
     expect(dailyResult?.passed).toBe(false);
     expect(dailyResult?.details).toContain('page.click timed out');
   });

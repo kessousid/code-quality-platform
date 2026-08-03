@@ -64,17 +64,18 @@ describe('QaAutomationPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Run now' }));
 
-    await waitFor(() => expect(screen.getByText('completed')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Successfully Executed')).toBeInTheDocument());
     expect(server.qaAutomationRuns).toHaveLength(1);
     expect(server.qaAutomationRuns[0]?.environment).toBe('production');
 
-    await user.click(screen.getByText('completed'));
+    await user.click(screen.getByText('Successfully Executed'));
     await waitFor(() =>
       expect(
         screen.getByText('Slot listing pricing matches Sunday/weekday business rule'),
       ).toBeInTheDocument(),
     );
     expect(screen.getByText('PASS')).toBeInTheDocument();
+    expect(screen.getByText('1 passed, 0 failed (of 1)')).toBeInTheDocument();
   });
 
   it('generates a PDF report for a production run through the real endpoint and can download it', async () => {
@@ -82,8 +83,8 @@ describe('QaAutomationPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Run now' }));
-    await waitFor(() => expect(screen.getByText('completed')).toBeInTheDocument());
-    await user.click(screen.getByText('completed'));
+    await waitFor(() => expect(screen.getByText('Successfully Executed')).toBeInTheDocument());
+    await user.click(screen.getByText('Successfully Executed'));
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Generate PDF report' })).toBeInTheDocument(),
@@ -121,7 +122,7 @@ describe('QaAutomationPage', () => {
     await waitFor(() => expect(screen.getByText('No runs yet.')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Run now' }));
 
-    await waitFor(() => expect(screen.getByText('completed')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Successfully Executed')).toBeInTheDocument());
     expect(server.qaAutomationRuns).toHaveLength(1);
     expect(server.qaAutomationRuns[0]?.environment).toBe('staging');
 

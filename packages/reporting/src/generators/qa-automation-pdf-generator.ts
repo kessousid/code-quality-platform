@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { QA_AUTOMATION_RUN_STATUS_LABELS } from '@cqp/core';
 import type { QaAutomationReportGenerator } from '../qa-automation-generator.js';
 import type { QaAutomationReportModel } from '../qa-automation-report-model.js';
 
@@ -21,7 +22,7 @@ export class PdfQaAutomationReportGenerator implements QaAutomationReportGenerat
     doc
       .fontSize(10)
       .fillColor('#555')
-      .text(`Run: ${run.id} (${run.status})`)
+      .text(`Run: ${run.id} (${QA_AUTOMATION_RUN_STATUS_LABELS[run.status]})`)
       .text(`Triggered by: ${run.triggeredBy}`)
       .text(`Started: ${run.startedAt.toISOString()}`)
       .text(`Completed: ${run.completedAt ? run.completedAt.toISOString() : '(in progress)'}`)

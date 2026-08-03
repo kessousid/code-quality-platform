@@ -8,6 +8,21 @@ import type { PaginatedResult, PaginationParams } from './pagination.js';
 
 export type QaAutomationRunStatus = 'running' | 'completed' | 'failed';
 
+/**
+ * User-facing wording for a run's status — shared by the web UI and the
+ * generated PDF/Excel reports so both say the same thing. Per the user:
+ * "completed"/"failed" read as if the *tests themselves* passed or
+ * failed, when a run can complete with real per-test failures still
+ * inside it — the run-level label is about whether the suite executed at
+ * all, not the aggregate test outcome (that's reported separately as a
+ * passed/failed count).
+ */
+export const QA_AUTOMATION_RUN_STATUS_LABELS: Record<QaAutomationRunStatus, string> = {
+  running: 'Running',
+  completed: 'Successfully Executed',
+  failed: 'Failed to Execute',
+};
+
 export type QaAutomationTrigger = 'scheduled' | 'manual';
 
 /**
