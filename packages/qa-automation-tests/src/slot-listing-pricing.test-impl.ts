@@ -13,9 +13,25 @@ import {
   type SlotTime,
 } from './portal-navigation.js';
 
+const SEVEN_AM = 7 * 60;
 const NINE_AM = 9 * 60;
 const SEVEN_PM = 19 * 60;
+const NINE_PM = 21 * 60;
 const DAYS_TO_CHECK = 3;
+
+/**
+ * Paid-only windows on a weekday: 7–9 AM and 7–9 PM (both ends
+ * inclusive) — updated per the user from the original "everything
+ * before 9 AM or after 7 PM is paid" rule. Free Slots cover the rest of
+ * the day, including overnight (after 9 PM through before 7 AM), not
+ * just the 9 AM–7 PM daytime window.
+ */
+export function isPaidWindow(minutesSinceMidnight: number): boolean {
+  return (
+    (minutesSinceMidnight >= SEVEN_AM && minutesSinceMidnight <= NINE_AM) ||
+    (minutesSinceMidnight >= SEVEN_PM && minutesSinceMidnight <= NINE_PM)
+  );
+}
 
 function formatSlotList(slots: SlotTime[]): string {
   return slots.length > 0 ? slots.map((s) => s.label).join(', ') : 'none';
@@ -28,12 +44,16 @@ function dateLabel(date: Date): string {
 /**
  * See docs/adr/0035. Cheap, no real-world side effect — safe to run on
  * every scheduled tick. Checks the business rule directly against real
- * production data: Sunday must be all-paid (no Free Slots), every other
- * day must have Free Slots strictly within 9 AM–7 PM and Priority slots
- * at-or-outside that window. Only ever looks at the next 2–3 days — a
- * real production run hit a date the site hadn't made bookable yet when
- * reaching further ahead for "the next Sunday", so per the user this
- * stays within the near-term window instead.
+ * production data: Sunday must be all-paid (no Free Slots); every other
+ * day, only 7–9 AM and 7–9 PM are paid-only windows — Free Slots cover
+ * the rest of the day, including overnight after 9 PM through before
+ * 7 AM (updated per the user from the original "everything before 9 AM
+ * or after 7 PM is paid" rule, which was flagging real overnight free
+ * slots as violations when they were actually correct). Only ever
+ * looks at the next 2–3 days — a real production run hit a date the
+ * site hadn't made bookable yet when reaching further ahead for "the
+ * next Sunday", so per the user this stays within the near-term window
+ * instead.
  *
  * Every checked day is evaluated (not stopped at the first failure) and
  * its real date, weekday, and full Free/Priority slot lists are always
@@ -105,22 +125,18 @@ export class SlotListingPricingTest implements PortalAutomationTest {
     const priority = await readSlotTimes(page, 'Priority Flexible Slots');
     const summary = `${dateLabel(date)}: Free Slots = [${formatSlotList(free)}], Priority Slots = [${formatSlotList(priority)}]`;
 
-    const badFree = free.filter(
-      (s) => s.minutesSinceMidnight <= NINE_AM || s.minutesSinceMidnight >= SEVEN_PM,
-    );
+    const badFree = free.filter((s) => isPaidWindow(s.minutesSinceMidnight));
     if (badFree.length > 0) {
       return {
         passed: false,
-        details: `${summary} — Free Slots outside 9 AM–7 PM: ${formatSlotList(badFree)}`,
+        details: `${summary} — Free Slots inside a paid window (7–9 AM or 7–9 PM): ${formatSlotList(badFree)}`,
       };
     }
-    const badPriority = priority.filter(
-      (s) => s.minutesSinceMidnight > NINE_AM && s.minutesSinceMidnight < SEVEN_PM,
-    );
+    const badPriority = priority.filter((s) => !isPaidWindow(s.minutesSinceMidnight));
     if (badPriority.length > 0) {
       return {
         passed: false,
-        details: `${summary} — Priority Slots inside the free window (9 AM–7 PM): ${formatSlotList(badPriority)}`,
+        details: `${summary} — Priority Slots outside the paid windows (7–9 AM or 7–9 PM): ${formatSlotList(badPriority)}`,
       };
     }
     return { passed: true, details: `${summary} — correctly split` };
