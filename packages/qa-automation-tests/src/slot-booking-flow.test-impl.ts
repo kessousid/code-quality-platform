@@ -1,4 +1,4 @@
-import type { Page } from 'playwright';
+import type { Locator, Page } from 'playwright';
 import type {
   PortalAutomationTest,
   PortalAutomationTestResult,
@@ -8,7 +8,9 @@ import {
   findSlotPanel,
   loginAndReachBookingScreen,
   nextNonSunday,
+  retryOnMissingSlot,
   selectCalendarDate,
+  TIME_PATTERN,
 } from './portal-navigation.js';
 
 const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
@@ -52,15 +54,31 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     page: Page,
     date: Date,
   ): Promise<PortalAutomationTestResult> {
-    const panel = await findSlotPanel(page, 'Priority Flexible Slots');
-    const timeButton = panel
+    let timeButton: Locator = (await findSlotPanel(page, 'Priority Flexible Slots'))
       .getByRole('button')
-      .filter({ hasText: /^\d{1,2}:\d{2}\s*(AM|PM)$/i })
+      .filter({ hasText: TIME_PATTERN })
       .first();
-    if (!(await timeButton.isVisible().catch(() => false))) {
+
+    // Per the user: a Priority slot can be genuinely present one moment
+    // and briefly gone the next (confirmed directly against production),
+    // so a missing time button is retried — with every attempt recorded
+    // — before it's trusted as a real absence rather than a momentary gap.
+    const retryOutcome = await retryOnMissingSlot(
+      page,
+      date,
+      'Priority Flexible Slots time button',
+      async () => {
+        timeButton = (await findSlotPanel(page, 'Priority Flexible Slots'))
+          .getByRole('button')
+          .filter({ hasText: TIME_PATTERN })
+          .first();
+        return timeButton.isVisible().catch(() => false);
+      },
+    );
+    if (!retryOutcome.succeeded) {
       return {
         passed: false,
-        details: `${date.toDateString()}: no Priority Flexible Slots time button was available to test the payment flow`,
+        details: `${date.toDateString()}: no Priority Flexible Slots time button was available to test the payment flow [${retryOutcome.auditTrail.join(' ')}]`,
       };
     }
     const timeLabel = (await timeButton.innerText()).trim();
@@ -100,15 +118,27 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
     page: Page,
     date: Date,
   ): Promise<PortalAutomationTestResult> {
-    const panel = await findSlotPanel(page, 'Free Slots');
-    const timeButton = panel
+    let timeButton: Locator = (await findSlotPanel(page, 'Free Slots'))
       .getByRole('button')
-      .filter({ hasText: /^\d{1,2}:\d{2}\s*(AM|PM)$/i })
+      .filter({ hasText: TIME_PATTERN })
       .first();
-    if (!(await timeButton.isVisible().catch(() => false))) {
+
+    const retryOutcome = await retryOnMissingSlot(
+      page,
+      date,
+      'Free Slots time button',
+      async () => {
+        timeButton = (await findSlotPanel(page, 'Free Slots'))
+          .getByRole('button')
+          .filter({ hasText: TIME_PATTERN })
+          .first();
+        return timeButton.isVisible().catch(() => false);
+      },
+    );
+    if (!retryOutcome.succeeded) {
       return {
         passed: false,
-        details: `${date.toDateString()}: no Free Slots time button was available to test the scheduling option`,
+        details: `${date.toDateString()}: no Free Slots time button was available to test the scheduling option [${retryOutcome.auditTrail.join(' ')}]`,
       };
     }
     const timeLabel = (await timeButton.innerText()).trim();

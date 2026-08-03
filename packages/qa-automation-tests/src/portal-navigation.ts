@@ -186,7 +186,7 @@ export function parseSlotTime(label: string): number {
   return hour * 60 + Number(minuteStr);
 }
 
-const TIME_PATTERN = /^\d{1,2}:\d{2}\s*(AM|PM)$/i;
+export const TIME_PATTERN = /^\d{1,2}:\d{2}\s*(AM|PM)$/i;
 
 /**
  * Locates the panel whose own heading is `sectionHeading` ("Priority
@@ -237,6 +237,50 @@ function addDays(date: Date, days: number): Date {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
   return copy;
+}
+
+export interface RetryOutcome {
+  succeeded: boolean;
+  auditTrail: string[];
+}
+
+/**
+ * Retries `check` a few times with a delay, re-selecting the calendar
+ * date before each retry to force a fresh read (the slot panels don't
+ * appear to auto-refresh on their own) — per the user: a slot that
+ * looks momentarily missing should be retried, and every attempt
+ * recorded in the returned audit trail rather than the first read
+ * being taken at face value. Confirmed directly against production
+ * that a real Priority slot can be present one moment and briefly gone
+ * the next, so a single read isn't reliable evidence either way.
+ */
+export async function retryOnMissingSlot(
+  page: Page,
+  date: Date,
+  label: string,
+  check: () => Promise<boolean>,
+  options: { attempts?: number; delayMs?: number } = {},
+): Promise<RetryOutcome> {
+  const attempts = options.attempts ?? 3;
+  const delayMs = options.delayMs ?? 5000;
+  const auditTrail: string[] = [];
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (await check()) {
+      auditTrail.push(
+        attempt === 1
+          ? `${label}: found on first check.`
+          : `${label}: found on retry attempt ${attempt}/${attempts} (missing on attempt(s) 1-${attempt - 1}).`,
+      );
+      return { succeeded: true, auditTrail };
+    }
+    auditTrail.push(`${label}: not found on attempt ${attempt}/${attempts}.`);
+    if (attempt < attempts) {
+      await page.waitForTimeout(delayMs);
+      await selectCalendarDate(page, date);
+    }
+  }
+  return { succeeded: false, auditTrail };
 }
 
 /**

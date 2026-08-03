@@ -8,6 +8,7 @@ import {
   isDateBookable,
   loginAndReachBookingScreen,
   readSlotTimes,
+  retryOnMissingSlot,
   selectCalendarDate,
   upcomingDates,
   type SlotTime,
@@ -105,7 +106,21 @@ export class SlotListingPricingTest implements PortalAutomationTest {
 
     await selectCalendarDate(page, date);
     const free = await readSlotTimes(page, 'Free Slots');
-    const priority = await readSlotTimes(page, 'Priority Flexible Slots');
+    let priority = await readSlotTimes(page, 'Priority Flexible Slots');
+
+    // Per the user: a Priority slot can be genuinely present one moment
+    // and briefly gone the next (confirmed directly against production),
+    // so an empty read is retried — with every attempt recorded — before
+    // it's trusted as a real violation rather than a momentary gap.
+    const retryOutcome =
+      priority.length > 0
+        ? undefined
+        : await retryOnMissingSlot(page, date, 'Priority Flexible Slots', async () => {
+            priority = await readSlotTimes(page, 'Priority Flexible Slots');
+            return priority.length > 0;
+          });
+    const auditNote = retryOutcome ? ` [${retryOutcome.auditTrail.join(' ')}]` : '';
+
     const summary = `${dateLabel(date)}: Free Slots = [${formatSlotList(free)}], Priority Slots = [${formatSlotList(priority)}]`;
 
     if (free.length > 0) {
@@ -114,10 +129,10 @@ export class SlotListingPricingTest implements PortalAutomationTest {
     if (priority.length === 0) {
       return {
         passed: false,
-        details: `${summary} — expected Priority Flexible Slots to be non-empty`,
+        details: `${summary} — expected Priority Flexible Slots to be non-empty${auditNote}`,
       };
     }
-    return { passed: true, details: `${summary} — correctly all-paid` };
+    return { passed: true, details: `${summary} — correctly all-paid${auditNote}` };
   }
 
   private async checkWeekday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
