@@ -321,6 +321,26 @@ export async function retryOnMissingSlot(
 }
 
 /**
+ * Per the user: after 3 PM IST, the site stops making *today* bookable
+ * at all — same-day scheduling closes for the day, and the bookable
+ * window shifts forward to the next 2 available days instead. Checked
+ * in IST specifically (not the server's own local time), since that's
+ * the site's own operating timezone regardless of where this runs.
+ */
+const SAME_DAY_CUTOFF_HOUR_IST = 15;
+
+function isPastSameDayCutoffIST(from: Date): boolean {
+  const istHour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }).format(from),
+  );
+  return istHour >= SAME_DAY_CUTOFF_HOUR_IST;
+}
+
+/**
  * The next `count` real calendar days, starting TODAY — per the user,
  * production only ever makes today and tomorrow bookable at all, so a
  * window that started at tomorrow (skipping today entirely) missed a
@@ -328,11 +348,14 @@ export async function retryOnMissingSlot(
  * calendar cells the site hadn't made bookable yet (`nextSunday()`
  * could previously land up to 6 days out looking for a specific
  * weekday). Tests iterate this instead of searching arbitrarily far
- * forward.
+ * forward. Once it's past 3 PM IST, "today" drops out of the window
+ * entirely (see `isPastSameDayCutoffIST`) — the window starts tomorrow
+ * instead, still covering the next `count` real bookable days from there.
  */
 export function upcomingDates(count: number, from: Date = new Date()): Date[] {
+  const startOffset = isPastSameDayCutoffIST(from) ? 1 : 0;
   const dates: Date[] = [];
-  for (let i = 0; i < count; i += 1) dates.push(addDays(from, i));
+  for (let i = 0; i < count; i += 1) dates.push(addDays(from, startOffset + i));
   return dates;
 }
 

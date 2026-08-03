@@ -30,10 +30,22 @@ describe('parseSlotTime', () => {
 });
 
 describe('upcomingDates', () => {
-  it('returns the next N real calendar days, starting today', () => {
-    const from = new Date(2026, 6, 17); // Friday, July 17 2026
+  it('returns the next N real calendar days, starting today, before the 3 PM IST cutoff', () => {
+    const from = new Date('2026-07-17T05:00:00Z'); // 10:30 AM IST — before the cutoff
     const result = upcomingDates(3, from);
-    expect(result.map((d) => d.getDate())).toEqual([17, 18, 19]);
+    expect(result.map((d) => d.getUTCDate())).toEqual([17, 18, 19]);
+  });
+
+  it('shifts the window to start tomorrow once it is past 3 PM IST, per the user', () => {
+    const from = new Date('2026-07-17T10:00:00Z'); // 3:30 PM IST — past the cutoff
+    const result = upcomingDates(2, from);
+    expect(result.map((d) => d.getUTCDate())).toEqual([18, 19]);
+  });
+
+  it('does not yet shift the window right at 2:59 PM IST', () => {
+    const from = new Date('2026-07-17T09:29:00Z'); // 2:59 PM IST
+    const result = upcomingDates(2, from);
+    expect(result.map((d) => d.getUTCDate())).toEqual([17, 18]);
   });
 });
 
