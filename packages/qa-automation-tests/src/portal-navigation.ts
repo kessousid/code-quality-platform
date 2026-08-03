@@ -131,37 +131,41 @@ const MONTH_NAMES = [
 ];
 
 /**
- * The calendar library renders each day cell as `<abbr aria-label="{Month}
- * {Day}, {Year}">` (no zero-padding, e.g. "September 2, 2026") — confirmed
- * from a real production failure: matching by the visible day-number text
- * alone (the original approach here) is ambiguous, since the widget shows
+ * The calendar library renders each day cell as `<abbr aria-label="{Day}
+ * {Month} {Year}">` (no zero-padding, e.g. "2 September 2026") — confirmed
+ * live against production (the format was previously "{Month} {Day},
+ * {Year}"; the site changed it — live-reverified after a real production
+ * failure showed the old format no longer matching anything). Matching by
+ * the visible day-number text alone is ambiguous, since the widget shows
  * a full 6-week grid including grayed-out, disabled overflow days from
- * adjacent months that can share the same day number (e.g. clicking "2"
- * hit the September 2 overflow cell instead of August 2, and Playwright
- * spent the full 30s retrying a click on a cell that's disabled by
- * design). The aria-label already disambiguates the exact date uniquely,
- * so this targets it directly instead of guessing among same-numbered
- * cells.
+ * adjacent months that can share the same day number. The aria-label
+ * already disambiguates the exact date uniquely, so this targets it
+ * directly instead of guessing among same-numbered cells.
  */
 export function formatCalendarCellLabel(date: Date): string {
   const month = MONTH_NAMES[date.getMonth()];
-  return `${month} ${date.getDate()}, ${date.getFullYear()}`;
+  return `${date.getDate()} ${month} ${date.getFullYear()}`;
 }
 
 /**
- * Whether `date`'s calendar cell is present and enabled — `isEnabled()`
- * (like `isVisible()`) checks current DOM state immediately rather than
- * auto-waiting, so this resolves in milliseconds even when the cell
- * doesn't exist at all (e.g. a date outside the currently displayed
- * month). A missing/disabled cell means the site itself hasn't made
- * that date available for booking yet, not a selector bug — confirmed
- * directly against a real production failure where the exact same date
- * was selectable a few days earlier but not once it became the
- * upcoming Sunday.
+ * Whether `date`'s calendar cell is present and enabled. `count()` is
+ * checked first — live-verified that `isEnabled()` on a locator matching
+ * *zero* elements (e.g. a date outside the currently displayed month)
+ * does not resolve immediately as its own name suggests, but instead
+ * waits the full default actionability timeout (30s) before throwing —
+ * the opposite of the fast, non-throwing check this needs. `count()`
+ * itself always resolves immediately with no waiting, so that's checked
+ * first and short-circuits to `false` with no 30s cost. Once at least
+ * one element genuinely exists, `isEnabled()` on it does behave as
+ * expected (immediate, no waiting) — confirmed directly against a real
+ * production failure where the exact same date was selectable a few days
+ * earlier but not once it became the upcoming Sunday.
  */
 export async function isDateBookable(page: Page, date: Date): Promise<boolean> {
   const cellLabel = formatCalendarCellLabel(date);
-  return page.getByLabel(cellLabel, { exact: true }).isEnabled();
+  const cell = page.getByLabel(cellLabel, { exact: true });
+  if ((await cell.count()) === 0) return false;
+  return cell.isEnabled();
 }
 
 /**

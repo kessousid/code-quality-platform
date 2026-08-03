@@ -8,8 +8,8 @@ import {
 
 describe('formatCalendarCellLabel', () => {
   it('matches the real aria-label format observed in production (no zero-padding)', () => {
-    expect(formatCalendarCellLabel(new Date(2026, 8, 2))).toBe('September 2, 2026');
-    expect(formatCalendarCellLabel(new Date(2026, 7, 31))).toBe('August 31, 2026');
+    expect(formatCalendarCellLabel(new Date(2026, 8, 2))).toBe('2 September 2026');
+    expect(formatCalendarCellLabel(new Date(2026, 7, 31))).toBe('31 August 2026');
   });
 });
 
