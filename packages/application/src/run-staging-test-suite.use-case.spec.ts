@@ -26,14 +26,16 @@ function setup() {
 }
 
 describe('RunStagingTestSuiteUseCase', () => {
-  it('marks the run completed with environment "staging" and sends no email when every test passes', async () => {
+  it('marks the run completed with environment "staging" and still sends a report email (labeled Staging) when every test passes', async () => {
     const { emailSender, useCase } = setup();
 
     const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
 
     expect(run.status).toBe('completed');
     expect(run.environment).toBe('staging');
-    expect(emailSender.sent).toHaveLength(0);
+    expect(emailSender.sent).toHaveLength(1);
+    expect(emailSender.sent[0]?.subject).toContain('[Staging]');
+    expect(emailSender.sent[0]?.subject).toContain('all');
   });
 
   it('marks the run completed (the suite did execute) and sends exactly one alert with a real Excel attachment when a test fails', async () => {

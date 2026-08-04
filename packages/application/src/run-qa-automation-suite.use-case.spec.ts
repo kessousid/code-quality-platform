@@ -46,13 +46,15 @@ function setup() {
 }
 
 describe('RunQaAutomationSuiteUseCase', () => {
-  it('marks the run completed and sends no email when every test passes', async () => {
+  it('marks the run completed and still sends a report email (labeled Production) when every test passes', async () => {
     const { emailSender, useCase } = setup();
 
     const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
 
     expect(run.status).toBe('completed');
-    expect(emailSender.sent).toHaveLength(0);
+    expect(emailSender.sent).toHaveLength(1);
+    expect(emailSender.sent[0]?.subject).toContain('[Production]');
+    expect(emailSender.sent[0]?.subject).toContain('all');
   });
 
   it('marks the run completed (the suite did execute) and sends exactly one alert naming the failing test', async () => {

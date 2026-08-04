@@ -78,39 +78,46 @@ export class RunQaAutomationSuiteUseCase {
       // actually executed, not whether every individual test passed —
       // 'failed' is reserved for the run itself never getting the chance
       // to run (the catch block below), not for real per-test failures
-      // recorded here. Those are still surfaced via the alert email and
+      // recorded here. Those are still surfaced via the report email and
       // the persisted pass/fail counts, just not via this status field.
       const failing = results.filter((r) => !r.passed);
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'completed',
       });
 
-      if (failing.length > 0) {
-        const persistedResults = await this.resultRepository.listByRun(run.id);
-        const model = buildQaAutomationReportModel(completed, persistedResults);
-        const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
+      // Per the user: an execution report email goes out after every run,
+      // not only on failure — clearly labeled "Production" so it's never
+      // confused with a Staging report.
+      const persistedResults = await this.resultRepository.listByRun(run.id);
+      const model = buildQaAutomationReportModel(completed, persistedResults);
+      const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
-        await this.emailSender.send({
-          to: this.alertEmailTo,
-          ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
-          subject: `QA automation alert: ${failing.length} test(s) failed`,
-          body: failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n'),
-          attachments: [
-            {
-              filename: `qa-automation-report-${run.id}.xlsx`,
-              content: reportXlsx,
-              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            },
-          ],
-        });
-      }
+      await this.emailSender.send({
+        to: this.alertEmailTo,
+        ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
+        subject:
+          failing.length > 0
+            ? `[Production] QA Automation Report: ${failing.length} of ${results.length} test(s) failed`
+            : `[Production] QA Automation Report: all ${results.length} test(s) passed`,
+        body:
+          failing.length > 0
+            ? failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n')
+            : `All ${results.length} test(s) passed. See the attached report for full details.`,
+        attachments: [
+          {
+            filename: `qa-automation-report-${run.id}.xlsx`,
+            content: reportXlsx,
+            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          },
+        ],
+      });
 
       return completed;
     } catch (error) {
-      // The alert email is the intended notification channel, but a crash
-      // this early (before any test result exists) has no other visible
-      // trace otherwise — logging it too means it shows up in the worker's
-      // own console output, not only in an inbox.
+      // The report email is the intended notification channel, but a
+      // crash this early (before any test result exists) has no other
+      // visible trace otherwise — logging it too means it shows up in the
+      // worker's own console output, not only in an inbox.
       console.error(`[qa-automation run ${run.id}] crashed:`, error);
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'failed',
@@ -118,7 +125,7 @@ export class RunQaAutomationSuiteUseCase {
       await this.emailSender.send({
         to: this.alertEmailTo,
         ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
-        subject: 'QA automation alert: the run itself crashed',
+        subject: '[Production] QA Automation Alert: the run itself crashed',
         body: `The run crashed before any test could complete: ${(error as Error).message}`,
       });
       return completed;
