@@ -19,7 +19,7 @@ const NINE_AM = 9 * 60;
 const SEVEN_PM = 19 * 60;
 const NINE_PM = 21 * 60;
 /** The site only ever makes today and tomorrow bookable — see upcomingDates(). */
-const DAYS_TO_CHECK = 2;
+export const DAYS_TO_CHECK = 2;
 
 /**
  * Paid-only windows on a weekday: 7–9 AM and 7–9 PM (both ends
@@ -35,11 +35,11 @@ export function isPaidWindow(minutesSinceMidnight: number): boolean {
   );
 }
 
-function formatSlotList(slots: SlotTime[]): string {
+export function formatSlotList(slots: SlotTime[]): string {
   return slots.length > 0 ? slots.map((s) => s.label).join(', ') : 'none';
 }
 
-function dateLabel(date: Date): string {
+export function dateLabel(date: Date): string {
   return date.toDateString();
 }
 
