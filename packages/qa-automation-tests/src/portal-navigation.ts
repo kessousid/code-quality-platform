@@ -345,21 +345,48 @@ function isPastSameDayCutoffIST(from: Date): boolean {
 }
 
 /**
- * The next `count` real calendar days, starting TODAY — per the user,
- * production only ever makes today and tomorrow bookable at all, so a
- * window that started at tomorrow (skipping today entirely) missed a
- * real bookable day, and a window reaching further than tomorrow hit
- * calendar cells the site hadn't made bookable yet (`nextSunday()`
- * could previously land up to 6 days out looking for a specific
- * weekday). Tests iterate this instead of searching arbitrarily far
- * forward. Once it's past 3 PM IST, "today" drops out of the window
- * entirely (see `isPastSameDayCutoffIST`) — the window starts tomorrow
- * instead, still covering the next `count` real bookable days from there.
+ * The real IST calendar day for `from` — a confirmed real production bug
+ * (not just a theoretical one) made this necessary: this whole module
+ * otherwise reads/writes dates via the *container's own local timezone*
+ * (plain `getDate()`/`setDate()`), not IST. Railway's container runs in
+ * UTC. Between midnight and 5:30 AM IST, IST has already rolled to a new
+ * calendar day while UTC hasn't yet — so `new Date()`'s own local
+ * (UTC) day was still "yesterday" by IST's clock, and every date this
+ * module computed from it landed one full day early. Anchoring here to
+ * the real IST year/month/day (via `Intl`, independent of the
+ * container's own timezone) and only ever doing local-Date arithmetic
+ * from *that* point on keeps every downstream `getDate()`/`setDate()`
+ * call self-consistent regardless of what timezone the process itself
+ * runs in.
+ */
+function istDateOnly(from: Date): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(from);
+  const get = (type: string): number => Number(parts.find((p) => p.type === type)?.value);
+  return new Date(get('year'), get('month') - 1, get('day'));
+}
+
+/**
+ * The next `count` real calendar days, starting TODAY (in IST) — per the
+ * user, production only ever makes today and tomorrow bookable at all,
+ * so a window that started at tomorrow (skipping today entirely) missed
+ * a real bookable day, and a window reaching further than tomorrow hit
+ * calendar cells the site hadn't made bookable yet (`nextSunday()` could
+ * previously land up to 6 days out looking for a specific weekday). Tests
+ * iterate this instead of searching arbitrarily far forward. Once it's
+ * past 3 PM IST, "today" drops out of the window entirely (see
+ * `isPastSameDayCutoffIST`) — the window starts tomorrow instead, still
+ * covering the next `count` real bookable days from there.
  */
 export function upcomingDates(count: number, from: Date = new Date()): Date[] {
+  const istToday = istDateOnly(from);
   const startOffset = isPastSameDayCutoffIST(from) ? 1 : 0;
   const dates: Date[] = [];
-  for (let i = 0; i < count; i += 1) dates.push(addDays(from, startOffset + i));
+  for (let i = 0; i < count; i += 1) dates.push(addDays(istToday, startOffset + i));
   return dates;
 }
 
