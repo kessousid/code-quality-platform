@@ -90,17 +90,16 @@ export class SlotListingPricingTest implements PortalAutomationTest {
 
   /**
    * Explicitly checks whether Sunday can be selected at all before
-   * checking its pricing — per the user: a candidate booking earlier in
-   * the week (e.g. on a Monday) may not get the option to pick a Sunday
-   * slot in the first place if the site hasn't opened that date for
-   * booking yet, which is itself worth surfacing distinctly from a
-   * pricing-rule violation.
+   * checking its pricing — per the user, a date the site hasn't opened
+   * for booking yet isn't itself a failure (nothing to violate the
+   * pricing rule with yet), so it's recorded as its own informational
+   * state rather than a pricing-rule violation.
    */
   private async checkSunday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
     if (!(await isDateBookable(page, date))) {
       return {
-        passed: false,
-        details: `${dateLabel(date)}: not open for booking — a candidate would not get the option to select this date at all.`,
+        passed: true,
+        details: `${dateLabel(date)}: not open for booking yet`,
       };
     }
 
@@ -136,6 +135,15 @@ export class SlotListingPricingTest implements PortalAutomationTest {
   }
 
   private async checkWeekday(page: Page, date: Date): Promise<PortalAutomationTestResult> {
+    // Per the user: a date the site hasn't opened for booking yet isn't a
+    // pricing-rule failure — there's no slot listing to check yet at all.
+    if (!(await isDateBookable(page, date))) {
+      return {
+        passed: true,
+        details: `${dateLabel(date)}: not open for booking yet`,
+      };
+    }
+
     await selectCalendarDate(page, date);
     const free = await readSlotTimes(page, 'Free Slots');
     const priority = await readSlotTimes(page, 'Priority Flexible Slots');

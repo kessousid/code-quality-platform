@@ -6,6 +6,7 @@ import type {
 } from './portal-automation-test.js';
 import {
   findSlotPanel,
+  isDateBookable,
   loginAndReachBookingScreen,
   nextNonSunday,
   retryOnMissingSlot,
@@ -32,6 +33,17 @@ export class SlotBookingFlowTest implements PortalAutomationTest {
   async run(page: Page): Promise<PortalAutomationTestResult> {
     await loginAndReachBookingScreen(page, this.credentials);
     const date = nextNonSunday();
+
+    // Per the user: a date the site hasn't opened for booking yet isn't a
+    // failure of this flow — it's just not there to test yet. Recorded as
+    // its own informational state instead of throwing (which used to
+    // surface as a generic, alarming "Threw an error" result).
+    if (!(await isDateBookable(page, date))) {
+      return {
+        passed: true,
+        details: `${date.toDateString()}: not open for booking yet`,
+      };
+    }
     await selectCalendarDate(page, date);
 
     // Free Slots first, deliberately — checkPriorityPaymentScreen ends by
