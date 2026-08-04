@@ -51,7 +51,7 @@ export function RepoDetailPage({ feature, onChangeFeature }: RepoDetailPageProps
           <CoverageGateSection repoId={repoId} defaultBranch={repoQuery.data?.defaultBranch} />
           <details>
             <summary className="cursor-pointer text-sm font-semibold text-neutral-600">
-              Generate unit tests with Gemini (secondary)
+              Generate unit tests (secondary)
             </summary>
             <div className="mt-3 space-y-6">
               <GenerateUnitTestsSection

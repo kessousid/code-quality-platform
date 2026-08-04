@@ -63,7 +63,7 @@ describe('RepoDetailPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
     // Gemini-based generation is now secondary/collapsed behind the primary coverage-gate flow (docs/adr/0025).
-    await user.click(screen.getByText('Generate unit tests with Gemini (secondary)'));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
     await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
@@ -82,7 +82,7 @@ describe('RepoDetailPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
-    await user.click(screen.getByText('Generate unit tests with Gemini (secondary)'));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
     await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
@@ -121,7 +121,7 @@ describe('RepoDetailPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
-    await user.click(screen.getByText('Generate unit tests with Gemini (secondary)'));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
     await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: 'Browse…' }));
@@ -178,7 +178,7 @@ describe('RepoDetailPage', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
-    await user.click(screen.getByText('Generate unit tests with Gemini (secondary)'));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
     await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: 'Browse…' }));
