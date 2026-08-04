@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateRepo, useRepos } from '../api/hooks.js';
 import { DirectoryBrowser } from '../components/DirectoryBrowser.js';
-import { USER_GUIDE_URL } from '../components/FeatureSelector.js';
+import { FEATURE_LABELS, USER_GUIDE_URL, type AppFeature } from '../components/FeatureSelector.js';
 
 /**
  * A developer's workerId is effectively constant across every repo they add
@@ -12,7 +12,10 @@ import { USER_GUIDE_URL } from '../components/FeatureSelector.js';
  */
 const LAST_WORKER_ID_KEY = 'cqp:lastWorkerId';
 
-export function DashboardPage({ onChangeFeature }: { onChangeFeature?: () => void } = {}) {
+export function DashboardPage({
+  feature,
+  onChangeFeature,
+}: { feature?: AppFeature | null; onChangeFeature?: () => void } = {}) {
   const reposQuery = useRepos();
   const createRepo = useCreateRepo();
   const [name, setName] = useState('');
@@ -48,7 +51,9 @@ export function DashboardPage({ onChangeFeature }: { onChangeFeature?: () => voi
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Code Quality &amp; Security Assessment Platform</h1>
+        <h1 className="text-xl font-semibold">
+          {feature ? FEATURE_LABELS[feature] : 'Code Quality & Security Assessment Platform'}
+        </h1>
         {onChangeFeature && (
           <button
             type="button"

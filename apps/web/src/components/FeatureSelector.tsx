@@ -13,6 +13,11 @@ const FEATURES: { value: AppFeature; label: string }[] = [
   { value: 'qa-automation', label: 'QA Automation' },
 ];
 
+/** Reused wherever a page needs to show which feature is active — e.g. DashboardPage's heading, which otherwise showed the same generic platform title no matter which feature was selected. */
+export const FEATURE_LABELS: Record<AppFeature, string> = Object.fromEntries(
+  FEATURES.map((f) => [f.value, f.label]),
+) as Record<AppFeature, string>;
+
 /**
  * The landing gate: nothing else renders until a feature is chosen, and
  * only that feature's functionality is shown afterward — not a

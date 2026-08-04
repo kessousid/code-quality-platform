@@ -39,7 +39,7 @@ export function App() {
               ) : feature === 'qa-automation' ? (
                 <Navigate to="/qa-automation" replace />
               ) : (
-                <DashboardPage onChangeFeature={resetFeature} />
+                <DashboardPage feature={feature} onChangeFeature={resetFeature} />
               )
             }
           />

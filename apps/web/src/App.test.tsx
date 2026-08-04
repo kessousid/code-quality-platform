@@ -33,8 +33,21 @@ describe('App', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(screen.getByText('Code Quality & Security Assessment Platform')).toBeInTheDocument();
+    expect(screen.getByText('Code Quality & Security')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/No repos yet/)).toBeInTheDocument());
+  });
+
+  it("shows the selected feature's own name as the dashboard heading, not the generic platform title", async () => {
+    render(<App />);
+
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Feature' }), 'unit-testing');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByText('Unit Testing')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Code Quality & Security Assessment Platform'),
+    ).not.toBeInTheDocument();
   });
 
   it('takes the Cron Runner feature straight to /crons, skipping the dashboard', async () => {
