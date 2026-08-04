@@ -27,8 +27,12 @@ export async function processRunUnitTestGenerationJob(
   const repoRepository = new PrismaRepoRepository(prisma);
   const generatedTestFileRepository = new PrismaGeneratedTestFileRepository(prisma);
   const testCaseResultRepository = new PrismaTestCaseResultRepository(prisma);
+  // A per-run apiKeyOverride (docs/adr/0037) takes priority over the
+  // worker's own configured default — the escape hatch for when the
+  // default key is out of quota. Never logged, never persisted anywhere
+  // beyond this one job's already-transient BullMQ payload.
   const generators: Record<TestGeneratorType, JestTestGenerator> = {
-    gemini: new GeminiJestTestGenerator(process.env.GEMINI_API_KEY ?? ''),
+    gemini: new GeminiJestTestGenerator(data.apiKeyOverride ?? process.env.GEMINI_API_KEY ?? ''),
     script: new ScriptJestTestGenerator(),
   };
 

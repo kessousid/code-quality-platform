@@ -102,6 +102,21 @@ describe('UnitTestController', () => {
     expect(created.generator).toBe('script');
   });
 
+  it('relays an apiKeyOverride into the enqueued job, never back out through the response', async () => {
+    const { controller, repo, unitTestQueue } = await buildTestingModule();
+
+    const created = await controller.create('org_1', {
+      repoId: repo.id,
+      target: { path: 'src/foo.ts' },
+      apiKeyOverride: 'AIzaSy-a-fake-override-key',
+    });
+
+    expect(created).not.toHaveProperty('apiKeyOverride');
+    expect(unitTestQueue.enqueued).toEqual([
+      { orgId: 'org_1', runId: created.id, apiKeyOverride: 'AIzaSy-a-fake-override-key' },
+    ]);
+  });
+
   it('translates RepoNotFoundError into a 404', async () => {
     const { controller } = await buildTestingModule();
     await expect(

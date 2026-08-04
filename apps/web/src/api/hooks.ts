@@ -278,6 +278,7 @@ export function useCreateUnitTestRun() {
       repoId: string;
       target: UnitTestTarget;
       generator?: TestGeneratorType;
+      apiKeyOverride?: string;
     }) => apiPost<UnitTestRun>('/unit-tests', input),
     onSuccess: (run) => queryClient.invalidateQueries({ queryKey: ['unit-test-runs', run.repoId] }),
   });

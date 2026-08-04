@@ -31,7 +31,16 @@ export class BullMqUnitTestQueue implements UnitTestQueue {
   constructor(private readonly queue: Queue<UnitTestJobData>) {}
 
   async enqueue(data: UnitTestJobData): Promise<void> {
-    await this.queue.add('run-unit-tests', data, { jobId: data.runId });
+    // removeOnComplete/removeOnFail: a job's data can carry a one-off
+    // apiKeyOverride (docs/adr/0037) — nothing downstream needs the job's
+    // own Redis record once it's done (the run's real status/results live
+    // in Postgres), so this keeps a plaintext key from lingering in Redis
+    // any longer than the run itself takes.
+    await this.queue.add('run-unit-tests', data, {
+      jobId: data.runId,
+      removeOnComplete: true,
+      removeOnFail: true,
+    });
   }
 
   async cancel(runId: string): Promise<void> {

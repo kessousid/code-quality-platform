@@ -2,6 +2,8 @@
 export interface UnitTestJobData {
   orgId: string;
   runId: string;
+  /** See CreateUnitTestRunInput's apiKeyOverride (docs/adr/0037) — carried only as far as the job payload, never written back to the run's own persisted row. */
+  apiKeyOverride?: string;
 }
 
 export interface UnitTestQueue {

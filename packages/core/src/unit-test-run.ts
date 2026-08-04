@@ -47,6 +47,13 @@ export interface CreateUnitTestRunInput {
   target: UnitTestTarget;
   /** Defaults to 'gemini' when omitted — resolved in CreateUnitTestRunUseCase, not here. */
   generator?: TestGeneratorType;
+  /**
+   * A one-off Gemini API key for this run only, in case the configured
+   * default key is out of quota — never persisted (deliberately absent
+   * from `UnitTestRun` itself), only relayed through `UnitTestJobData` to
+   * whichever worker actually runs the job (see docs/adr/0037).
+   */
+  apiKeyOverride?: string;
 }
 
 export interface UnitTestRunProgress {

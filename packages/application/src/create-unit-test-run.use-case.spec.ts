@@ -53,6 +53,33 @@ describe('CreateUnitTestRunUseCase', () => {
     expect(run.generator).toBe('script');
   });
 
+  it('relays an apiKeyOverride to the enqueued job without ever persisting it on the run', async () => {
+    const repoRepository = new InMemoryRepoRepository();
+    const unitTestRunRepository = new InMemoryUnitTestRunRepository();
+    const unitTestQueueRegistry = new InMemoryUnitTestQueueRegistry();
+    const repo = await repoRepository.create({ orgId: 'org_1', name: 'demo-repo' });
+    const useCase = new CreateUnitTestRunUseCase(
+      unitTestRunRepository,
+      repoRepository,
+      unitTestQueueRegistry,
+    );
+
+    const run = await useCase.execute({
+      orgId: 'org_1',
+      repoId: repo.id,
+      target: { path: 'src/foo.ts' },
+      apiKeyOverride: 'AIzaSy-a-fake-override-key',
+    });
+
+    expect(unitTestQueueRegistry.forWorker('default').enqueued).toEqual([
+      { orgId: 'org_1', runId: run.id, apiKeyOverride: 'AIzaSy-a-fake-override-key' },
+    ]);
+    expect(run).not.toHaveProperty('apiKeyOverride');
+    expect(await unitTestRunRepository.findById('org_1', run.id)).not.toHaveProperty(
+      'apiKeyOverride',
+    );
+  });
+
   it('rejects an unknown repoId', async () => {
     const repoRepository = new InMemoryRepoRepository();
     const unitTestRunRepository = new InMemoryUnitTestRunRepository();

@@ -36,6 +36,7 @@ export class UnitTestController {
         repoId: dto.repoId,
         target: dto.target,
         ...(dto.generator !== undefined ? { generator: dto.generator } : {}),
+        ...(dto.apiKeyOverride !== undefined ? { apiKeyOverride: dto.apiKeyOverride } : {}),
       });
     } catch (error) {
       if (error instanceof RepoNotFoundError) {

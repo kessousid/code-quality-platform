@@ -25,14 +25,21 @@ export class CreateUnitTestRunUseCase {
       throw new RepoNotFoundError(input.repoId);
     }
 
+    // apiKeyOverride is deliberately kept out of the repository.create() call
+    // below — it must never land in the persisted run row (docs/adr/0037),
+    // only in the job payload the worker actually consumes it from.
+    const { apiKeyOverride, ...runInput } = input;
+
     // Defaults to Gemini when omitted (docs/adr/0026) — preserves existing behavior for any caller not using the new selector.
     const run = await this.unitTestRunRepository.create({
-      ...input,
+      ...runInput,
       generator: input.generator ?? 'gemini',
     });
-    await this.unitTestQueueRegistry
-      .forWorker(repo.workerId)
-      .enqueue({ orgId: input.orgId, runId: run.id });
+    await this.unitTestQueueRegistry.forWorker(repo.workerId).enqueue({
+      orgId: input.orgId,
+      runId: run.id,
+      ...(apiKeyOverride !== undefined ? { apiKeyOverride } : {}),
+    });
     return run;
   }
 }

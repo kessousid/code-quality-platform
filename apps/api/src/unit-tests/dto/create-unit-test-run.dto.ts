@@ -41,4 +41,14 @@ export class CreateUnitTestRunRequestDto {
   @IsOptional()
   @IsIn(TEST_GENERATOR_TYPES)
   generator?: TestGeneratorType;
+
+  @ApiProperty({
+    required: false,
+    description:
+      "A one-off Gemini API key for this run only, in case the platform's configured default key is out of quota (docs/adr/0037) — never stored, only relayed to the worker that runs this run.",
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  apiKeyOverride?: string;
 }

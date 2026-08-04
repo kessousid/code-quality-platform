@@ -146,6 +146,8 @@ export interface LocalApiServer {
   reportsByScan: Map<string, unknown[]>;
   directories: Map<string, DirectoryFixture>;
   unitTestRuns: UnitTestRun[];
+  /** Raw POST /unit-tests bodies, exactly as sent — lets a test verify e.g. apiKeyOverride was actually transmitted, since it's deliberately never echoed back on the stored/returned run. */
+  receivedUnitTestCreateBodies: { apiKeyOverride?: string }[];
   resultsByRun: Map<string, unknown[]>;
   generatedFilesByRun: Map<string, unknown[]>;
   unitTestReportsByRun: Map<string, UnitTestReport[]>;
@@ -233,6 +235,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   const reportContent = new Map<string, string>();
   const directories = new Map<string, DirectoryFixture>();
   const unitTestRuns: UnitTestRun[] = [];
+  const receivedUnitTestCreateBodies: { apiKeyOverride?: string }[] = [];
   const resultsByRun = new Map<string, unknown[]>();
   const generatedFilesByRun = new Map<string, unknown[]>();
   const unitTestReportsByRun = new Map<string, UnitTestReport[]>();
@@ -432,7 +435,11 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
         repoId: string;
         target: { path: string; functionName?: string };
         generator?: string;
+        apiKeyOverride?: string;
       };
+      receivedUnitTestCreateBodies.push(
+        input.apiKeyOverride !== undefined ? { apiKeyOverride: input.apiKeyOverride } : {},
+      );
       const run: UnitTestRun = {
         id: id('run'),
         orgId: 'org_1',
@@ -786,6 +793,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     reportsByScan,
     directories,
     unitTestRuns,
+    receivedUnitTestCreateBodies,
     resultsByRun,
     generatedFilesByRun,
     unitTestReportsByRun,

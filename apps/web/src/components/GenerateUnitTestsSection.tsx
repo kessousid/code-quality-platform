@@ -24,6 +24,7 @@ export function GenerateUnitTestsSection({
   const [functionName, setFunctionName] = useState('');
   const [browsingTarget, setBrowsingTarget] = useState(false);
   const [generator, setGenerator] = useState<TestGeneratorType>('gemini');
+  const [apiKeyOverride, setApiKeyOverride] = useState('');
 
   // Browsing shows the real, recognizable absolute path in the field (never a cryptic '.' or a blank-looking
   // empty string) — converting down to a path relative to the repo root only matters at submit time, which is
@@ -46,6 +47,9 @@ export function GenerateUnitTestsSection({
           ...(functionName.trim().length > 0 ? { functionName: functionName.trim() } : {}),
         },
         generator,
+        ...(generator === 'gemini' && apiKeyOverride.trim().length > 0
+          ? { apiKeyOverride: apiKeyOverride.trim() }
+          : {}),
       });
     } catch {
       // surfaced via createUnitTestRun.isError, if the UI grows one
@@ -119,6 +123,21 @@ export function GenerateUnitTestsSection({
               Script-based (deterministic, no AI)
             </label>
           </fieldset>
+          {generator === 'gemini' && (
+            <div className="space-y-1">
+              <input
+                type="password"
+                value={apiKeyOverride}
+                onChange={(e) => setApiKeyOverride(e.target.value)}
+                placeholder="Custom Gemini API key (optional — only if the default key is out of quota)"
+                className="w-full rounded border px-3 py-2 text-sm"
+              />
+              <p className="text-xs text-neutral-500">
+                Only used for this one run, never stored — leave blank to use the configured default
+                key.
+              </p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={createUnitTestRun.isPending || targetPath.trim().length === 0}

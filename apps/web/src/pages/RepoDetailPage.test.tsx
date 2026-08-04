@@ -93,6 +93,43 @@ describe('RepoDetailPage', () => {
     expect(server.unitTestRuns[0]!.generator).toBe('script');
   });
 
+  it('sends a custom Gemini API key override through the real POST /unit-tests endpoint when provided, and never echoes it back', async () => {
+    renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
+    await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
+
+    await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
+    await user.type(
+      screen.getByPlaceholderText(/Custom Gemini API key/),
+      'AIzaSy-a-fake-override-key',
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate & run' }));
+
+    await waitFor(() => expect(server.unitTestRuns).toHaveLength(1));
+    expect(server.receivedUnitTestCreateBodies[0]).toEqual({
+      apiKeyOverride: 'AIzaSy-a-fake-override-key',
+    });
+    expect(server.unitTestRuns[0]).not.toHaveProperty('apiKeyOverride');
+  });
+
+  it('hides the Gemini API key override field once the script-based generator is selected', async () => {
+    renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
+    expect(screen.getByPlaceholderText(/Custom Gemini API key/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: /Script-based/ }));
+
+    expect(screen.queryByPlaceholderText(/Custom Gemini API key/)).not.toBeInTheDocument();
+  });
+
   it('picking the repo root itself via the folder browser still submits a real target, not a silently-empty one', async () => {
     server.repos.push({
       id: 'repo_2',
