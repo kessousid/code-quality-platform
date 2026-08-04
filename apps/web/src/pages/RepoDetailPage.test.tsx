@@ -8,6 +8,9 @@ import { RepoDetailPage } from './RepoDetailPage.js';
 let server: LocalApiServer;
 
 beforeEach(async () => {
+  // The Gemini API key override is saved per-browser (docs/adr/0037) via
+  // localStorage — cleared so one test's saved key never leaks into the next.
+  localStorage.clear();
   server = await startLocalApiServer();
   import.meta.env.VITE_API_BASE_URL = server.baseUrl;
 
@@ -93,7 +96,7 @@ describe('RepoDetailPage', () => {
     expect(server.unitTestRuns[0]!.generator).toBe('script');
   });
 
-  it('sends a custom Gemini API key override through the real POST /unit-tests endpoint when provided, and never echoes it back', async () => {
+  it('saves a custom Gemini API key override once, then reuses it on every subsequent run without retyping', async () => {
     renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
     await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
 
@@ -102,32 +105,64 @@ describe('RepoDetailPage', () => {
     await user.click(screen.getByText('Generate unit tests (secondary)'));
     await waitFor(() => expect(screen.getByText('No unit test runs yet.')).toBeInTheDocument());
 
-    await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
-    await user.type(
-      screen.getByPlaceholderText(/Custom Gemini API key/),
-      'AIzaSy-a-fake-override-key',
-    );
-    await user.click(screen.getByRole('button', { name: 'Generate & run' }));
+    // One-time setup: click the button, type the key, Save.
+    await user.click(screen.getByRole('button', { name: /Set a custom Gemini API key/ }));
+    await user.type(screen.getByPlaceholderText('Custom Gemini API key'), 'AIzaSy-a-fake-key');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByText(/Using a saved Gemini API key override/)).toBeInTheDocument();
+    expect(localStorage.getItem('cqp:geminiApiKeyOverride')).toBe('AIzaSy-a-fake-key');
 
+    // First run: the saved key is sent without being retyped.
+    await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
+    await user.click(screen.getByRole('button', { name: 'Generate & run' }));
     await waitFor(() => expect(server.unitTestRuns).toHaveLength(1));
-    expect(server.receivedUnitTestCreateBodies[0]).toEqual({
-      apiKeyOverride: 'AIzaSy-a-fake-override-key',
-    });
+    expect(server.receivedUnitTestCreateBodies[0]).toEqual({ apiKeyOverride: 'AIzaSy-a-fake-key' });
     expect(server.unitTestRuns[0]).not.toHaveProperty('apiKeyOverride');
+
+    // Second run, no re-entry needed: still reused automatically.
+    await user.clear(screen.getByPlaceholderText(/Target file or folder/));
+    await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/other.ts');
+    await user.click(screen.getByRole('button', { name: 'Generate & run' }));
+    await waitFor(() => expect(server.unitTestRuns).toHaveLength(2));
+    expect(server.receivedUnitTestCreateBodies[1]).toEqual({ apiKeyOverride: 'AIzaSy-a-fake-key' });
   });
 
-  it('hides the Gemini API key override field once the script-based generator is selected', async () => {
+  it('clears a saved Gemini API key override, reverting to the configured default key', async () => {
     renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
     await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
     await user.click(screen.getByText('Generate unit tests (secondary)'));
-    expect(screen.getByPlaceholderText(/Custom Gemini API key/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Set a custom Gemini API key/ }));
+    await user.type(screen.getByPlaceholderText('Custom Gemini API key'), 'AIzaSy-a-fake-key');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+
+    expect(localStorage.getItem('cqp:geminiApiKeyOverride')).toBeNull();
+    expect(screen.getByRole('button', { name: /Set a custom Gemini API key/ })).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/Target file or folder/), 'src/math.ts');
+    await user.click(screen.getByRole('button', { name: 'Generate & run' }));
+    await waitFor(() => expect(server.unitTestRuns).toHaveLength(1));
+    expect(server.receivedUnitTestCreateBodies[0]).toEqual({});
+  });
+
+  it('hides the Gemini API key override control once the script-based generator is selected', async () => {
+    renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Unit Testing' }));
+    await user.click(screen.getByText('Generate unit tests (secondary)'));
+    expect(screen.getByRole('button', { name: /Set a custom Gemini API key/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: /Script-based/ }));
 
-    expect(screen.queryByPlaceholderText(/Custom Gemini API key/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Set a custom Gemini API key/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('picking the repo root itself via the folder browser still submits a real target, not a silently-empty one', async () => {

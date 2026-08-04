@@ -1,4 +1,4 @@
-# ADR-0037: Per-run Gemini API key override
+# ADR-0037: Per-developer Gemini API key override
 
 ## Status
 
@@ -12,8 +12,11 @@ key's daily/per-minute quota can run out mid-session with no warning
 until the next request 429s — at which point every subsequent run fails
 until the user notices and either waits for the quota to reset or swaps
 the configured key and redeploys/restarts the worker. The user asked for
-a faster way to keep working: type a different key in for just the runs
-that need it, without touching worker configuration at all.
+a faster way to keep working: supply a different key for the runs that
+need it, without touching worker configuration at all — and, once told
+that would mean re-entering a key on every single run, asked for a
+one-time-per-developer setup instead ("done by a click of a button"),
+not something retyped on every generate.
 
 ## Decision
 
@@ -36,20 +39,33 @@ whatever retention BullMQ defaults to. Nothing downstream needs the job's
 own Redis record afterward; the run's real status/results already live in
 Postgres.
 
-The web UI shows a single optional, `type="password"` field ("Custom
-Gemini API key") next to the existing generator radio choice, visible
-only when Gemini is selected — left blank, behavior is identical to
-today.
+**The web UI persists the override client-side, not per-run.**
+`GenerateUnitTestsSection` saves it to `localStorage` under
+`cqp:geminiApiKeyOverride` — the same "remember it, don't ask again"
+pattern DashboardPage already uses for `LAST_WORKER_ID_KEY`, on the same
+reasoning: a developer's override key is effectively constant across
+every run they do from this browser. The flow is one click to start
+("Set a custom Gemini API key"), type once, one click to commit ("Save")
+— from then on every Gemini run on that browser silently includes it
+until "Clear" is clicked, with no per-run field to fill in at all.
 
 ## Consequences
 
 - No database migration — this is the rare case where the right answer
   to "should this be a column" is no.
-- The override is a manual, per-run escape hatch, not an automatic
-  failover — if the default key is out of quota, the run still fails
-  first; the user then retries with an override. Automatic multi-key
+- The override is a manual escape hatch, not an automatic failover — if
+  the default key is out of quota, the run still fails first; the
+  developer then saves an override and retries. Automatic multi-key
   failover was considered and rejected as unnecessary complexity for a
-  problem that, in practice, happens rarely enough to notice and retry.
-- Same tradeoff as any browser-entered secret: it's visible in the
-  Network tab / browser memory for that request. Acceptable here since
-  it's the user's own key, entered by the user, for their own run.
+  problem that, in practice, happens rarely enough to notice and fix
+  once per developer.
+- Same tradeoff as any browser-stored secret: it's visible in
+  `localStorage`/the Network tab on that machine. Acceptable here since
+  it's the developer's own key, saved by the developer, on their own
+  browser — same trust boundary this app already accepts for
+  `LAST_WORKER_ID_KEY`.
+- Scoped to one browser, not one person — a developer using two browsers
+  (or clearing site data) saves it twice. Accepted as the same tradeoff
+  `LAST_WORKER_ID_KEY` already lives with; a real per-account setting
+  would need a backend column, reopening the "should this be persisted
+  server-side" question this ADR deliberately answers "no" to.
