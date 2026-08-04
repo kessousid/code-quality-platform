@@ -94,6 +94,17 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           envVarName: 'STAGING_TESTS_PYTHON_PATH',
         }),
       );
+      // The suite's own automation/config/settings.py imports python-dotenv,
+      // but its own requirements.txt doesn't list it — installed defensively
+      // here so a gap in their file (which this repo doesn't control) never
+      // silently breaks every single test with an import error.
+      requireZeroExit(
+        'pip install python-dotenv',
+        await runSubprocess(python, ['-m', 'pip', 'install', 'python-dotenv'], {
+          cwd: repoDir,
+          envVarName: 'STAGING_TESTS_PYTHON_PATH',
+        }),
+      );
       requireZeroExit(
         'playwright install chromium',
         await runSubprocess(python, ['-m', 'playwright', 'install', '--with-deps', 'chromium'], {

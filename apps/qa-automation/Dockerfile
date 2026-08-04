@@ -26,7 +26,12 @@ RUN corepack enable
 # others — but pre-installing the common packages + Chromium here means
 # most of a run's setup time is already paid for at build time.
 RUN apt-get update && apt-get install -y python3 python3-pip python3-venv xvfb && rm -rf /var/lib/apt/lists/*
-RUN python3 -m pip install --no-cache-dir pytest pytest-playwright playwright pytest-html
+# python-dotenv: the suite's own automation/config/settings.py imports it,
+# but its own requirements.txt doesn't list it — a gap in their file, not
+# ours. Installed defensively here (and again at runtime, since their
+# requirements.txt is re-installed fresh every run) so a missing
+# dependency in their file never silently breaks every single test.
+RUN python3 -m pip install --no-cache-dir pytest pytest-playwright playwright pytest-html python-dotenv
 RUN python3 -m playwright install --with-deps chromium
 
 WORKDIR /repo
