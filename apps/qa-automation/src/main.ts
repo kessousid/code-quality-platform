@@ -58,6 +58,12 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_EMAIL'),
     password: requireEnv('PORTAL_QA_PASSWORD'),
   };
+  // A dedicated login for the slot-related checks only (docs/adr/0035) —
+  // every other check keeps using `credentials` above.
+  const slotCheckCredentials = {
+    email: requireEnv('PORTAL_QA_SLOT_CHECK_EMAIL'),
+    password: requireEnv('PORTAL_QA_SLOT_CHECK_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -69,7 +75,7 @@ async function main(): Promise<void> {
     new PrismaQaAutomationRunRepository(prisma),
     new PrismaQaAutomationTestResultRepository(prisma),
     new PrismaQaAutomationScheduleRepository(prisma),
-    createPortalAutomationTests(credentials),
+    createPortalAutomationTests(credentials, slotCheckCredentials),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });
       return {

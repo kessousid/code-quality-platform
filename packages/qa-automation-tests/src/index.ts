@@ -18,14 +18,22 @@ import { DevelopmentReportDownloadTest } from './development-report-download.tes
  * adding a class file and one entry here, no DB/UI change required.
  * Credentials aren't known until runtime (env vars), so this is a
  * factory rather than a plain constant array.
+ *
+ * `slotCheckCredentials` is a separate, optional login used only by the
+ * three slot-related checks (listing/pricing, availability snapshot,
+ * booking flow) — per the user, a dedicated account for slot checks
+ * specifically, while every other check (premium upgrade, development
+ * report) keeps using `credentials`. Defaults to `credentials` when
+ * omitted, so a caller with just one account still works unchanged.
  */
 export function createPortalAutomationTests(
   credentials: PortalCredentials,
+  slotCheckCredentials: PortalCredentials = credentials,
 ): PortalAutomationTest[] {
   return [
-    new SlotListingPricingTest(credentials),
-    new SlotAvailabilitySnapshotTest(credentials),
-    new SlotBookingFlowTest(credentials),
+    new SlotListingPricingTest(slotCheckCredentials),
+    new SlotAvailabilitySnapshotTest(slotCheckCredentials),
+    new SlotBookingFlowTest(slotCheckCredentials),
     new PremiumUpgradeTest(credentials),
     new DevelopmentReportDownloadTest(credentials),
   ];
