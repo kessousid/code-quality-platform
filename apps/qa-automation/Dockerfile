@@ -32,7 +32,17 @@ RUN apt-get update && apt-get install -y python3 python3-pip python3-venv xvfb &
 # requirements.txt is re-installed fresh every run) so a missing
 # dependency in their file never silently breaks every single test.
 RUN python3 -m pip install --no-cache-dir pytest pytest-playwright playwright pytest-html python-dotenv
-RUN python3 -m playwright install --with-deps chromium
+# A dedicated PLAYWRIGHT_BROWSERS_PATH, deliberately NOT the default
+# (shared with Node Playwright's own /ms-playwright, baked in by this base
+# image). Confirmed live: since every staging run re-installs its browser
+# fresh (requirements.txt can bump the Python playwright version at any
+# time), that reinstall's own cleanup logic doesn't recognize Node's
+# separately-baked chromium as "claimed" and prunes it — a real production
+# incident, not a hypothetical one. Scoped with an inline env assignment,
+# not `ENV`, so it applies only to this one RUN step and never leaks into
+# the final image's runtime environment (which would break Node Playwright
+# instead).
+RUN PLAYWRIGHT_BROWSERS_PATH=/ms-playwright-staging python3 -m playwright install --with-deps chromium
 
 WORKDIR /repo
 COPY --from=build /repo /repo

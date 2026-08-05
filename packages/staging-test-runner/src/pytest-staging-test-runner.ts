@@ -21,6 +21,26 @@ function requireZeroExit(step: string, result: SubprocessResult): void {
   }
 }
 
+/**
+ * Deliberately NOT the default browsers path (`/ms-playwright`, shared
+ * with this same container's Node/Playwright-JS install — see docs/adr/0035,
+ * docs/adr/0036). Confirmed live in production: since this class
+ * reinstalls its own browser on every single run (the external repo's
+ * requirements.txt can bump its pinned Playwright version at any time),
+ * that reinstall's own cleanup logic doesn't recognize Node's separately-
+ * baked chromium as "claimed" and prunes it out from under the production
+ * runner — a real incident (`browserType.launch: Executable doesn't exist
+ * at /ms-playwright/chromium-1140/...`), not a hypothetical one. Isolating
+ * this path is what actually fixes it, not just avoiding a race — even
+ * back-to-back (non-overlapping) runs hit this, since the file is simply
+ * gone by the next production launch.
+ */
+const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
+
+function pythonEnv(): NodeJS.ProcessEnv {
+  return { ...process.env, PLAYWRIGHT_BROWSERS_PATH: STAGING_PLAYWRIGHT_BROWSERS_PATH };
+}
+
 export interface PytestStagingTestRunnerOptions {
   /** The shared, externally-maintained repo (e.g. https://github.com/codewithVsingh/curatal_tests). */
   repoUrl: string;
@@ -110,6 +130,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         await runSubprocess(python, ['-m', 'playwright', 'install', '--with-deps', 'chromium'], {
           cwd: repoDir,
           envVarName: 'STAGING_TESTS_PYTHON_PATH',
+          env: pythonEnv(),
         }),
       );
 
@@ -132,7 +153,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           'chromium',
           `--junitxml=${reportPath}`,
         ],
-        { cwd: repoDir, envVarName: 'STAGING_TESTS_XVFB_PATH' },
+        { cwd: repoDir, envVarName: 'STAGING_TESTS_XVFB_PATH', env: pythonEnv() },
       );
 
       const xml = await readFile(reportPath, 'utf-8').catch(() => {
