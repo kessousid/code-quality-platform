@@ -46,15 +46,28 @@ export async function loginAndReachBookingScreen(
   await page.getByText('My Interviews', { exact: true }).click();
   await page.waitForTimeout(3000);
   await page.getByRole('button', { name: 'Book Interview Slot' }).click();
-  await page.waitForTimeout(3000);
 
+  // A candidate account with an incomplete profile (e.g. the dedicated
+  // slot-check account, docs/adr/0037) gets a "Candidate Verification
+  // Details" modal here that an already-verified account never sees.
+  // Confirmed live: a fixed sleep + one instant isVisible() snapshot is a
+  // real race — if the modal renders even slightly slower than the sleep,
+  // the check misses it, the Cancel click never happens, and the modal
+  // stays open covering the calendar (which can pull every date cell out
+  // of the accessibility tree, making isDateBookable wrongly report every
+  // single date as "not open" — a real production incident, not a
+  // hypothetical one). waitFor actively waits for the modal instead of a
+  // single snapshot, so it's found whenever it actually appears.
   const verificationModalVisible = await page
     .getByText('Candidate Verification Details')
-    .isVisible()
+    .waitFor({ state: 'visible', timeout: 8000 })
+    .then(() => true)
     .catch(() => false);
   if (verificationModalVisible) {
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.waitForTimeout(1000);
+  } else {
+    await page.waitForTimeout(2000);
   }
 }
 
