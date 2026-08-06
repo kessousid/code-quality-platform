@@ -70,22 +70,52 @@ coverage) will either show someone else's machine's files or fail with
    worker) never will.
 
 **Keeping it running without thinking about it**: the command above exits
-the moment you close its terminal. To have it start automatically at
-login and restart itself if it crashes, register it as a Windows
-scheduled task instead of running the command by hand:
+the moment you close its terminal. To have it start automatically and
+restart itself if it crashes, register it as a Windows scheduled task
+instead of running the command by hand:
 
 ```powershell
 # One-time, in an elevated PowerShell — replace <you>-laptop and the .env file path with your own
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"cd 'C:\path\to\code-quality-platform'; Get-Content '.env.<you>-worker' | ForEach-Object { if ($_ -match '^\s*([^#=][^=]*)=(.*)$') { [System.Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process') } }; $env:WORKER_ID='<you>-laptop'; corepack pnpm --filter @cqp/worker run start`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-Register-ScheduledTask -TaskName "CQP-Worker-<You>" -Action $action -Trigger $trigger -Settings $settings
+# Two triggers, not one: AtLogOn covers a real sign-in, but most laptops
+# just sleep/lock for days at a time and never re-fire it — the repeating
+# trigger is what actually keeps this self-healing regardless of how you
+# use the machine. MultipleInstances=IgnoreNew means a periodic tick that
+# fires while the worker's already running is a no-op, not a duplicate.
+$logonTrigger = New-ScheduledTaskTrigger -AtLogOn
+$repeatTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 10) -RepetitionDuration (New-TimeSpan -Days 3650)
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName "CQP-Worker-<You>" -Action $action -Trigger @($logonTrigger, $repeatTrigger) -Settings $settings
 ```
 
 Note this runs the **built** worker, not the auto-reloading dev mode —
 after pulling new platform code, re-run `corepack pnpm run build` and
 restart the task (`Restart-ScheduledTask` or log off/on) for it to take
 effect.
+
+**"I have to start the worker manually every time" / it keeps going
+inactive**: this means the task above either isn't registered yet, or was
+registered with only the old `AtLogOn` trigger (no repeating trigger) —
+`AtLogOn` fires on a genuine Windows sign-in, not on waking from sleep or
+unlocking, so on a laptop that's rarely fully logged out, the task can go
+days without ever re-firing after the worker process dies. Check what you
+actually have registered:
+
+```powershell
+Get-ScheduledTask -TaskName "CQP-Worker-*" | Get-ScheduledTaskInfo
+(Get-ScheduledTask -TaskName "CQP-Worker-*").Triggers | ForEach-Object { $_.CimClass.CimClassName }
+```
+
+If `LastRunTime` is old and/or only `MSFT_TaskLogonTrigger` is listed (no
+`MSFT_TaskTimeTrigger`), re-run the `Register-ScheduledTask` block above
+in an **elevated** PowerShell (modifying an existing task's triggers needs
+admin rights even if your account is an admin — a plain terminal's token
+has that stripped by UAC) to add the repeating trigger. To get unblocked
+immediately without waiting for a trigger to fire, start it directly:
+
+```powershell
+Start-ScheduledTask -TaskName "CQP-Worker-<You>"
+```
 
 ## Registering a repo — the one rule that matters
 
