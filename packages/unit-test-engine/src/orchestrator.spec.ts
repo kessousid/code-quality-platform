@@ -52,7 +52,7 @@ describe('runUnitTestGeneration', () => {
     }
   });
 
-  it('generates a real test file next to the source, writes it to disk, and runs it for real', async () => {
+  it('writes the generated test under Unit tests/AI Based, mirroring the source path, and runs it for real', async () => {
     await writeFile(
       join(repoRoot, 'greet.js'),
       `export function greet(name) { return 'hello ' + name; }`,
@@ -61,17 +61,24 @@ describe('runUnitTestGeneration', () => {
     const generator = new TemplateJestTestGenerator();
     const events: UnitTestProgressEvent[] = [];
 
-    const result = await runUnitTestGeneration(repoRoot, { path: 'greet.js' }, generator, {
-      onProgress: (e) => events.push(e),
-    });
+    const result = await runUnitTestGeneration(
+      repoRoot,
+      { path: 'greet.js' },
+      'gemini',
+      generator,
+      {
+        onProgress: (e) => events.push(e),
+      },
+    );
 
     expect(generator.calls).toHaveLength(1);
     expect(generator.calls[0]?.functions[0]?.name).toBe('greet');
 
+    const expectedTestPath = join('Unit tests', 'AI Based', 'greet.generated.test.js');
     expect(result.generatedFiles).toEqual([
-      { sourceFilePath: 'greet.js', testFilePath: 'greet.generated.test.js' },
+      { sourceFilePath: 'greet.js', testFilePath: expectedTestPath },
     ]);
-    const writtenContent = await readFile(join(repoRoot, 'greet.generated.test.js'), 'utf-8');
+    const writtenContent = await readFile(join(repoRoot, expectedTestPath), 'utf-8');
     expect(writtenContent).toContain("describe('greet'");
 
     expect(result.testsTotal).toBe(1);
@@ -81,12 +88,53 @@ describe('runUnitTestGeneration', () => {
     expect(events[0]).toEqual({ type: 'total', total: 1 });
     expect(events.some((e) => e.type === 'file-start')).toBe(true);
     expect(events.some((e) => e.type === 'file-finish')).toBe(true);
+
+    const report = JSON.parse(
+      await readFile(
+        join(repoRoot, 'Unit tests', 'AI Based', 'greet.js', 'execution report', 'report.json'),
+        'utf-8',
+      ),
+    );
+    expect(report.generator).toBe('gemini');
+    expect(report.testsTotal).toBe(1);
+    expect(report.testsPassed).toBe(1);
+  }, 30000);
+
+  it('writes a script-generated test under Unit tests/Script based instead', async () => {
+    await writeFile(join(repoRoot, 'greet.js'), `export function greet() { return 1; }`);
+    const generator = new TemplateJestTestGenerator();
+
+    const result = await runUnitTestGeneration(repoRoot, { path: 'greet.js' }, 'script', generator);
+
+    const expectedTestPath = join('Unit tests', 'Script based', 'greet.generated.test.js');
+    expect(result.generatedFiles).toEqual([
+      { sourceFilePath: 'greet.js', testFilePath: expectedTestPath },
+    ]);
+    await expect(readFile(join(repoRoot, expectedTestPath), 'utf-8')).resolves.toBeTruthy();
+  }, 30000);
+
+  it("overrides a previous run against the same target, removing a since-deleted source file's stale generated test", async () => {
+    await writeFile(join(repoRoot, 'a.js'), `export function a() { return 1; }`);
+    await writeFile(join(repoRoot, 'b.js'), `export function b() { return 2; }`);
+    const generator = new TemplateJestTestGenerator();
+
+    await runUnitTestGeneration(repoRoot, { path: '.' }, 'gemini', generator);
+    const staleTestPath = join(repoRoot, 'Unit tests', 'AI Based', 'a.generated.test.js');
+    await expect(readFile(staleTestPath, 'utf-8')).resolves.toBeTruthy();
+
+    await rm(join(repoRoot, 'a.js'));
+    await runUnitTestGeneration(repoRoot, { path: '.' }, 'gemini', generator);
+
+    await expect(readFile(staleTestPath, 'utf-8')).rejects.toThrow();
+    await expect(
+      readFile(join(repoRoot, 'Unit tests', 'AI Based', 'b.generated.test.js'), 'utf-8'),
+    ).resolves.toBeTruthy();
   }, 30000);
 
   it('rejects a functionName target that points at a directory', async () => {
     const generator = new TemplateJestTestGenerator();
     await expect(
-      runUnitTestGeneration(repoRoot, { path: '.', functionName: 'anything' }, generator),
+      runUnitTestGeneration(repoRoot, { path: '.', functionName: 'anything' }, 'gemini', generator),
     ).rejects.toThrow('single file, not a directory');
   });
 
@@ -96,7 +144,7 @@ describe('runUnitTestGeneration', () => {
     controller.abort();
 
     const generator = new TemplateJestTestGenerator();
-    const result = await runUnitTestGeneration(repoRoot, { path: 'a.js' }, generator, {
+    const result = await runUnitTestGeneration(repoRoot, { path: 'a.js' }, 'gemini', generator, {
       signal: controller.signal,
     });
 

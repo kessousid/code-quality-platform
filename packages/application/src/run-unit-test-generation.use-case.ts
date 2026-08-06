@@ -70,10 +70,13 @@ export class RunUnitTestGenerationUseCase {
 
     try {
       const generator = this.generators[run.generator];
-      const result = await runUnitTestGeneration(repo.localPath, run.target, generator, {
-        onProgress,
-        signal: controller.signal,
-      });
+      const result = await runUnitTestGeneration(
+        repo.localPath,
+        run.target,
+        run.generator,
+        generator,
+        { onProgress, signal: controller.signal },
+      );
 
       if (controller.signal.aborted) {
         // Status is already 'cancelled' (CancelUnitTestRunUseCase set it) — leave it as-is, skip persisting a partial result.

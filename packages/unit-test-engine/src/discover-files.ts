@@ -10,6 +10,11 @@ const EXCLUDED_DIR_NAMES = new Set([
   'coverage',
   '.turbo',
   '.next',
+  // Where this engine writes its own output (docs/adr/0038) — walking
+  // into it would be wasted work at best, and at worst burn through
+  // MAX_DISCOVERED_FILES on a repo's own accumulated generated tests
+  // before ever reaching real source files elsewhere in a root-level scan.
+  'Unit tests',
 ]);
 
 /** A cap, not a suggestion (see docs/adr/0023's C:\CuratalIT lesson) — an LLM call per file means an unbounded folder is an unbounded bill, not just an unbounded scan. */

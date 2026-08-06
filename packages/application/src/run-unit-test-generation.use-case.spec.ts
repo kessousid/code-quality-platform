@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -102,11 +102,21 @@ describe('RunUnitTestGenerationUseCase', () => {
 
     const files = await generatedTestFileRepository.listByRun(run.id);
     expect(files).toHaveLength(1);
-    expect(files[0]?.testFilePath).toBe('greet.generated.test.js');
+    expect(files[0]?.testFilePath).toBe(join('Unit tests', 'AI Based', 'greet.generated.test.js'));
 
     const results = await testCaseResultRepository.listByRun(run.id);
     expect(results).toHaveLength(1);
     expect(results[0]?.status).toBe('passed');
+
+    // docs/adr/0038 — a local execution report lands alongside the generated test.
+    const report = JSON.parse(
+      await readFile(
+        join(repoRoot, 'Unit tests', 'AI Based', 'greet.js', 'execution report', 'report.json'),
+        'utf-8',
+      ),
+    );
+    expect(report.testsTotal).toBe(1);
+    expect(report.testsPassed).toBe(1);
   }, 30000);
 
   it('uses the script generator, not gemini, when the run requests it', async () => {

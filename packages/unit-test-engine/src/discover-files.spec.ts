@@ -36,6 +36,26 @@ describe('discoverSourceFiles', () => {
     });
   });
 
+  it('skips the Unit tests output tree entirely (docs/adr/0038), not just files matching the generated-test filename pattern', async () => {
+    await withTempRepo(async (repoRoot) => {
+      await mkdir(join(repoRoot, 'Unit tests', 'AI Based', 'execution report'), {
+        recursive: true,
+      });
+      await writeFile(
+        join(repoRoot, 'Unit tests', 'AI Based', 'a.generated.test.ts'),
+        '// stale from a prior run',
+      );
+      await writeFile(
+        join(repoRoot, 'Unit tests', 'AI Based', 'execution report', 'report.json'),
+        '{}',
+      );
+      await writeFile(join(repoRoot, 'src.ts'), 'export const x = 1;');
+
+      const files = await discoverSourceFiles(repoRoot, '.');
+      expect(files.map((f) => f.relativePath)).toEqual(['src.ts']);
+    });
+  });
+
   it('throws a clear error for a target that does not exist', async () => {
     await withTempRepo(async (repoRoot) => {
       await expect(discoverSourceFiles(repoRoot, 'nope')).rejects.toThrow(TargetNotFoundError);
