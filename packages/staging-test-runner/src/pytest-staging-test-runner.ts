@@ -6,21 +6,6 @@ import { runSubprocess, type SubprocessResult } from '@cqp/plugin-shared';
 import { parseJunitXml } from './junit-xml-parser.js';
 
 /**
- * Per the user: COD (Candidate on Demand) automation now lives on its own
- * branch of the same repo, actively maintained separately from `main` —
- * `main`'s own `tests/roles/cod` is excluded here so COD coverage isn't
- * run (and, if the two ever drift, double-counted) from two places at
- * once. This branch has its own committed `.env` (same mechanism as
- * `main`'s — see `config.py`'s `load_dotenv()` with no path argument,
- * which reads whatever `.env` sits in the process's cwd, i.e. wherever
- * *that* branch's clone lands) and its own `pytest.ini` `cod` marker,
- * which is what actually scopes the run to COD tests specifically —
- * this branch also carries a broader, work-in-progress admin/auth/RBAC
- * suite that isn't COD at all.
- */
-const COD_AUTOMATION_BRANCH = 'cod-automation';
-
-/**
  * `runSubprocess` deliberately doesn't treat a non-zero exit as failure —
  * that's correct for the final pytest invocation (non-zero means "a test
  * failed", not "the runner failed"), but for the setup steps ahead of it
@@ -83,21 +68,21 @@ export interface PytestStagingTestRunnerOptions {
 
 /**
  * Runs the external, independently-maintained pytest/playwright-python
- * staging suite as a real subprocess (docs/adr/0036, docs/adr/0039) — a
- * genuinely different tech stack from this repo's own TS Playwright
- * tests, so it's run as-is rather than reimplemented. Two separate
- * clones run in sequence and their results are concatenated: `main`
- * (minus its own `tests/roles/cod`) and the dedicated `cod-automation`
- * branch (scoped to just its `cod`-marked tests) — see docs/adr/0039 for
- * why COD moved to its own branch. Each clone is fresh on every run
- * (never a frozen snapshot, since other people keep updating both), and
- * each installs its own requirements + browser before running its own
- * `pytest ... --junitxml` so results can be parsed back into
- * StagingTestResult rows. Re-running `playwright install` after each
- * fresh `pip install` matters specifically because either branch's own
- * `requirements.txt` can bump the `playwright` package version at any
- * time — the installed browser build has to track whatever version pip
- * just installed, not whatever was baked into the image at build time.
+ * staging suite as a real subprocess (docs/adr/0036) — a genuinely
+ * different tech stack from this repo's own TS Playwright tests, so
+ * it's run as-is rather than reimplemented. Per the user, all test
+ * cases (including what used to live on a separate `cod-automation`
+ * branch, docs/adr/0039 — now superseded) have moved under `main`'s
+ * `tests/` folder, split into per-persona subfolders, so a single clone
+ * of `main` covers everything. The clone is fresh on every run (never a
+ * frozen snapshot, since other people keep updating it), and installs
+ * its own requirements + browser before running `pytest ... --junitxml`
+ * so results can be parsed back into StagingTestResult rows.
+ * Re-running `playwright install` after `pip install` matters
+ * specifically because the repo's own `requirements.txt` can bump the
+ * `playwright` package version at any time — the installed browser
+ * build has to track whatever version pip just installed, not whatever
+ * was baked into the image at build time.
  */
 export class PytestStagingTestRunner implements StagingTestRunner {
   constructor(private readonly options: PytestStagingTestRunnerOptions) {}
@@ -111,34 +96,21 @@ export class PytestStagingTestRunner implements StagingTestRunner {
   }
 
   /**
-   * A real, clickable GitHub URL for wherever a given result's tests
-   * actually live — per the user, there was no way to tell from the
-   * report whether tests from `main` or from `cod-automation` (docs/adr/0039)
-   * had actually run. `.git` is stripped so the result is a normal
-   * browsable `https://github.com/.../tree/...` link, not a clone URL.
+   * A real, clickable GitHub URL for where the suite's tests live. `.git`
+   * is stripped so the result is a normal browsable
+   * `https://github.com/.../tree/...` link, not a clone URL.
    */
-  private sourceUrlFor(branch: string | undefined): string {
+  private sourceUrl(): string {
     const base = this.options.repoUrl.replace(/\.git$/, '');
-    return branch !== undefined ? `${base}/tree/${branch}` : `${base}/tree/main/tests`;
+    return `${base}/tree/main/tests`;
   }
 
   async run(): Promise<StagingTestRunResult> {
-    const mainResults = await this.runSuite(undefined, ['tests', '--ignore=tests/roles/cod']);
-    const codResults = await this.runSuite(COD_AUTOMATION_BRANCH, ['tests', '-m', 'cod']);
-    return { results: [...mainResults, ...codResults] };
+    return { results: await this.runSuite() };
   }
 
-  /**
-   * One full clone -> install -> browser -> pytest -> parse cycle,
-   * against either `main` (branch === undefined, git's own default) or a
-   * named branch. `pytestArgs` follow `pytest` on the command line, ahead
-   * of the flags every run always needs (`-v --browser chromium
-   * --junitxml=...`).
-   */
-  private async runSuite(
-    branch: string | undefined,
-    pytestArgs: string[],
-  ): Promise<StagingTestResult[]> {
+  /** One full clone -> install -> browser -> pytest -> parse cycle against `main`. */
+  private async runSuite(): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
     const repoDir = path.join(workDir, 'repo');
     const reportPath = path.join(workDir, 'report.xml');
@@ -149,14 +121,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         'git clone',
         await runSubprocess(
           this.options.gitCommand ?? 'git',
-          [
-            'clone',
-            '--depth',
-            '1',
-            ...(branch !== undefined ? ['-b', branch] : []),
-            this.cloneUrl(),
-            repoDir,
-          ],
+          ['clone', '--depth', '1', this.cloneUrl(), repoDir],
           { cwd: workDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
         ),
       );
@@ -201,7 +166,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           python,
           '-m',
           'pytest',
-          ...pytestArgs,
+          'tests',
           '-v',
           '--browser',
           'chromium',
@@ -215,7 +180,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           `pytest produced no report at ${reportPath} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
         );
       });
-      const sourceUrl = this.sourceUrlFor(branch);
+      const sourceUrl = this.sourceUrl();
       return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
     } finally {
       await rm(workDir, { recursive: true, force: true });

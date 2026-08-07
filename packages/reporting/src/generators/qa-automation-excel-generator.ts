@@ -41,10 +41,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       { header: 'Test Name', key: 'testName', width: 50 },
       { header: 'Status', key: 'status', width: 12 },
       { header: 'Details', key: 'details', width: 80 },
-      // Only ever populated for a staging run (docs/adr/0039) — staging
-      // pulls from more than one repo/branch, and per the user, there was
-      // no way to tell from the report which tests actually ran from
-      // which. Blank for production, which has just the one source.
+      // Only ever populated for a staging run. Blank for production, which has just the one source.
       { header: 'Source', key: 'sourceUrl', width: 60 },
     ];
     testResults.addRows(

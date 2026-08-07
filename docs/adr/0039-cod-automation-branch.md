@@ -2,6 +2,15 @@
 
 ## Status
 
+Superseded (2026-08-07) — per the user, `cod-automation` has been folded
+back into `main`: all test cases (COD included) now live under `main`'s
+`tests/` folder, split into per-persona subfolders. `PytestStagingTestRunner`
+is back to a single clone/run against `main`, matching docs/adr/0036's
+original shape. This ADR is kept for history; do not use it to reason
+about the current runner.
+
+## Status (original)
+
 Accepted
 
 ## Context

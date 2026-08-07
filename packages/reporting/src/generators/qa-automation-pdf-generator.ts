@@ -51,9 +51,7 @@ export class PdfQaAutomationReportGenerator implements QaAutomationReportGenerat
         .fontSize(9)
         .fillColor(result.passed ? '#333' : '#991b1b')
         .text(result.details);
-      // Only ever set for a staging run (docs/adr/0039) — staging pulls
-      // from more than one repo/branch, and per the user, there was no
-      // way to tell from the report which tests actually ran from which.
+      // Only ever set for a staging run — production has only ever had one source.
       if (result.sourceUrl !== undefined) {
         doc.fontSize(8).fillColor('#2563eb').text(`Source: ${result.sourceUrl}`);
       }
