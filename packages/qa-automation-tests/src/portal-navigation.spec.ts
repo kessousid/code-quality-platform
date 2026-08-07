@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  calendarCellLabelPattern,
   formatCalendarCellLabel,
   nextNonSunday,
   parseSlotTime,
@@ -10,6 +11,34 @@ describe('formatCalendarCellLabel', () => {
   it('matches the real aria-label format observed in production (no zero-padding)', () => {
     expect(formatCalendarCellLabel(new Date(2026, 8, 2))).toBe('2 September 2026');
     expect(formatCalendarCellLabel(new Date(2026, 7, 31))).toBe('31 August 2026');
+  });
+});
+
+describe('calendarCellLabelPattern', () => {
+  // Regression: the site's calendar aria-label format has been observed
+  // live in BOTH shapes, flipping between them with no code/deploy change
+  // on our side (docs/adr/0040) — a manual verification run matched one
+  // format, then every real scheduled run right after matched the other,
+  // making every date look "not open" even though the site had real open
+  // slots the whole time. Matching only one exact string was the actual
+  // bug; this pattern must accept either.
+  it('matches the "{Day} {Month} {Year}" format', () => {
+    expect(calendarCellLabelPattern(new Date(2026, 8, 2)).test('2 September 2026')).toBe(true);
+  });
+
+  it('matches the "{Month} {Day}, {Year}" format', () => {
+    expect(calendarCellLabelPattern(new Date(2026, 8, 2)).test('September 2, 2026')).toBe(true);
+  });
+
+  it('does not match a different date in either format', () => {
+    const pattern = calendarCellLabelPattern(new Date(2026, 8, 2));
+    expect(pattern.test('3 September 2026')).toBe(false);
+    expect(pattern.test('September 3, 2026')).toBe(false);
+    expect(pattern.test('2 October 2026')).toBe(false);
+  });
+
+  it('does not match unrelated text', () => {
+    expect(calendarCellLabelPattern(new Date(2026, 8, 2)).test('close')).toBe(false);
   });
 });
 

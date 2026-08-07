@@ -158,17 +158,26 @@ const MONTH_NAMES = [
 ];
 
 /**
- * The calendar library renders each day cell as `<abbr aria-label="{Day}
- * {Month} {Year}">` (no zero-padding, e.g. "2 September 2026") — confirmed
- * live against production (the format was previously "{Month} {Day},
- * {Year}"; the site changed it — live-reverified after a real production
- * failure showed the old format no longer matching anything). Matching by
- * the visible day-number text alone is ambiguous, since the widget shows
- * a full 6-week grid including grayed-out, disabled overflow days from
- * adjacent months that can share the same day number. The aria-label
- * already disambiguates the exact date uniquely, so this targets it
- * directly instead of guessing among same-numbered cells.
+ * The calendar library's day-cell aria-label format has now been
+ * confirmed live in BOTH of two shapes — "{Day} {Month} {Year}" (e.g.
+ * "2 September 2026") and "{Month} {Day}, {Year}" (e.g. "September 2,
+ * 2026") — and NOT as a one-time migration from one to the other: a
+ * manual verification run matched the first format, then every real
+ * scheduled run immediately afterward matched the second, with no
+ * deploy or code change in between (docs/adr/0040). Whatever drives
+ * which one renders isn't something this code controls or can predict,
+ * so `calendarCellLabelPattern` matches either — the single-string
+ * `formatCalendarCellLabel` below is kept only for human-readable
+ * error messages/logs, never for actually locating an element.
  */
+export function calendarCellLabelPattern(date: Date): RegExp {
+  const month = MONTH_NAMES[date.getMonth()];
+  const day = date.getDate();
+  const year = date.getFullYear();
+  return new RegExp(`^(?:${day} ${month} ${year}|${month} ${day}, ${year})$`);
+}
+
+/** Human-readable only — see calendarCellLabelPattern for the actual (format-tolerant) element lookup. */
 export function formatCalendarCellLabel(date: Date): string {
   const month = MONTH_NAMES[date.getMonth()];
   return `${date.getDate()} ${month} ${date.getFullYear()}`;
@@ -189,21 +198,20 @@ export function formatCalendarCellLabel(date: Date): string {
  * earlier but not once it became the upcoming Sunday.
  */
 export async function isDateBookable(page: Page, date: Date): Promise<boolean> {
-  const cellLabel = formatCalendarCellLabel(date);
-  const cell = page.getByLabel(cellLabel, { exact: true });
+  const cell = page.getByLabel(calendarCellLabelPattern(date));
   const count = await cell.count();
   if (count === 0) {
     // Diagnostic only (see the modal-wait logging above this same file) —
     // dumps every aria-label actually present so a real run's logs show
     // whether the calendar just isn't there at all (a modal still
-    // covering it, a different page entirely) versus this exact label
-    // genuinely not existing among a normal-looking set of date cells.
+    // covering it, a different page entirely) versus this date genuinely
+    // not existing among a normal-looking set of date cells.
     const allLabels = await page
       .locator('[aria-label]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')).filter(Boolean))
       .catch(() => ['<failed to read aria-labels>']);
     console.log(
-      `[portal-navigation] isDateBookable("${cellLabel}"): 0 matching elements. All aria-labels on page: ${JSON.stringify(allLabels)}`,
+      `[portal-navigation] isDateBookable("${formatCalendarCellLabel(date)}"): 0 matching elements. All aria-labels on page: ${JSON.stringify(allLabels)}`,
     );
     return false;
   }
@@ -233,7 +241,7 @@ export async function selectCalendarDate(page: Page, date: Date): Promise<void> 
     );
   }
 
-  const cell = page.getByLabel(cellLabel, { exact: true });
+  const cell = page.getByLabel(calendarCellLabelPattern(date));
   await cell.click();
   await page.waitForTimeout(2000);
 
