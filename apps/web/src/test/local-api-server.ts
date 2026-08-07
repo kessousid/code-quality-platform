@@ -113,6 +113,7 @@ export interface QaAutomationTestResultFixture {
   testName: string;
   passed: boolean;
   details: string;
+  sourceUrl?: string;
   createdAt: string;
 }
 
@@ -698,6 +699,10 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
           passed: true,
           details: 'ok',
           createdAt: new Date().toISOString(),
+          // Only a staging result ever carries this (docs/adr/0039) — staging pulls from more than one repo/branch.
+          ...(environment === 'staging'
+            ? { sourceUrl: 'https://github.com/codewithVsingh/curatal_tests/tree/main/tests' }
+            : {}),
         },
       ]);
       send(res, 201, { status: 'queued' });

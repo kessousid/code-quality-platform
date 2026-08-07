@@ -51,6 +51,8 @@ export interface QaAutomationTestResult {
   testName: string;
   passed: boolean;
   details: string;
+  /** See StagingTestResult's own doc comment — only ever set for a staging run's results (docs/adr/0039). */
+  sourceUrl?: string;
   createdAt: Date;
 }
 
@@ -70,6 +72,7 @@ export interface CreateQaAutomationTestResultInput {
   testName: string;
   passed: boolean;
   details: string;
+  sourceUrl?: string;
 }
 
 export interface QaAutomationRunRepository {

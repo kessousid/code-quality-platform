@@ -129,4 +129,24 @@ describe('QaAutomationPage', () => {
     await user.click(screen.getByRole('button', { name: 'Production' }));
     expect(screen.getByText('No runs yet.')).toBeInTheDocument();
   });
+
+  it('shows a clickable source link for a staging result, so it is clear which repo/branch it ran from', async () => {
+    renderWithProviders(<QaAutomationPage />);
+    const user = userEvent.setup();
+    await switchToStagingTab(user);
+
+    await waitFor(() => expect(screen.getByText('No runs yet.')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+
+    await waitFor(() => expect(screen.getByText('Successfully Executed')).toBeInTheDocument());
+    await user.click(screen.getByText('Successfully Executed'));
+
+    const link = await screen.findByRole('link', {
+      name: /https:\/\/github\.com\/codewithVsingh\/curatal_tests\/tree\/main\/tests/,
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      'https://github.com/codewithVsingh/curatal_tests/tree/main/tests',
+    );
+  });
 });

@@ -635,6 +635,7 @@ model QaAutomationTestResult {
   testName  String
   passed    Boolean
   details   String
+  sourceUrl String?
   createdAt DateTime @default(now())
 
   run QaAutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)

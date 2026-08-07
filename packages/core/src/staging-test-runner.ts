@@ -11,6 +11,15 @@ export interface StagingTestResult {
   testName: string;
   passed: boolean;
   details: string;
+  /**
+   * Which of the (possibly several) source repos/branches this test
+   * actually ran from — per the user, staging pulls from more than one
+   * place (`main` and the dedicated `cod-automation` branch, docs/adr/0039)
+   * and there was no way to tell which tests came from which in the
+   * report. Optional so a runner with only one source is never forced to
+   * fill this in.
+   */
+  sourceUrl?: string;
 }
 
 export interface StagingTestRunResult {

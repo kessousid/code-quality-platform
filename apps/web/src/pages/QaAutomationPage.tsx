@@ -59,6 +59,16 @@ function RunResults({ runId }: { runId: string }) {
               <span className="font-medium">{result.testName}</span>
             </div>
             <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
+            {result.sourceUrl && (
+              <a
+                href={result.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Source: {result.sourceUrl}
+              </a>
+            )}
           </li>
         ))}
       </ul>

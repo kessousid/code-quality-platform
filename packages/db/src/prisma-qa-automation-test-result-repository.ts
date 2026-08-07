@@ -20,15 +20,39 @@ export class PrismaQaAutomationTestResultRepository implements QaAutomationTestR
         testName: input.testName,
         passed: input.passed,
         details: input.details,
+        ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
       },
     });
-    return row;
+    return this.toDomain(row);
   }
 
   async listByRun(runId: string): Promise<QaAutomationTestResult[]> {
-    return this.prisma.qaAutomationTestResult.findMany({
+    const rows = await this.prisma.qaAutomationTestResult.findMany({
       where: { runId },
       orderBy: { createdAt: 'asc' },
     });
+    return rows.map((row) => this.toDomain(row));
+  }
+
+  private toDomain(row: {
+    id: string;
+    runId: string;
+    testId: string;
+    testName: string;
+    passed: boolean;
+    details: string;
+    sourceUrl: string | null;
+    createdAt: Date;
+  }): QaAutomationTestResult {
+    return {
+      id: row.id,
+      runId: row.runId,
+      testId: row.testId,
+      testName: row.testName,
+      passed: row.passed,
+      details: row.details,
+      ...(row.sourceUrl !== null ? { sourceUrl: row.sourceUrl } : {}),
+      createdAt: row.createdAt,
+    };
   }
 }

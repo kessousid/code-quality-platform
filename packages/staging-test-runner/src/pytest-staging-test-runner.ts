@@ -110,6 +110,18 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return url.toString();
   }
 
+  /**
+   * A real, clickable GitHub URL for wherever a given result's tests
+   * actually live — per the user, there was no way to tell from the
+   * report whether tests from `main` or from `cod-automation` (docs/adr/0039)
+   * had actually run. `.git` is stripped so the result is a normal
+   * browsable `https://github.com/.../tree/...` link, not a clone URL.
+   */
+  private sourceUrlFor(branch: string | undefined): string {
+    const base = this.options.repoUrl.replace(/\.git$/, '');
+    return branch !== undefined ? `${base}/tree/${branch}` : `${base}/tree/main/tests`;
+  }
+
   async run(): Promise<StagingTestRunResult> {
     const mainResults = await this.runSuite(undefined, ['tests', '--ignore=tests/roles/cod']);
     const codResults = await this.runSuite(COD_AUTOMATION_BRANCH, ['tests', '-m', 'cod']);
@@ -203,7 +215,8 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           `pytest produced no report at ${reportPath} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
         );
       });
-      return parseJunitXml(xml);
+      const sourceUrl = this.sourceUrlFor(branch);
+      return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }

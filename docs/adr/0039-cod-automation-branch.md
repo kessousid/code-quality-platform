@@ -75,3 +75,18 @@ must never be allowed to touch Node/Playwright-JS's separately-baked
   again), only the two `runSuite()` call sites in `run()` need to
   change — the branch name and `--ignore`/`-m` scoping are the only
   branch-specific knowledge in this file.
+
+## Addendum: each result now carries its own source URL
+
+Once two branches were feeding into one report, the user had no way to
+tell from the report itself whether a given test had actually run from
+`main` or from `cod-automation` — a real gap once there's more than one
+source at all. `StagingTestResult` (and, on the persisted side,
+`QaAutomationTestResult`) gained an optional `sourceUrl`, set by
+`runSuite()` to a real, clickable
+`https://github.com/.../tree/<branch>[/tests]` link (`.git` stripped)
+matching whichever clone actually produced that result. Threaded through
+to the DB (new nullable `sourceUrl` column — a migration, not a schema
+break), the Excel/PDF reports (a new "Source" column / line), and the
+web UI's per-result view. Left `undefined` for production results, which
+have only ever had the one source.

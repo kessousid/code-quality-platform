@@ -16,6 +16,7 @@ export class InMemoryQaAutomationTestResultRepository implements QaAutomationTes
       testName: input.testName,
       passed: input.passed,
       details: input.details,
+      ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl } : {}),
       createdAt: new Date(),
     };
     this.results.push(result);
