@@ -30,11 +30,13 @@
     "@cqp/unit-test-engine": "workspace:*",
     "@cqp/coverage-engine": "workspace:*",
     "@cqp/filesystem-browser": "workspace:*",
-    "@cqp/qa-automation-tests": "workspace:*"
+    "@cqp/qa-automation-tests": "workspace:*",
+    "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^2.1.0",
-    "@types/node": "^22.10.0"
+    "@types/node": "^22.10.0",
+    "@types/bcryptjs": "^2.4.6"
   }
 }

@@ -28,11 +28,16 @@ function renderLoginPage() {
 }
 
 describe('LoginPage', () => {
-  it('exchanges a curatal.com email for a session via the real /auth/login endpoint, then navigates home', async () => {
+  it('logs in a verified curatal.com account via the real /auth/login endpoint, then navigates home', async () => {
+    server.mockUsers.set('keshavkumar@curatal.com', {
+      password: 'the-real-password',
+      status: 'active',
+    });
     renderLoginPage();
 
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('you@curatal.com'), 'keshavkumar@curatal.com');
+    await user.type(screen.getByPlaceholderText('Password'), 'the-real-password');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() => expect(screen.getByText('dashboard-landed')).toBeInTheDocument());
@@ -43,13 +48,34 @@ describe('LoginPage', () => {
 
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText('you@curatal.com'), 'someone@gmail.com');
+    await user.type(screen.getByPlaceholderText('Password'), 'whatever');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText('Only @curatal.com email addresses are allowed.'),
-      ).toBeInTheDocument(),
+      expect(screen.getByText('Only @curatal.com email addresses may sign in')).toBeInTheDocument(),
     );
     expect(screen.queryByText('dashboard-landed')).not.toBeInTheDocument();
+  });
+
+  it('shows the real server message for the wrong password, and does not navigate', async () => {
+    server.mockUsers.set('real@curatal.com', { password: 'the-real-password', status: 'active' });
+    renderLoginPage();
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('you@curatal.com'), 'real@curatal.com');
+    await user.type(screen.getByPlaceholderText('Password'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => expect(screen.getByText('Invalid email or password.')).toBeInTheDocument());
+    expect(screen.queryByText('dashboard-landed')).not.toBeInTheDocument();
+  });
+
+  it('links to Sign up and Forgot Password', () => {
+    renderLoginPage();
+    expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/signup');
+    expect(screen.getByRole('link', { name: 'Forgot Password?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
   });
 });

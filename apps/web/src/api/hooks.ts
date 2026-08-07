@@ -225,10 +225,37 @@ export function useGenerateReport(scanId: string) {
   });
 }
 
-/** Interim, no password/verification yet — see docs/adr/0022. */
-export function useLoginWithEmail() {
+/** Replaces the old passwordless email-only login — see docs/adr/0041. */
+export function useLogin() {
   return useMutation({
-    mutationFn: (email: string) => apiPost<{ status: string }>('/auth/login', { email }),
+    mutationFn: (input: { email: string; password: string }) =>
+      apiPost<{ status: string }>('/auth/login', input),
+  });
+}
+
+export function useSignup() {
+  return useMutation({
+    mutationFn: (input: { email: string; password: string }) =>
+      apiPost<{ status: string }>('/auth/signup', input),
+  });
+}
+
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => apiPost<{ status: string }>('/auth/verify-email', { token }),
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (email: string) => apiPost<{ status: string }>('/auth/forgot-password', { email }),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: (input: { token: string; password: string }) =>
+      apiPost<{ status: string }>('/auth/reset-password', input),
   });
 }
 

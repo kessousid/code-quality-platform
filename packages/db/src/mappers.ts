@@ -8,6 +8,8 @@ import {
   RepoProvider as DbRepoProvider,
   ReportFormat as DbReportFormat,
   UserRole as DbUserRole,
+  UserStatus as DbUserStatus,
+  AuthTokenPurpose as DbAuthTokenPurpose,
   UnitTestRunStatus as DbUnitTestRunStatus,
   TestCaseStatus as DbTestCaseStatus,
   UnitTestReportFormat as DbUnitTestReportFormat,
@@ -32,6 +34,8 @@ import type {
   RepoProvider as CoreRepoProvider,
   ReportFormat as CoreReportFormat,
   UserRole as CoreUserRole,
+  UserStatus as CoreUserStatus,
+  AuthTokenPurpose as CoreAuthTokenPurpose,
   UnitTestRunStatus as CoreUnitTestRunStatus,
   TestCaseStatus as CoreTestCaseStatus,
   UnitTestReportFormat as CoreUnitTestReportFormat,
@@ -153,6 +157,22 @@ export function userRoleToDb(role: CoreUserRole): DbUserRole {
 
 export function userRoleFromDb(role: DbUserRole): CoreUserRole {
   return role.toLowerCase() as CoreUserRole;
+}
+
+export function userStatusToDb(status: CoreUserStatus): DbUserStatus {
+  return status.toUpperCase() as DbUserStatus;
+}
+
+export function userStatusFromDb(status: DbUserStatus): CoreUserStatus {
+  return status.toLowerCase() as CoreUserStatus;
+}
+
+export function authTokenPurposeToDb(purpose: CoreAuthTokenPurpose): DbAuthTokenPurpose {
+  return purpose.toUpperCase() as DbAuthTokenPurpose;
+}
+
+export function authTokenPurposeFromDb(purpose: DbAuthTokenPurpose): CoreAuthTokenPurpose {
+  return purpose.toLowerCase() as CoreAuthTokenPurpose;
 }
 
 export function unitTestRunStatusToDb(status: CoreUnitTestRunStatus): DbUnitTestRunStatus {

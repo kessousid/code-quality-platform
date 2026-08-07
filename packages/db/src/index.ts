@@ -6,6 +6,7 @@ export * from './prisma-finding-repository.js';
 export * from './prisma-report-repository.js';
 export * from './prisma-api-token-repository.js';
 export * from './prisma-user-repository.js';
+export * from './prisma-auth-token-repository.js';
 export * from './prisma-org-repository.js';
 export * from './prisma-unit-test-run-repository.js';
 export * from './prisma-generated-test-file-repository.js';

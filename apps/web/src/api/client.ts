@@ -19,8 +19,15 @@ function baseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL ?? '/api';
 }
 
-/** A 401 from these means "this login/token was rejected," not "your session expired" — the caller (LoginPage) handles it, no redirect. */
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/session'];
+/** A 401 from these means "this login/signup/token/link was rejected," not "your session expired" — the caller (LoginPage/SignupPage/VerifyEmailPage/ResetPasswordPage) handles it, no redirect (docs/adr/0041). */
+const AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/session',
+  '/auth/signup',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${baseUrl()}${path}`, {

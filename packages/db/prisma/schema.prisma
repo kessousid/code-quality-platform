@@ -186,21 +186,57 @@ model Org {
   @@map("orgs")
 }
 
+/// `status` defaults ACTIVE so every row that predates docs/adr/0041 (the
+/// old ADR-0022 email-only login) is grandfathered in rather than locked
+/// out — those rows just have a null `passwordHash` until their first
+/// "Forgot Password" use, which doubles as their migration path.
 model User {
-  id        String   @id @default(cuid())
-  orgId     String
-  email     String   @unique
-  name      String
-  role      UserRole @default(MEMBER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String     @id @default(cuid())
+  orgId        String
+  email        String     @unique
+  name         String
+  role         UserRole   @default(MEMBER)
+  passwordHash String?
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  org             Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  triggeredScans  Scan[]  @relation("ScanTriggeredBy")
-  createdPatchPrs Patch[] @relation("PatchPrCreatedBy")
+  org             Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  triggeredScans  Scan[]      @relation("ScanTriggeredBy")
+  createdPatchPrs Patch[]     @relation("PatchPrCreatedBy")
+  authTokens      AuthToken[]
 
   @@index([orgId])
   @@map("users")
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// A short-lived, single-use, emailed bearer secret (see docs/adr/0041) —
+/// covers both email verification (signup) and password reset (forgot
+/// password) with one shape. Only `tokenHash` is ever stored, mirroring
+/// `ApiToken`'s own discipline (docs/adr/0014).
+model AuthToken {
+  id        String           @id @default(cuid())
+  userId    String
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_tokens")
 }
 
 /// The sole credential type for MVP (see docs/adr/0014-auth-model.md) — no

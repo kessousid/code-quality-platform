@@ -14,6 +14,9 @@ export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
 export const SCAN_QUEUE_REGISTRY = Symbol('SCAN_QUEUE_REGISTRY');
 export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
 export const ORG_REPOSITORY = Symbol('ORG_REPOSITORY');
+export const AUTH_TOKEN_REPOSITORY = Symbol('AUTH_TOKEN_REPOSITORY');
+/** See docs/adr/0041 — apps/api's first use of the EmailSender port (previously only wired in apps/qa-automation). */
+export const EMAIL_SENDER = Symbol('EMAIL_SENDER');
 export const UNIT_TEST_RUN_REPOSITORY = Symbol('UNIT_TEST_RUN_REPOSITORY');
 export const GENERATED_TEST_FILE_REPOSITORY = Symbol('GENERATED_TEST_FILE_REPOSITORY');
 export const TEST_CASE_RESULT_REPOSITORY = Symbol('TEST_CASE_RESULT_REPOSITORY');

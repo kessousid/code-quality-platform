@@ -162,6 +162,10 @@ export interface LocalApiServer {
   qaAutomationRuns: QaAutomationRunFixture[];
   qaAutomationResultsByRun: Map<string, QaAutomationTestResultFixture[]>;
   qaAutomationReportsByRun: Map<string, QaAutomationReportFixture[]>;
+  /** Pre-seed an account directly (bypassing the real signup/verify UI flow) for tests that only care about login/reset behavior. */
+  mockUsers: Map<string, { password: string; status: 'pending_verification' | 'active' }>;
+  /** The most recent signup/forgot-password "email" tokens — stands in for actually reading an inbox in tests. */
+  authTokens: { verification?: string; reset?: string };
 }
 
 interface Report {
@@ -259,6 +263,11 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
   const qaAutomationResultsByRun = new Map<string, QaAutomationTestResultFixture[]>();
   const qaAutomationReportsByRun = new Map<string, QaAutomationReportFixture[]>();
   const qaAutomationReportContent = new Map<string, Buffer>();
+  const mockUsers = new Map<
+    string,
+    { password: string; status: 'pending_verification' | 'active' }
+  >();
+  const authTokens: { verification?: string; reset?: string } = {};
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -271,12 +280,82 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
       return;
     }
 
-    if (method === 'POST' && pathname === '/auth/login') {
-      const { email } = await readJsonBody(req);
+    if (method === 'POST' && pathname === '/auth/signup') {
+      const { email, password } = await readJsonBody(req);
       if (!email?.endsWith('@curatal.com')) {
-        send(res, 401, { message: 'Only @curatal.com email addresses are allowed' });
+        send(res, 401, { message: 'Only @curatal.com email addresses may sign in' });
         return;
       }
+      if (mockUsers.has(email)) {
+        send(res, 409, { message: `${email} is already registered.` });
+        return;
+      }
+      mockUsers.set(email, { password: password ?? '', status: 'pending_verification' });
+      authTokens.verification = `verify-${email}`;
+      send(res, 201, { status: 'ok' });
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/auth/verify-email') {
+      const { token } = await readJsonBody(req);
+      const email = typeof token === 'string' ? token.replace(/^verify-/, '') : undefined;
+      const user = email ? mockUsers.get(email) : undefined;
+      if (!user || token !== authTokens.verification) {
+        send(res, 401, { message: 'This link is invalid or has expired.' });
+        return;
+      }
+      user.status = 'active';
+      res.writeHead(201, { 'Set-Cookie': 'cqp_session=x; HttpOnly' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/auth/login') {
+      const { email, password } = await readJsonBody(req);
+      if (!email?.endsWith('@curatal.com')) {
+        send(res, 401, { message: 'Only @curatal.com email addresses may sign in' });
+        return;
+      }
+      const user = mockUsers.get(email);
+      if (!user || user.password !== password) {
+        send(res, 401, { message: 'Invalid email or password.' });
+        return;
+      }
+      if (user.status !== 'active') {
+        send(res, 401, {
+          message: 'Please verify your email before logging in — check your inbox for the link.',
+        });
+        return;
+      }
+      res.writeHead(201, { 'Set-Cookie': 'cqp_session=x; HttpOnly' });
+      res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/auth/forgot-password') {
+      const { email } = await readJsonBody(req);
+      if (!email?.endsWith('@curatal.com')) {
+        send(res, 401, { message: 'Only @curatal.com email addresses may sign in' });
+        return;
+      }
+      if (mockUsers.has(email)) {
+        authTokens.reset = `reset-${email}`;
+      }
+      send(res, 201, { status: 'ok' });
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/auth/reset-password') {
+      const { token, password } = await readJsonBody(req);
+      const email = typeof token === 'string' ? token.replace(/^reset-/, '') : undefined;
+      const user = email ? mockUsers.get(email) : undefined;
+      if (!user || token !== authTokens.reset) {
+        send(res, 401, { message: 'This link is invalid or has expired.' });
+        return;
+      }
+      user.password = password ?? '';
+      user.status = 'active';
+      delete authTokens.reset;
       res.writeHead(201, { 'Set-Cookie': 'cqp_session=x; HttpOnly' });
       res.end(JSON.stringify({ status: 'ok' }));
       return;
@@ -812,5 +891,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     qaAutomationRuns,
     qaAutomationResultsByRun,
     qaAutomationReportsByRun,
+    mockUsers,
+    authTokens,
   };
 }

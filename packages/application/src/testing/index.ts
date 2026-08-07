@@ -6,6 +6,7 @@ export * from './in-memory-api-token-repository.js';
 export * from './in-memory-object-storage.js';
 export * from './in-memory-scan-queue.js';
 export * from './in-memory-user-repository.js';
+export * from './in-memory-auth-token-repository.js';
 export * from './in-memory-org-repository.js';
 export * from './in-memory-unit-test-run-repository.js';
 export * from './in-memory-generated-test-file-repository.js';

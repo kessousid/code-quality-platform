@@ -7,6 +7,10 @@ import { ScanDetailPage } from './pages/ScanDetailPage.js';
 import { UnitTestRunDetailPage } from './pages/UnitTestRunDetailPage.js';
 import { CoverageRunDetailPage } from './pages/CoverageRunDetailPage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { SignupPage } from './pages/SignupPage.js';
+import { VerifyEmailPage } from './pages/VerifyEmailPage.js';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage.js';
+import { ResetPasswordPage } from './pages/ResetPasswordPage.js';
 import { CronsPage } from './pages/CronsPage.js';
 import { QaAutomationPage } from './pages/QaAutomationPage.js';
 import { FeatureSelector, type AppFeature } from './components/FeatureSelector.js';
@@ -29,6 +33,10 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/"
             element={
