@@ -50,15 +50,17 @@ describe('App', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('takes the Cron Runner feature straight to /crons, skipping the dashboard', async () => {
+  it('hides Cron Runner from the feature picker for the time being', async () => {
     render(<App />);
 
-    const user = userEvent.setup();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Feature' }), 'cron-runner');
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByRole('option', { name: 'Cron Runner' })).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => expect(screen.getByText('Cron Runner')).toBeInTheDocument());
-    expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
+  it('still serves /crons directly even though it is hidden from the picker', async () => {
+    window.history.pushState({}, '', '/crons');
+    render(<App />);
+
+    await waitFor(() => expect(screen.getAllByText('Cron Runner').length).toBeGreaterThan(0));
   });
 
   it('takes the QA Automation feature straight to /qa-automation, skipping the dashboard', async () => {

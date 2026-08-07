@@ -58,11 +58,25 @@ export async function loginAndReachBookingScreen(
   // single date as "not open" — a real production incident, not a
   // hypothetical one). waitFor actively waits for the modal instead of a
   // single snapshot, so it's found whenever it actually appears.
+  //
+  // Timeout raised from 8s to 20s and this whole step now logs its real
+  // timing (docs/adr/0035's console.error precedent) — a first attempt at
+  // 8s was verified working from a local machine, but the SAME code kept
+  // failing on every real scheduled run in the Railway container
+  // afterward. That gap (works locally, not in the container) is the
+  // actual open question, not yet root-caused — this logging is how the
+  // next real run actually proves out what's really happening there
+  // rather than guessing again.
+  const modalWaitStarted = Date.now();
   const verificationModalVisible = await page
     .getByText('Candidate Verification Details')
-    .waitFor({ state: 'visible', timeout: 8000 })
+    .waitFor({ state: 'visible', timeout: 20000 })
     .then(() => true)
     .catch(() => false);
+  const modalWaitMs = Date.now() - modalWaitStarted;
+  console.log(
+    `[portal-navigation] verification modal ${verificationModalVisible ? 'appeared' : 'did not appear'} after ${modalWaitMs}ms`,
+  );
   if (verificationModalVisible) {
     await page.getByRole('button', { name: 'Cancel' }).click();
     await page.waitForTimeout(1000);
@@ -177,7 +191,22 @@ export function formatCalendarCellLabel(date: Date): string {
 export async function isDateBookable(page: Page, date: Date): Promise<boolean> {
   const cellLabel = formatCalendarCellLabel(date);
   const cell = page.getByLabel(cellLabel, { exact: true });
-  if ((await cell.count()) === 0) return false;
+  const count = await cell.count();
+  if (count === 0) {
+    // Diagnostic only (see the modal-wait logging above this same file) —
+    // dumps every aria-label actually present so a real run's logs show
+    // whether the calendar just isn't there at all (a modal still
+    // covering it, a different page entirely) versus this exact label
+    // genuinely not existing among a normal-looking set of date cells.
+    const allLabels = await page
+      .locator('[aria-label]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')).filter(Boolean))
+      .catch(() => ['<failed to read aria-labels>']);
+    console.log(
+      `[portal-navigation] isDateBookable("${cellLabel}"): 0 matching elements. All aria-labels on page: ${JSON.stringify(allLabels)}`,
+    );
+    return false;
+  }
   return cell.isEnabled();
 }
 

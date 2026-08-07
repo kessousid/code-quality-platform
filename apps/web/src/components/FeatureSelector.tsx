@@ -13,6 +13,14 @@ const FEATURES: { value: AppFeature; label: string }[] = [
   { value: 'qa-automation', label: 'QA Automation' },
 ];
 
+/**
+ * Hidden from the picker for the time being, per the user — the feature
+ * and its route (/crons) still exist and work for a direct link, this
+ * only removes it from the initial "which feature?" choice.
+ */
+const HIDDEN_FEATURES = new Set<AppFeature>(['cron-runner']);
+const VISIBLE_FEATURES = FEATURES.filter((f) => !HIDDEN_FEATURES.has(f.value));
+
 /** Reused wherever a page needs to show which feature is active — e.g. DashboardPage's heading, which otherwise showed the same generic platform title no matter which feature was selected. */
 export const FEATURE_LABELS: Record<AppFeature, string> = Object.fromEntries(
   FEATURES.map((f) => [f.value, f.label]),
@@ -38,7 +46,7 @@ export function FeatureSelector({ onSelect }: { onSelect: (feature: AppFeature) 
           className="flex-1 rounded border px-3 py-2 text-sm"
         >
           <option value="">Select a feature…</option>
-          {FEATURES.map((feature) => (
+          {VISIBLE_FEATURES.map((feature) => (
             <option key={feature.value} value={feature.value}>
               {feature.label}
             </option>
