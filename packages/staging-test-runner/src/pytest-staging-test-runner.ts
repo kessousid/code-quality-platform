@@ -159,6 +159,17 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       // failed to even start (e.g. a bad CLI flag), no XML is produced at
       // all — that case still needs to surface the real stderr, not the
       // opaque ENOENT from the read below.
+      //
+      // `--continue-on-collection-errors` is load-bearing, confirmed via a
+      // real reproduction: pytest's default behavior is to abort the
+      // *entire* session the moment any single file fails to import (e.g.
+      // one test module referencing a persona key missing from this
+      // externally-maintained repo's own config) — "Interrupted: 1 error
+      // during collection", zero of the other (hundreds of) tests ever
+      // run. Since this suite is independently maintained and kept fresh
+      // on every run, one broken file is expected to happen periodically;
+      // without this flag a single bad file silently discards the entire
+      // real run every time, which is exactly what was happening.
       const pytestResult = await runSubprocess(
         this.options.xvfbCommand ?? 'xvfb-run',
         [
@@ -170,6 +181,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           '-v',
           '--browser',
           'chromium',
+          '--continue-on-collection-errors',
           `--junitxml=${reportPath}`,
         ],
         { cwd: repoDir, envVarName: 'STAGING_TESTS_XVFB_PATH', env: pythonEnv() },
