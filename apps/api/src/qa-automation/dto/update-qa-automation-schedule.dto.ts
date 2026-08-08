@@ -1,13 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, Min } from 'class-validator';
+import { IsBoolean, IsOptional } from 'class-validator';
 
+/** No intervalHours — production runs on a fixed twice-daily cron, not user-configurable (docs/adr/0042). */
 export class UpdateQaAutomationScheduleRequestDto {
-  @ApiPropertyOptional({ minimum: 1, description: 'How often the suite runs, in hours.' })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  intervalHours?: number;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()

@@ -28,7 +28,6 @@ import { DAYS_TO_CHECK, dateLabel, formatSlotList } from './slot-listing-pricing
 export class SlotAvailabilitySnapshotTest implements PortalAutomationTest {
   readonly id = 'slot-availability-snapshot';
   readonly name = 'Slot availability snapshot (Free vs Priority, per day)';
-  readonly frequency = 'every-run' as const;
 
   constructor(private readonly credentials: PortalCredentials) {}
 

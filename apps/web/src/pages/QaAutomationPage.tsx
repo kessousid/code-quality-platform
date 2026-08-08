@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   QA_AUTOMATION_RUN_STATUS_LABELS,
   type QaAutomationEnvironment,
@@ -184,78 +184,35 @@ function TriggerRunButton({
   );
 }
 
+/** No interval field — production runs the whole suite together on a fixed twice-daily cron, not user-configurable (docs/adr/0042). */
 function ProductionSection() {
   const scheduleQuery = useQaAutomationSchedule();
   const updateSchedule = useUpdateQaAutomationSchedule();
   const triggerRun = useTriggerQaAutomationRun();
-  const [intervalHours, setIntervalHours] = useState<number | ''>('');
-  const [touchedInterval, setTouchedInterval] = useState(false);
-
   const schedule = scheduleQuery.data;
-
-  // Pre-fills the field from the loaded schedule exactly once — without
-  // `touchedInterval`, the fallback would re-snap to the server value on
-  // every render, making it impossible to actually clear/retype the field.
-  useEffect(() => {
-    if (!touchedInterval && schedule) setIntervalHours(schedule.intervalHours);
-  }, [schedule, touchedInterval]);
-
-  function handleSave() {
-    const value = intervalHours === '' ? (schedule?.intervalHours ?? 12) : intervalHours;
-    updateSchedule.mutate({ intervalHours: value, enabled: schedule?.enabled ?? true });
-  }
-
-  function handleToggleEnabled() {
-    updateSchedule.mutate({ enabled: !(schedule?.enabled ?? true) });
-  }
 
   return (
     <section aria-label="Production QA Automation" className="space-y-6">
       <p className="text-xs text-neutral-500">
-        Runs a real, extensible suite of checks against production (portal.curatal.com) on a
-        schedule you control — see docs/adr/0035.
+        Runs a real, extensible suite of checks against production (portal.curatal.com) twice daily
+        at 12:00 AM and 12:00 PM IST, plus a manual "Run now" option — see docs/adr/0035,
+        docs/adr/0042.
       </p>
 
       <section className="space-y-3 rounded-lg border p-4">
         <h2 className="text-sm font-semibold text-neutral-600">Schedule</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm" htmlFor="interval-hours">
-            Every
-          </label>
-          <input
-            id="interval-hours"
-            type="number"
-            min={1}
-            aria-label="Interval hours"
-            value={intervalHours}
-            onChange={(e) => {
-              setTouchedInterval(true);
-              setIntervalHours(e.target.value === '' ? '' : Number(e.target.value));
-            }}
-            className="w-20 rounded border px-3 py-2 text-sm"
-          />
-          <span className="text-sm">hours</span>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={updateSchedule.isPending}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={handleToggleEnabled}
-            disabled={updateSchedule.isPending}
-            className="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {schedule?.enabled ? 'Disable' : 'Enable'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => updateSchedule.mutate({ enabled: !(schedule?.enabled ?? true) })}
+          disabled={updateSchedule.isPending}
+          className="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50"
+        >
+          {schedule?.enabled ? 'Disable' : 'Enable'}
+        </button>
         {schedule && (
           <p className="text-xs text-neutral-500">
-            Currently {schedule.enabled ? 'enabled' : 'disabled'}, every {schedule.intervalHours}{' '}
-            hour(s).
+            Currently {schedule.enabled ? 'enabled' : 'disabled'} — runs twice daily at 12:00 AM and
+            12:00 PM IST when enabled.
           </p>
         )}
       </section>

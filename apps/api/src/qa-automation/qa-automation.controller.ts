@@ -64,7 +64,7 @@ export class QaAutomationController {
   ) {
     const schedule = await this.updateScheduleUseCase.execute(orgId, dto);
     if (schedule.enabled) {
-      await upsertQaAutomationSchedule(this.queue, orgId, schedule.intervalHours);
+      await upsertQaAutomationSchedule(this.queue, orgId);
     } else {
       await removeQaAutomationSchedule(this.queue, orgId);
     }

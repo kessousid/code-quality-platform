@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Accepted, partially superseded by docs/adr/0042 (2026-08-08) — the
+`frequency`/`lastDailyCheckAt` gating and the user-adjustable interval
+described below have been replaced by a fixed twice-daily (00:00 and
+12:00 IST) schedule running every registered test together. The rest of
+this ADR (the registry shape minus `frequency`, the run/result model,
+the Railway service, email alerting, credentials) is still accurate.
 
 ## Context
 

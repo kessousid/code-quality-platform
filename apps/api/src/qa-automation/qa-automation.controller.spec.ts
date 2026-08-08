@@ -92,24 +92,22 @@ async function buildTestingModule() {
 }
 
 describe('QaAutomationController', () => {
-  it('returns the default schedule for a new org', async () => {
+  it('returns the default schedule (enabled, no interval field) for a new org', async () => {
     const { controller } = await buildTestingModule();
 
     const schedule = await controller.getSchedule('org_1');
 
-    expect(schedule.intervalHours).toBe(12);
-    expect(schedule.enabled).toBe(true);
+    expect(schedule).toEqual({ enabled: true });
   });
 
-  it('updating the interval while enabled upserts the job scheduler', async () => {
+  it('re-enabling the schedule upserts the job scheduler on the fixed twice-daily cron', async () => {
     const { controller, queue } = await buildTestingModule();
 
-    const schedule = await controller.updateSchedule('org_1', { intervalHours: 6 });
+    await controller.updateSchedule('org_1', { enabled: true });
 
-    expect(schedule.intervalHours).toBe(6);
     expect(queue.upsertJobScheduler).toHaveBeenCalledWith(
       expect.stringContaining('org_1'),
-      { every: 6 * 60 * 60 * 1000 },
+      { pattern: '0 0,12 * * *', tz: 'Asia/Kolkata' },
       expect.anything(),
     );
     expect(queue.removeJobScheduler).not.toHaveBeenCalled();

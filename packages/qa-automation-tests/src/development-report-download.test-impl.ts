@@ -10,10 +10,9 @@ const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
 
 /**
  * See docs/adr/0035. Has a real-world side effect (opens a real Razorpay
- * checkout session) so it only runs automatically once per day — see
- * RunQaAutomationSuiteUseCase's frequency gating. Never completes
- * payment — reaching the payment screen is itself the pass signal, per
- * the user.
+ * checkout session) — runs twice daily along with the rest of the suite
+ * (docs/adr/0042), accepted since it never completes payment — reaching
+ * the payment screen is itself the pass signal, per the user.
  *
  * Live-verified: "Download Report" (on a completed interview row, My
  * Interviews > Completed tab) opens a "Candidate Development Report"
@@ -26,7 +25,6 @@ const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
 export class DevelopmentReportDownloadTest implements PortalAutomationTest {
   readonly id = 'development-report-download';
   readonly name = 'Candidate Development Report unlock leads to the payment screen';
-  readonly frequency = 'daily' as const;
 
   constructor(private readonly credentials: PortalCredentials) {}
 

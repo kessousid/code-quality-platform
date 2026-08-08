@@ -18,15 +18,14 @@ const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
 
 /**
  * See docs/adr/0035. Has a real-world side effect (opens a real Razorpay
- * checkout session) so it only runs automatically once per day — see
- * RunQaAutomationSuiteUseCase's frequency gating. Never completes payment
- * and never clicks "Schedule Interview" — reaching the payment screen /
- * seeing the schedule button is itself the pass signal, per the user.
+ * checkout session) — runs twice daily along with the rest of the suite
+ * (docs/adr/0042). Never completes payment and never clicks "Schedule
+ * Interview" — reaching the payment screen / seeing the schedule button
+ * is itself the pass signal, per the user.
  */
 export class SlotBookingFlowTest implements PortalAutomationTest {
   readonly id = 'slot-booking-flow';
   readonly name = 'Priority payment screen and free-slot scheduling option are reachable';
-  readonly frequency = 'daily' as const;
 
   constructor(private readonly credentials: PortalCredentials) {}
 

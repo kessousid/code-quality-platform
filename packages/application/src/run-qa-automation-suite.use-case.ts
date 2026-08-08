@@ -2,8 +2,6 @@ import type {
   EmailSender,
   QaAutomationRun,
   QaAutomationRunRepository,
-  QaAutomationSchedule,
-  QaAutomationScheduleRepository,
   QaAutomationTestResultRepository,
   QaAutomationTrigger,
 } from '@cqp/core';
@@ -30,18 +28,17 @@ export interface RunQaAutomationSuiteInput {
 }
 
 /**
- * See docs/adr/0035. One execution = the whole registered test suite —
- * a `QaAutomationRun` parent row plus one `QaAutomationTestResult` child
- * per test, mirroring Scan/Finding. `'daily'`-frequency tests only run
- * automatically once per calendar day (tracked via
- * `schedule.lastDailyCheckAt`); a `'manual'` trigger always runs
- * everything. Sends one alert email if anything failed.
+ * See docs/adr/0035, docs/adr/0042. One execution = the whole registered
+ * test suite — a `QaAutomationRun` parent row plus one
+ * `QaAutomationTestResult` child per test, mirroring Scan/Finding. Every
+ * test runs together on every trigger, scheduled or manual — the
+ * schedule itself (fixed twice-daily, docs/adr/0042) is what controls
+ * cadence, not per-test gating. Sends one alert email if anything failed.
  */
 export class RunQaAutomationSuiteUseCase {
   constructor(
     private readonly runRepository: QaAutomationRunRepository,
     private readonly resultRepository: QaAutomationTestResultRepository,
-    private readonly scheduleRepository: QaAutomationScheduleRepository,
     private readonly tests: PortalAutomationTest[],
     private readonly browserFactory: QaBrowserFactory,
     private readonly emailSender: EmailSender,
@@ -62,16 +59,9 @@ export class RunQaAutomationSuiteUseCase {
     // 'running' forever with no test ever having gotten the chance to
     // record its own per-test failure.
     try {
-      const schedule = await this.scheduleRepository.get(input.orgId);
-      const testsToRun = this.selectTests(input.triggeredBy, schedule);
-
-      const results = await this.runTests(testsToRun);
+      const results = await this.runTests(this.tests);
       for (const result of results) {
         await this.resultRepository.create({ runId: run.id, ...result });
-      }
-
-      if (input.triggeredBy === 'scheduled' && testsToRun.some((t) => t.frequency === 'daily')) {
-        await this.scheduleRepository.update(input.orgId, { lastDailyCheckAt: new Date() });
       }
 
       // Per the user: the run's own status reflects whether the suite
@@ -132,17 +122,6 @@ export class RunQaAutomationSuiteUseCase {
     }
   }
 
-  private selectTests(
-    triggeredBy: QaAutomationTrigger,
-    schedule: QaAutomationSchedule,
-  ): PortalAutomationTest[] {
-    if (triggeredBy === 'manual') return this.tests;
-    const ranDailyToday =
-      schedule.lastDailyCheckAt !== undefined &&
-      isSameCalendarDay(schedule.lastDailyCheckAt, new Date());
-    return this.tests.filter((t) => t.frequency === 'every-run' || !ranDailyToday);
-  }
-
   private async runTests(
     tests: PortalAutomationTest[],
   ): Promise<{ testId: string; testName: string; passed: boolean; details: string }[]> {
@@ -173,12 +152,4 @@ export class RunQaAutomationSuiteUseCase {
       await browser.close();
     }
   }
-}
-
-function isSameCalendarDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
 }

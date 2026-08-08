@@ -3,7 +3,6 @@ import type { Job } from 'bullmq';
 import {
   createPrismaClient,
   PrismaQaAutomationRunRepository,
-  PrismaQaAutomationScheduleRepository,
   PrismaQaAutomationTestResultRepository,
 } from '@cqp/db';
 import {
@@ -74,7 +73,6 @@ async function main(): Promise<void> {
   const useCase = new RunQaAutomationSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
     new PrismaQaAutomationTestResultRepository(prisma),
-    new PrismaQaAutomationScheduleRepository(prisma),
     createPortalAutomationTests(credentials, slotCheckCredentials),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });

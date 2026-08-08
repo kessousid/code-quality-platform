@@ -98,21 +98,17 @@ export interface QaAutomationTestResultRepository {
 }
 
 /**
- * Single-row config — the whole point (docs/adr/0035) is that the interval
- * is adjustable at runtime, not fixed at deploy time. `lastDailyCheckAt`
- * tracks the `'daily'`-frequency tests independently of the interval
- * itself (see PortalAutomationTest in @cqp/qa-automation-tests).
+ * Single-row config. Per the user, production runs the whole registered
+ * suite together on a fixed twice-daily cron (00:00 and 12:00 IST) —
+ * not a user-adjustable interval — mirroring QaAutomationStagingSchedule's
+ * shape exactly.
  */
 export interface QaAutomationSchedule {
-  intervalHours: number;
   enabled: boolean;
-  lastDailyCheckAt?: Date;
 }
 
 export interface UpdateQaAutomationScheduleInput {
-  intervalHours?: number;
   enabled?: boolean;
-  lastDailyCheckAt?: Date;
 }
 
 export interface QaAutomationScheduleRepository {

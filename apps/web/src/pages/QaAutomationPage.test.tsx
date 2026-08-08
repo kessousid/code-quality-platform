@@ -24,24 +24,11 @@ describe('QaAutomationPage', () => {
   it('shows the Production tab by default, with the two Production/Staging switch buttons', async () => {
     renderWithProviders(<QaAutomationPage />);
 
-    await waitFor(() => expect(screen.getByLabelText('Interval hours')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Disable' })).toBeInTheDocument(),
+    );
     expect(screen.getByRole('button', { name: 'Production' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Staging' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Interval hours')).toBeInTheDocument();
-  });
-
-  it('shows the current production schedule and saves a new interval through the real PUT endpoint', async () => {
-    renderWithProviders(<QaAutomationPage />);
-
-    await waitFor(() => expect(screen.getByLabelText('Interval hours')).toHaveValue(12));
-
-    const user = userEvent.setup();
-    const input = screen.getByLabelText('Interval hours');
-    await user.clear(input);
-    await user.type(input, '6');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(server.qaAutomationSchedule.intervalHours).toBe(6));
   });
 
   it('disabling the production schedule calls the real endpoint with enabled: false', async () => {
@@ -98,7 +85,7 @@ describe('QaAutomationPage', () => {
     expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
   });
 
-  it('switches to the Staging tab, showing its own schedule (no interval field) and toggling it through the real PUT endpoint', async () => {
+  it('switches to the Staging tab, showing its own schedule and toggling it through the real PUT endpoint', async () => {
     renderWithProviders(<QaAutomationPage />);
     const user = userEvent.setup();
     await switchToStagingTab(user);
@@ -106,7 +93,6 @@ describe('QaAutomationPage', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Disable' })).toBeInTheDocument(),
     );
-    expect(screen.queryByLabelText('Interval hours')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Disable' }));
 

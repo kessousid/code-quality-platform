@@ -8,7 +8,6 @@ export class FakePortalAutomationTest implements PortalAutomationTest {
   constructor(
     readonly id: string,
     readonly name: string,
-    readonly frequency: 'every-run' | 'daily' = 'every-run',
   ) {}
 
   async run(page: unknown): Promise<PortalAutomationTestResult> {

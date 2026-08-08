@@ -97,9 +97,7 @@ export interface CronRunFixture {
 }
 
 export interface QaAutomationScheduleFixture {
-  intervalHours: number;
   enabled: boolean;
-  lastDailyCheckAt?: string;
 }
 
 export interface QaAutomationStagingScheduleFixture {
@@ -257,7 +255,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     },
   ];
   const cronRuns: CronRunFixture[] = [];
-  const qaAutomationSchedule: QaAutomationScheduleFixture = { intervalHours: 12, enabled: true };
+  const qaAutomationSchedule: QaAutomationScheduleFixture = { enabled: true };
   const qaAutomationStagingSchedule: QaAutomationStagingScheduleFixture = { enabled: true };
   const qaAutomationRuns: QaAutomationRunFixture[] = [];
   const qaAutomationResultsByRun = new Map<string, QaAutomationTestResultFixture[]>();
@@ -742,12 +740,7 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
     }
 
     if (method === 'PUT' && pathname === '/qa-automation/schedule') {
-      const input = (await readJsonBody(req)) as unknown as {
-        intervalHours?: number;
-        enabled?: boolean;
-      };
-      if (input.intervalHours !== undefined)
-        qaAutomationSchedule.intervalHours = input.intervalHours;
+      const input = (await readJsonBody(req)) as unknown as { enabled?: boolean };
       if (input.enabled !== undefined) qaAutomationSchedule.enabled = input.enabled;
       send(res, 200, qaAutomationSchedule);
       return;

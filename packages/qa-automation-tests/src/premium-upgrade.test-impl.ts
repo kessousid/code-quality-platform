@@ -10,11 +10,11 @@ const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
 
 /**
  * See docs/adr/0035. Has a real-world side effect (opens a real Razorpay
- * checkout session) so it only runs automatically once per day — see
- * RunQaAutomationSuiteUseCase's frequency gating. Never completes
- * payment — reaching the payment screen is itself the pass signal, per
- * the user. Uses the cheapest (7-day) plan to minimize any residual
- * footprint from repeatedly opening a real checkout session.
+ * checkout session) — runs twice daily along with the rest of the suite
+ * (docs/adr/0042), accepted since it never completes payment — reaching
+ * the payment screen is itself the pass signal, per the user. Uses the
+ * cheapest (7-day) plan to minimize any residual footprint from
+ * repeatedly opening a real checkout session.
  *
  * Live-verified: the "I Agree to the Terms of Conditions" text is not
  * itself the clickable control — the real `input[type=checkbox]` next
@@ -25,7 +25,6 @@ const RAZORPAY_IFRAME_SELECTOR = 'iframe[src*="razorpay.com/v1/checkout"]';
 export class PremiumUpgradeTest implements PortalAutomationTest {
   readonly id = 'premium-upgrade';
   readonly name = 'Premium job-upgrade payment screen is reachable';
-  readonly frequency = 'daily' as const;
 
   constructor(private readonly credentials: PortalCredentials) {}
 

@@ -680,16 +680,13 @@ model QaAutomationTestResult {
   @@map("qa_automation_test_results")
 }
 
-/// Single row per org — source of truth for the BullMQ repeatable job's
-/// interval; apps/api calls upsertJobScheduler whenever intervalHours
-/// changes (see docs/adr/0035). lastDailyCheckAt gates 'daily'-frequency
-/// tests so they run once per calendar day, not on every scheduled tick.
+/// Single row per org (docs/adr/0035, docs/adr/0042) — no interval field,
+/// since production runs the whole suite together on a fixed twice-daily
+/// (00:00 and 12:00 IST) code constant, not a user-configurable schedule.
 model QaAutomationSchedule {
-  orgId            String    @id
-  intervalHours    Int       @default(12)
-  enabled          Boolean   @default(true)
-  lastDailyCheckAt DateTime?
-  updatedAt        DateTime  @updatedAt
+  orgId     String   @id
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
 
   org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
 

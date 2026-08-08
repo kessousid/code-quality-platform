@@ -66,7 +66,6 @@ export function dateLabel(date: Date): string {
 export class SlotListingPricingTest implements PortalAutomationTest {
   readonly id = 'slot-listing-pricing';
   readonly name = 'Slot listing pricing matches Sunday/weekday business rule';
-  readonly frequency = 'every-run' as const;
 
   constructor(private readonly credentials: PortalCredentials) {}
 

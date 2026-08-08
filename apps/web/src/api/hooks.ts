@@ -552,7 +552,7 @@ export function useQaAutomationSchedule() {
 export function useUpdateQaAutomationSchedule() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { intervalHours?: number; enabled?: boolean }) =>
+    mutationFn: (input: { enabled?: boolean }) =>
       apiPut<QaAutomationSchedule>('/qa-automation/schedule', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-schedule'] }),
   });

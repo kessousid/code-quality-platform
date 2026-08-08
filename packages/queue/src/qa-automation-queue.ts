@@ -8,11 +8,15 @@ export interface QaAutomationJobData {
 
 export const QA_AUTOMATION_QUEUE_NAME = 'qa-automation';
 
+/** Fixed twice-daily (00:00 and 12:00 IST) schedule (docs/adr/0042) — not user-configurable. */
+const PRODUCTION_CRON_PATTERN = '0 0,12 * * *';
+const PRODUCTION_CRON_TZ = 'Asia/Kolkata';
+
 /**
  * One fixed scheduler id per org — `upsertQaAutomationSchedule` removes
  * and replaces whatever repeatable job already exists under this key, so
- * changing the interval never leaves a stale duplicate ticking alongside
- * the new one (see docs/adr/0035).
+ * enabling/disabling never leaves a stale duplicate ticking alongside the
+ * new one (see docs/adr/0035).
  */
 export function qaAutomationSchedulerId(orgId: string): string {
   return `qa-automation-${orgId}`;
@@ -31,15 +35,14 @@ export function createQaAutomationBullWorker(
   return new Worker<QaAutomationJobData>(QA_AUTOMATION_QUEUE_NAME, processor, { connection });
 }
 
-/** Called from `apps/api` whenever `PUT /qa-automation/schedule` changes the interval — no redeploy needed. */
+/** Called from `apps/api` whenever `PUT /qa-automation/schedule` enables the production run — no redeploy needed. */
 export async function upsertQaAutomationSchedule(
   queue: Queue<QaAutomationJobData>,
   orgId: string,
-  intervalHours: number,
 ): Promise<void> {
   await queue.upsertJobScheduler(
     qaAutomationSchedulerId(orgId),
-    { every: intervalHours * 60 * 60 * 1000 },
+    { pattern: PRODUCTION_CRON_PATTERN, tz: PRODUCTION_CRON_TZ },
     { data: { orgId, triggeredBy: 'scheduled' } },
   );
 }

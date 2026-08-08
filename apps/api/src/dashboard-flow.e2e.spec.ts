@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { hashApiToken } from '@cqp/application';
 import {
   InMemoryApiTokenRepository,
+  InMemoryAuthTokenRepository,
+  InMemoryEmailSender,
   InMemoryFindingRepository,
   InMemoryObjectStorage,
   InMemoryOrgRepository,
@@ -20,6 +22,8 @@ import {
 import { AppModule } from './app.module.js';
 import {
   API_TOKEN_REPOSITORY,
+  AUTH_TOKEN_REPOSITORY,
+  EMAIL_SENDER,
   FINDING_REPOSITORY,
   OBJECT_STORAGE,
   ORG_REPOSITORY,
@@ -48,8 +52,14 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
   let app: INestApplication;
   const rawToken = 'cqp_dashboard_flow_token';
   const findingRepository = new InMemoryFindingRepository();
+  const originalWebBaseUrl = process.env.WEB_BASE_URL;
 
   beforeAll(async () => {
+    // Read directly by AuthController's constructor (docs/adr/0041) — real
+    // Postgres/Redis are already avoided below via provider overrides, this
+    // is the same idea for the one plain env var that isn't a DI token.
+    process.env.WEB_BASE_URL = 'https://e2e.example.com';
+
     const tokenRepository = new InMemoryApiTokenRepository();
     await tokenRepository.create({
       orgId: 'org_1',
@@ -76,6 +86,11 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
       .useValue(new InMemoryOrgRepository())
       .overrideProvider(USER_REPOSITORY)
       .useValue(new InMemoryUserRepository())
+      .overrideProvider(AUTH_TOKEN_REPOSITORY)
+      .useValue(new InMemoryAuthTokenRepository())
+      // Avoids requiring real ALERT_EMAIL_FROM/APP_PASSWORD env vars at boot.
+      .overrideProvider(EMAIL_SENDER)
+      .useValue(new InMemoryEmailSender())
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -86,6 +101,11 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
 
   afterAll(async () => {
     await app.close();
+    if (originalWebBaseUrl === undefined) {
+      delete process.env.WEB_BASE_URL;
+    } else {
+      process.env.WEB_BASE_URL = originalWebBaseUrl;
+    }
   });
 
   it('walks the full repo -> scan -> findings -> summary -> report flow over real HTTP', async () => {
