@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { StagingTestRunner, StagingTestRunResult, StagingTestResult } from '@cqp/core';
-import { runSubprocess, type SubprocessResult } from '@cqp/plugin-shared';
+import { runSubprocess, SubprocessTimeoutError, type SubprocessResult } from '@cqp/plugin-shared';
 import { parseJunitXml } from './junit-xml-parser.js';
 
 /**
@@ -36,6 +36,16 @@ function requireZeroExit(step: string, result: SubprocessResult): void {
  * gone by the next production launch.
  */
 const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
+
+/**
+ * Live-confirmed necessary (docs/adr/0045): two separate real staging runs
+ * each hung for 2+ hours at the same point (a `admin_page` fixture/test
+ * combination) with zero output, even with stdout unbuffered — genuinely
+ * stuck, not just slow. 3 hours is comfortably above every real full-suite
+ * duration observed so far (the fastest healthy stretch extrapolated to
+ * well under 2 hours) while still bounding the worst case.
+ */
+const MAX_PYTEST_DURATION_MS = 3 * 60 * 60 * 1000;
 
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
@@ -211,25 +221,62 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         }),
       );
 
-      // pytest exits non-zero whenever any test fails — that's expected,
-      // not a runner failure; the real per-test outcomes live in the
-      // JUnit XML this call produces, not in the exit code. But if it
-      // failed to even start (e.g. a bad CLI flag), no XML is produced at
-      // all — that case still needs to surface the real stderr, not the
-      // opaque ENOENT from the read below.
-      //
-      // `--continue-on-collection-errors` is load-bearing, confirmed via a
-      // real reproduction: pytest's default behavior is to abort the
-      // *entire* session the moment any single file fails to import (e.g.
-      // one test module referencing a persona key missing from this
-      // externally-maintained repo's own config) — "Interrupted: 1 error
-      // during collection", zero of the other (hundreds of) tests ever
-      // run. Since this suite is independently maintained and kept fresh
-      // on every run, one broken file is expected to happen periodically;
-      // without this flag a single bad file silently discards the entire
-      // real run every time, which is exactly what was happening.
-      const percentTracker = onProgress ? makePercentTracker(onProgress) : undefined;
-      const pytestResult = await runSubprocess(
+      const pytestResult = await this.runPytest(
+        python,
+        repoDir,
+        reportPath,
+        onStdout,
+        onStderr,
+        onProgress,
+      );
+
+      const xml = await readFile(reportPath, 'utf-8').catch(() => {
+        throw new Error(
+          `pytest produced no report at ${reportPath} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
+        );
+      });
+      const sourceUrl = this.sourceUrl();
+      return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * pytest exits non-zero whenever any test fails — that's expected, not a
+   * runner failure; the real per-test outcomes live in the JUnit XML this
+   * call produces, not in the exit code. But if it failed to even start
+   * (e.g. a bad CLI flag), no XML is produced at all — that case still
+   * needs to surface the real stderr, not the opaque ENOENT from the read
+   * in `runSuite`.
+   *
+   * `--continue-on-collection-errors` is load-bearing, confirmed via a
+   * real reproduction: pytest's default behavior is to abort the *entire*
+   * session the moment any single file fails to import (e.g. one test
+   * module referencing a persona key missing from this
+   * externally-maintained repo's own config) — "Interrupted: 1 error
+   * during collection", zero of the other (hundreds of) tests ever run.
+   * Since this suite is independently maintained and kept fresh on every
+   * run, one broken file is expected to happen periodically; without this
+   * flag a single bad file silently discards the entire real run every
+   * time, which is exactly what was happening.
+   *
+   * `timeoutMs` (docs/adr/0045) is separately load-bearing — two real
+   * runs each hung for hours with zero output at the same point, and
+   * nothing else in this stack can recover from a genuinely stuck child
+   * process.
+   */
+  private async runPytest(
+    python: string,
+    repoDir: string,
+    reportPath: string,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void,
+    onProgress?: (percent: number) => void,
+  ): Promise<SubprocessResult> {
+    const percentTracker = onProgress ? makePercentTracker(onProgress) : undefined;
+    try {
+      return await runSubprocess(
         this.options.xvfbCommand ?? 'xvfb-run',
         [
           '-a',
@@ -252,18 +299,16 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             percentTracker?.(chunk);
           },
           onStderr,
+          timeoutMs: MAX_PYTEST_DURATION_MS,
         },
       );
-
-      const xml = await readFile(reportPath, 'utf-8').catch(() => {
+    } catch (error) {
+      if (error instanceof SubprocessTimeoutError) {
         throw new Error(
-          `pytest produced no report at ${reportPath} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
+          `pytest ran longer than ${MAX_PYTEST_DURATION_MS / 60_000} minutes and was killed as hung — see docs/adr/0045.`,
         );
-      });
-      const sourceUrl = this.sourceUrl();
-      return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
-    } finally {
-      await rm(workDir, { recursive: true, force: true });
+      }
+      throw error;
     }
   }
 }

@@ -13,6 +13,13 @@ export interface SubprocessResult {
   exitCode: number | null;
 }
 
+export class SubprocessTimeoutError extends Error {
+  constructor(command: string, timeoutMs: number) {
+    super(`${command} did not exit within ${timeoutMs}ms and was killed as hung.`);
+    this.name = 'SubprocessTimeoutError';
+  }
+}
+
 /**
  * Real target-repo code frequently does DB/third-party-client setup at
  * module load time with no `.catch()` on the resulting promise (docs/adr/0028)
@@ -60,16 +67,45 @@ export function runSubprocess(
      */
     onStdout?: (chunk: string) => void;
     onStderr?: (chunk: string) => void;
+    /**
+     * Kills the whole process tree and rejects with SubprocessTimeoutError
+     * if the subprocess hasn't exited within this many ms (docs/adr/0045) —
+     * live-confirmed necessary: two separate real staging runs each hung
+     * for 2+ hours at the same point with zero output (even with stdout
+     * unbuffered), and nothing else in this stack — not BullMQ's own
+     * stall detection, which only watches whether *this* Node process
+     * stays responsive, not whether a spawned child is actually making
+     * progress — can ever recover from that. `detached: true` makes the
+     * child its own process group leader so the negative-PID kill below
+     * reaches every descendant (`xvfb-run` itself spawns Xvfb + the real
+     * python process as children `child.kill()` alone would orphan, not
+     * terminate).
+     */
+    timeoutMs?: number;
   },
 ): Promise<SubprocessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
       ...(options.env ? { env: options.env } : {}),
+      ...(options.timeoutMs !== undefined ? { detached: true } : {}),
     });
 
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    const timer =
+      options.timeoutMs !== undefined
+        ? setTimeout(() => {
+            timedOut = true;
+            try {
+              process.kill(-child.pid!, 'SIGKILL');
+            } catch {
+              child.kill('SIGKILL');
+            }
+          }, options.timeoutMs)
+        : undefined;
+
     child.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString();
       stdout += text;
@@ -82,6 +118,7 @@ export function runSubprocess(
     });
 
     child.on('error', (error: NodeJS.ErrnoException) => {
+      if (timer) clearTimeout(timer);
       if (error.code === 'ENOENT') {
         reject(new ToolNotFoundError(command, options.envVarName));
       } else {
@@ -90,6 +127,11 @@ export function runSubprocess(
     });
 
     child.on('close', (exitCode) => {
+      if (timer) clearTimeout(timer);
+      if (timedOut) {
+        reject(new SubprocessTimeoutError(command, options.timeoutMs!));
+        return;
+      }
       resolve({ stdout, stderr, exitCode });
     });
   });

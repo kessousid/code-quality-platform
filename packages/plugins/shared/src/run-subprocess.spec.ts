@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   runSubprocess,
+  SubprocessTimeoutError,
   ToolNotFoundError,
   withUnhandledRejectionsAsWarnings,
 } from './run-subprocess.js';
@@ -42,6 +43,26 @@ describe('runSubprocess', () => {
 
     expect(chunks.join('')).toBe('hello-live');
     expect(result.stdout).toBe('hello-live');
+  });
+
+  it('kills a subprocess that outlives timeoutMs and rejects with SubprocessTimeoutError (docs/adr/0045)', async () => {
+    await expect(
+      runSubprocess(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], {
+        cwd: process.cwd(),
+        envVarName: 'CQP_TEST_TOOL_PATH',
+        timeoutMs: 200,
+      }),
+    ).rejects.toThrow(SubprocessTimeoutError);
+  });
+
+  it('does not time out a subprocess that finishes well within timeoutMs', async () => {
+    const result = await runSubprocess(process.execPath, ['--version'], {
+      cwd: process.cwd(),
+      envVarName: 'CQP_TEST_TOOL_PATH',
+      timeoutMs: 10_000,
+    });
+
+    expect(result.exitCode).toBe(0);
   });
 
   it('actually applies a custom env to the spawned child, not just process.env', async () => {
