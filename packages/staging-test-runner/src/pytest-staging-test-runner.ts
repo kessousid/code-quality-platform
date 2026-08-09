@@ -38,7 +38,18 @@ function requireZeroExit(step: string, result: SubprocessResult): void {
 const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
 
 function pythonEnv(): NodeJS.ProcessEnv {
-  return { ...process.env, PLAYWRIGHT_BROWSERS_PATH: STAGING_PLAYWRIGHT_BROWSERS_PATH };
+  return {
+    ...process.env,
+    PLAYWRIGHT_BROWSERS_PATH: STAGING_PLAYWRIGHT_BROWSERS_PATH,
+    // Confirmed live in production (docs/adr/0044): Python fully
+    // block-buffers stdout whenever it isn't attached to a real terminal —
+    // exactly this case, piped through xvfb-run into this process. Real
+    // per-test `-v` output sat unflushed for 2.5+ hours of a genuinely
+    // still-running suite, making the live progress/log-streaming fix
+    // useless for exactly the case it exists to handle. This forces every
+    // write to flush immediately.
+    PYTHONUNBUFFERED: '1',
+  };
 }
 
 /**
