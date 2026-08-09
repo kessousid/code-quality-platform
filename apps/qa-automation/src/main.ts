@@ -13,6 +13,7 @@ import {
   type QaAutomationStagingJobData,
 } from '@cqp/queue';
 import {
+  ReconcileOrphanedQaAutomationRunsUseCase,
   RunQaAutomationSuiteUseCase,
   RunStagingTestSuiteUseCase,
   type QaBrowser,
@@ -69,6 +70,20 @@ async function main(): Promise<void> {
   });
   const alertEmailTo = requireEnv('ALERT_EMAIL_TO');
   const alertEmailCc = process.env.ALERT_EMAIL_CC;
+
+  // See docs/adr/0043 — a container restart mid-run (e.g. this very
+  // deploy) kills the process before either use case's own try/catch can
+  // mark its run failed, leaving it stuck at 'running' forever. Runs
+  // before either worker starts accepting jobs.
+  const orphaned = await new ReconcileOrphanedQaAutomationRunsUseCase(
+    new PrismaQaAutomationRunRepository(prisma),
+    emailSender,
+    alertEmailTo,
+    alertEmailCc,
+  ).execute();
+  if (orphaned.length > 0) {
+    console.log(`[qa-automation] marked ${orphaned.length} orphaned run(s) failed on startup`);
+  }
 
   const useCase = new RunQaAutomationSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),

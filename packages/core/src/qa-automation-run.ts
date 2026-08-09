@@ -90,6 +90,14 @@ export interface QaAutomationRunRepository {
     id: string,
     input: CompleteQaAutomationRunInput,
   ): Promise<QaAutomationRun>;
+  /**
+   * System-wide, not scoped to a single org — used only by the worker's own
+   * startup reconciliation (docs/adr/0043) to find runs orphaned by a
+   * container restart mid-execution. Since only one job can be actively
+   * processing per queue at a time, anything still `'running'` when the
+   * worker boots cannot possibly still be in progress.
+   */
+  findAllRunning(): Promise<QaAutomationRun[]>;
 }
 
 export interface QaAutomationTestResultRepository {

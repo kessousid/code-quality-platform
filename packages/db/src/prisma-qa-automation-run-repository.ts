@@ -90,6 +90,13 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
     return this.toDomain(row);
   }
 
+  async findAllRunning(): Promise<QaAutomationRun[]> {
+    const rows = await this.prisma.qaAutomationRun.findMany({
+      where: { status: qaAutomationRunStatusToDb('running') },
+    });
+    return rows.map((row) => this.toDomain(row));
+  }
+
   private toDomain(row: {
     id: string;
     orgId: string;

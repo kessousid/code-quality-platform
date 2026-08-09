@@ -64,4 +64,8 @@ export class InMemoryQaAutomationRunRepository implements QaAutomationRunReposit
     if (run.completedAt === undefined) run.completedAt = new Date();
     return run;
   }
+
+  async findAllRunning(): Promise<QaAutomationRun[]> {
+    return [...this.runs.values()].filter((r) => r.status === 'running');
+  }
 }
