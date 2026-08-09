@@ -135,4 +135,23 @@ describe('QaAutomationPage', () => {
       'https://github.com/codewithVsingh/curatal_tests/tree/main/tests',
     );
   });
+
+  it('shows a live progress bar for a staging run that is still running (docs/adr/0044)', async () => {
+    server.qaAutomationRuns.unshift({
+      id: 'qarun_in_progress',
+      orgId: 'org_1',
+      environment: 'staging',
+      status: 'running',
+      triggeredBy: 'scheduled',
+      startedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      progressPercent: 42,
+    });
+    renderWithProviders(<QaAutomationPage />);
+    const user = userEvent.setup();
+    await switchToStagingTab(user);
+
+    await waitFor(() => expect(screen.getByText('42%')).toBeInTheDocument());
+    expect(screen.getByLabelText('42% complete')).toBeInTheDocument();
+  });
 });

@@ -68,4 +68,17 @@ export class InMemoryQaAutomationRunRepository implements QaAutomationRunReposit
   async findAllRunning(): Promise<QaAutomationRun[]> {
     return [...this.runs.values()].filter((r) => r.status === 'running');
   }
+
+  async updateProgress(
+    orgId: string,
+    id: string,
+    progressPercent: number,
+  ): Promise<QaAutomationRun> {
+    const run = this.runs.get(id);
+    if (!run || run.orgId !== orgId) {
+      throw new Error(`QaAutomationRun not found: ${id}`);
+    }
+    run.progressPercent = progressPercent;
+    return run;
+  }
 }

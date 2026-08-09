@@ -46,7 +46,21 @@ export function withUnhandledRejectionsAsWarnings(
 export function runSubprocess(
   command: string,
   args: string[],
-  options: { cwd: string; envVarName: string; env?: NodeJS.ProcessEnv },
+  options: {
+    cwd: string;
+    envVarName: string;
+    env?: NodeJS.ProcessEnv;
+    /**
+     * Fires alongside the usual buffering, for callers whose subprocess can
+     * run long enough that silence looks indistinguishable from a hang —
+     * confirmed as a real problem with the staging pytest suite (docs/adr/0044),
+     * which could run for hours with zero output anywhere until the very
+     * end. Never replaces the buffered stdout/stderr on the resolved
+     * SubprocessResult — this is purely an additional live tap.
+     */
+    onStdout?: (chunk: string) => void;
+    onStderr?: (chunk: string) => void;
+  },
 ): Promise<SubprocessResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -56,8 +70,16 @@ export function runSubprocess(
 
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()));
-    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      stdout += text;
+      options.onStdout?.(text);
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString();
+      stderr += text;
+      options.onStderr?.(text);
+    });
 
     child.on('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') {

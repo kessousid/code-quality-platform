@@ -28,6 +28,22 @@ describe('runSubprocess', () => {
     ).rejects.toThrow(ToolNotFoundError);
   });
 
+  it('fires onStdout live with each chunk, in addition to the buffered result', async () => {
+    const chunks: string[] = [];
+    const result = await runSubprocess(
+      process.execPath,
+      ['-e', 'process.stdout.write("hello-live")'],
+      {
+        cwd: process.cwd(),
+        envVarName: 'CQP_TEST_TOOL_PATH',
+        onStdout: (chunk) => chunks.push(chunk),
+      },
+    );
+
+    expect(chunks.join('')).toBe('hello-live');
+    expect(result.stdout).toBe('hello-live');
+  });
+
   it('actually applies a custom env to the spawned child, not just process.env', async () => {
     const result = await runSubprocess(
       process.execPath,

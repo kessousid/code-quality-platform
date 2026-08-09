@@ -96,6 +96,19 @@ describe('RunStagingTestSuiteUseCase', () => {
     expect(emailSender.sent[0]?.body).toContain('git clone failed: repository not found');
   });
 
+  it('persists progress reported by the test runner via updateProgress (docs/adr/0044)', async () => {
+    const { runRepository, testRunner, useCase } = setup();
+    testRunner.run = async (onProgress?: (percent: number) => void) => {
+      onProgress?.(50);
+      return testRunner.result;
+    };
+
+    const run = await useCase.execute({ orgId: ORG_ID, triggeredBy: 'scheduled' });
+
+    const persisted = await runRepository.findById(ORG_ID, run.id);
+    expect(persisted?.progressPercent).toBe(50);
+  });
+
   it('CCs the configured address on a failure alert when one is set', async () => {
     const runRepository = new InMemoryQaAutomationRunRepository();
     const resultRepository = new InMemoryQaAutomationTestResultRepository();

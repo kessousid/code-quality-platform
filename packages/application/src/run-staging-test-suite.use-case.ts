@@ -19,7 +19,9 @@ export interface RunStagingTestSuiteInput {
  * whole external pytest suite runs as one opaque subprocess call via
  * `testRunner.run()`. Same create-run -> run -> persist-results -> complete
  * -> alert-on-failure shape, and the same "the run itself can crash before
- * any test result exists" handling.
+ * any test result exists" handling. Threads an `onProgress` callback
+ * through to the runner (docs/adr/0044) so a run that can legitimately
+ * take hours is never indistinguishable from a hung one.
  */
 export class RunStagingTestSuiteUseCase {
   constructor(
@@ -39,7 +41,15 @@ export class RunStagingTestSuiteUseCase {
     });
 
     try {
-      const { results } = await this.testRunner.run();
+      // Fire-and-forget on purpose (docs/adr/0044) — this fires on every
+      // percentage tick from a real subprocess's live stdout, and must
+      // never make that stream wait on a DB round trip; a failed write
+      // here is a lost progress update, not a lost test result.
+      const { results } = await this.testRunner.run((percent) => {
+        this.runRepository.updateProgress(input.orgId, run.id, percent).catch((error: unknown) => {
+          console.error(`[staging run ${run.id}] failed to persist progress:`, error);
+        });
+      });
       for (const result of results) {
         await this.resultRepository.create({ runId: run.id, ...result });
       }

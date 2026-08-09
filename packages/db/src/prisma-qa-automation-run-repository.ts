@@ -97,6 +97,23 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
     return rows.map((row) => this.toDomain(row));
   }
 
+  async updateProgress(
+    orgId: string,
+    id: string,
+    progressPercent: number,
+  ): Promise<QaAutomationRun> {
+    const existing = await this.prisma.qaAutomationRun.findFirst({ where: { id, orgId } });
+    if (!existing) {
+      throw new Error(`QaAutomationRun not found: ${id}`);
+    }
+
+    const row = await this.prisma.qaAutomationRun.update({
+      where: { id },
+      data: { progressPercent },
+    });
+    return this.toDomain(row);
+  }
+
   private toDomain(row: {
     id: string;
     orgId: string;
@@ -106,6 +123,7 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
     startedAt: Date;
     completedAt: Date | null;
     createdAt: Date;
+    progressPercent: number | null;
   }): QaAutomationRun {
     return {
       id: row.id,
@@ -116,6 +134,7 @@ export class PrismaQaAutomationRunRepository implements QaAutomationRunRepositor
       startedAt: row.startedAt,
       createdAt: row.createdAt,
       ...(row.completedAt !== null ? { completedAt: row.completedAt } : {}),
+      ...(row.progressPercent !== null ? { progressPercent: row.progressPercent } : {}),
     };
   }
 }

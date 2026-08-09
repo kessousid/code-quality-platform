@@ -42,6 +42,14 @@ export interface QaAutomationRun {
   startedAt: Date;
   completedAt?: Date;
   createdAt: Date;
+  /**
+   * 0-100, only ever set for a staging run (docs/adr/0044) — parsed live
+   * from pytest's own `-v` output (it already prints a running `[ NN%]`
+   * per test), so a long-running suite is never indistinguishable from a
+   * hung one. Undefined for production (short enough to not need it) and
+   * for a staging run that hasn't produced its first result yet.
+   */
+  progressPercent?: number;
 }
 
 export interface QaAutomationTestResult {
@@ -98,6 +106,8 @@ export interface QaAutomationRunRepository {
    * worker boots cannot possibly still be in progress.
    */
   findAllRunning(): Promise<QaAutomationRun[]>;
+  /** See QaAutomationRun.progressPercent's own doc comment (docs/adr/0044). A no-op on an already-terminal run. */
+  updateProgress(orgId: string, id: string, progressPercent: number): Promise<QaAutomationRun>;
 }
 
 export interface QaAutomationTestResultRepository {

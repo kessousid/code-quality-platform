@@ -41,6 +41,38 @@ function pythonEnv(): NodeJS.ProcessEnv {
   return { ...process.env, PLAYWRIGHT_BROWSERS_PATH: STAGING_PLAYWRIGHT_BROWSERS_PATH };
 }
 
+/**
+ * pytest's own default `-v` output already prints a right-aligned running
+ * percentage on every test outcome line, e.g.
+ * `tests/test_foo.py::test_bar PASSED  [ 12%]` — no extra flag needed.
+ */
+const PYTEST_PERCENT_PATTERN = /\[\s*(\d{1,3})%\]/;
+
+/**
+ * Line-buffers stdout chunks (a percent marker can land split across two
+ * separate `data` events) and reports a new percent only when it actually
+ * changes, since the same value repeats across every line of a given
+ * test's output (docs/adr/0044).
+ */
+export function makePercentTracker(onProgress: (percent: number) => void): (chunk: string) => void {
+  let buffer = '';
+  let lastPercent: number | undefined;
+  return (chunk: string) => {
+    buffer += chunk;
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const match = PYTEST_PERCENT_PATTERN.exec(line);
+      if (!match?.[1]) continue;
+      const percent = Number(match[1]);
+      if (percent !== lastPercent) {
+        lastPercent = percent;
+        onProgress(percent);
+      }
+    }
+  };
+}
+
 export interface PytestStagingTestRunnerOptions {
   /** The shared, externally-maintained repo (e.g. https://github.com/codewithVsingh/curatal_tests). */
   repoUrl: string;
@@ -105,16 +137,25 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return `${base}/tree/main/tests`;
   }
 
-  async run(): Promise<StagingTestRunResult> {
-    return { results: await this.runSuite() };
+  async run(onProgress?: (percent: number) => void): Promise<StagingTestRunResult> {
+    return { results: await this.runSuite(onProgress) };
   }
 
   /** One full clone -> install -> browser -> pytest -> parse cycle against `main`. */
-  private async runSuite(): Promise<StagingTestResult[]> {
+  private async runSuite(onProgress?: (percent: number) => void): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
     const repoDir = path.join(workDir, 'repo');
     const reportPath = path.join(workDir, 'report.xml');
     const python = this.options.pythonCommand ?? 'python3';
+    // Live-forwarded to this process's own stdout/stderr for every step
+    // (docs/adr/0044) — a run silently buffered until the very end was
+    // indistinguishable from a hung one when it legitimately took hours.
+    const onStdout = (chunk: string): void => {
+      process.stdout.write(chunk);
+    };
+    const onStderr = (chunk: string): void => {
+      process.stderr.write(chunk);
+    };
 
     try {
       requireZeroExit(
@@ -122,7 +163,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         await runSubprocess(
           this.options.gitCommand ?? 'git',
           ['clone', '--depth', '1', this.cloneUrl(), repoDir],
-          { cwd: workDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
+          { cwd: workDir, envVarName: 'STAGING_TESTS_GIT_PATH', onStdout, onStderr },
         ),
       );
 
@@ -131,6 +172,8 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         await runSubprocess(python, ['-m', 'pip', 'install', '-r', 'requirements.txt'], {
           cwd: repoDir,
           envVarName: 'STAGING_TESTS_PYTHON_PATH',
+          onStdout,
+          onStderr,
         }),
       );
       // The suite's own config imports python-dotenv, but its own
@@ -142,6 +185,8 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         await runSubprocess(python, ['-m', 'pip', 'install', 'python-dotenv'], {
           cwd: repoDir,
           envVarName: 'STAGING_TESTS_PYTHON_PATH',
+          onStdout,
+          onStderr,
         }),
       );
       requireZeroExit(
@@ -150,6 +195,8 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           cwd: repoDir,
           envVarName: 'STAGING_TESTS_PYTHON_PATH',
           env: pythonEnv(),
+          onStdout,
+          onStderr,
         }),
       );
 
@@ -170,6 +217,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       // on every run, one broken file is expected to happen periodically;
       // without this flag a single bad file silently discards the entire
       // real run every time, which is exactly what was happening.
+      const percentTracker = onProgress ? makePercentTracker(onProgress) : undefined;
       const pytestResult = await runSubprocess(
         this.options.xvfbCommand ?? 'xvfb-run',
         [
@@ -184,7 +232,16 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           '--continue-on-collection-errors',
           `--junitxml=${reportPath}`,
         ],
-        { cwd: repoDir, envVarName: 'STAGING_TESTS_XVFB_PATH', env: pythonEnv() },
+        {
+          cwd: repoDir,
+          envVarName: 'STAGING_TESTS_XVFB_PATH',
+          env: pythonEnv(),
+          onStdout: (chunk) => {
+            onStdout(chunk);
+            percentTracker?.(chunk);
+          },
+          onStderr,
+        },
       );
 
       const xml = await readFile(reportPath, 'utf-8').catch(() => {

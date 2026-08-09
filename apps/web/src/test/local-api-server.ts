@@ -124,6 +124,7 @@ export interface QaAutomationRunFixture {
   startedAt: string;
   createdAt: string;
   completedAt?: string;
+  progressPercent?: number;
 }
 
 export interface QaAutomationReportFixture {

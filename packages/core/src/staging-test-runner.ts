@@ -25,5 +25,10 @@ export interface StagingTestRunResult {
 }
 
 export interface StagingTestRunner {
-  run(): Promise<StagingTestRunResult>;
+  /**
+   * `onProgress` fires with 0-100 as the run progresses, whenever the
+   * runner has a real way to measure it (docs/adr/0044) — optional since
+   * not every runner necessarily can.
+   */
+  run(onProgress?: (percent: number) => void): Promise<StagingTestRunResult>;
 }

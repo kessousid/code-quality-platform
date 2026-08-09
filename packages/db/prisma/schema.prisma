@@ -647,14 +647,15 @@ model CronRun {
 /// suite executing once; QaAutomationTestResult rows record each test's own
 /// outcome, same parent/child split as Scan/Finding.
 model QaAutomationRun {
-  id          String                   @id @default(cuid())
-  orgId       String
-  environment QaAutomationEnvironment  @default(PRODUCTION)
-  status      QaAutomationRunStatus    @default(RUNNING)
-  triggeredBy QaAutomationTrigger
-  startedAt   DateTime                 @default(now())
-  completedAt DateTime?
-  createdAt   DateTime                 @default(now())
+  id              String                   @id @default(cuid())
+  orgId           String
+  environment     QaAutomationEnvironment  @default(PRODUCTION)
+  status          QaAutomationRunStatus    @default(RUNNING)
+  triggeredBy     QaAutomationTrigger
+  startedAt       DateTime                 @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime                 @default(now())
+  progressPercent Int?
 
   org     Org                       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   results QaAutomationTestResult[]

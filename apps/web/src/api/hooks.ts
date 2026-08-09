@@ -579,6 +579,12 @@ export function useQaAutomationRuns(
       apiGet<PaginatedResult<QaAutomationRun>>(
         `/qa-automation/runs?page=${page}&pageSize=${pageSize}&environment=${environment}`,
       ),
+    // Live progress (docs/adr/0044) needs a live poll to be worth anything —
+    // a staging run can legitimately run for hours.
+    refetchInterval: (query) => {
+      const runs = query.state.data?.data ?? [];
+      return runs.some((r) => r.status === 'running') ? 5000 : false;
+    },
   });
 }
 

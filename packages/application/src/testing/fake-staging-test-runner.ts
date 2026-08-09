@@ -7,8 +7,9 @@ export class FakeStagingTestRunner implements StagingTestRunner {
   };
   runCalls = 0;
 
-  async run(): Promise<StagingTestRunResult> {
+  async run(onProgress?: (percent: number) => void): Promise<StagingTestRunResult> {
     this.runCalls += 1;
+    onProgress?.(100);
     return this.result;
   }
 }

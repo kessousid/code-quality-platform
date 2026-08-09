@@ -34,6 +34,23 @@ function StatusBadge({ status }: { status: QaAutomationRun['status'] }) {
   );
 }
 
+/**
+ * Only ever shown for a running staging run (docs/adr/0044) — a long
+ * staging suite used to look identical whether it was healthy or hung;
+ * this is parsed live from pytest's own progress output so there's a real
+ * signal to check instead of just waiting and wondering.
+ */
+function RunProgressBar({ percent }: { percent: number }) {
+  return (
+    <div className="flex items-center gap-2" aria-label={`${percent}% complete`}>
+      <div className="h-1.5 w-24 overflow-hidden rounded-full bg-neutral-200">
+        <div className="h-full bg-blue-600" style={{ width: `${percent}%` }} />
+      </div>
+      <span className="text-xs text-neutral-500">{percent}%</span>
+    </div>
+  );
+}
+
 function RunResults({ runId }: { runId: string }) {
   const runQuery = useQaAutomationRun(runId);
   if (runQuery.isLoading) return <p className="text-xs text-neutral-500">Loading results…</p>;
@@ -130,6 +147,9 @@ function RunHistoryList({ environment }: { environment: QaAutomationEnvironment 
             onClick={() => setExpandedRunId(expandedRunId === run.id ? null : run.id)}
           >
             <StatusBadge status={run.status} />
+            {run.status === 'running' && run.progressPercent !== undefined && (
+              <RunProgressBar percent={run.progressPercent} />
+            )}
             <span className="text-xs text-neutral-500">{run.triggeredBy}</span>
             <span className="text-xs text-neutral-500">
               {new Date(run.createdAt).toLocaleString()}
