@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { GenerateTestsInput, GeneratedTestCode, JestTestGenerator } from '@cqp/core';
 import { buildPrompt } from './prompt-builder.js';
 import { extractCode } from './extract-code.js';
+import { withGeminiRetry } from './retry.js';
 
 /** An alias Google keeps pointed at its current recommended flash model — avoids hardcoding a specific dated model name that later gets deprecated for new API keys (confirmed live: `gemini-2.5-flash` itself already 404s despite still being listed by `models.list()`). */
 const DEFAULT_MODEL = 'gemini-flash-latest';
@@ -32,10 +33,12 @@ export class GeminiJestTestGenerator implements JestTestGenerator {
 
   async generateTests(input: GenerateTestsInput): Promise<GeneratedTestCode> {
     const prompt = buildPrompt(input);
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: prompt,
-    });
+    const response = await withGeminiRetry(() =>
+      this.client.models.generateContent({
+        model: this.model,
+        contents: prompt,
+      }),
+    );
     const text = response.text;
     if (!text || text.trim().length === 0) {
       throw new EmptyGeminiResponseError();
