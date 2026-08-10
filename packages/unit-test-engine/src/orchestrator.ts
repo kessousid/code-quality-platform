@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, extname, join } from 'node:path';
+import { dirname, extname, join, posix } from 'node:path';
 import type {
   GeneratedTestFile,
   JestTestGenerator,
@@ -11,6 +11,7 @@ import { discoverSourceFiles } from './discover-files.js';
 import { extractExportedFunctions, languageFromPath } from './extract-functions.js';
 import { runJest } from './run-jest.js';
 import { writeLocalExecutionReport } from './local-execution-report.js';
+import { rewriteRelativeImportsForOutputLocation } from './rewrite-relative-imports.js';
 
 export type UnitTestProgressEvent =
   | { type: 'total'; total: number }
@@ -77,8 +78,18 @@ async function generateAndWriteTestFor(
 
   const testRelativePath = join(baseDir, testFilePathFor(file.relativePath));
   const testAbsolutePath = join(repoRoot, testRelativePath);
+  // Both generators write relative imports as if the test sat right next
+  // to the source file (docs/adr/0047's live-verification finding) — the
+  // real output lives under the mirrored `Unit tests/<generator>/...` tree
+  // (docs/adr/0038) instead, so every such import needs correcting before
+  // it's written to a location it was never actually written for.
+  const content = rewriteRelativeImportsForOutputLocation(
+    generated.content,
+    posix.dirname(file.relativePath),
+    posix.dirname(testRelativePath.replace(/\\/g, '/')),
+  );
   await mkdir(dirname(testAbsolutePath), { recursive: true });
-  await writeFile(testAbsolutePath, generated.content, 'utf-8');
+  await writeFile(testAbsolutePath, content, 'utf-8');
 
   return {
     generatedFile: {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -137,6 +137,53 @@ describe('runUnitTestGeneration', () => {
       runUnitTestGeneration(repoRoot, { path: '.', functionName: 'anything' }, 'gemini', generator),
     ).rejects.toThrow('single file, not a directory');
   });
+
+  it("rewrites a generated test's relative imports so they resolve from the real nested output location (live-reproduced bug, docs/adr/0047)", async () => {
+    await mkdir(join(repoRoot, 'src', 'utils'), { recursive: true });
+    await mkdir(join(repoRoot, 'src', 'controllers'), { recursive: true });
+    await writeFile(
+      join(repoRoot, 'src', 'utils', 'catchAsync.js'),
+      `module.exports = (fn) => (req, res, next) => fn(req, res, next).catch(next);`,
+    );
+    await writeFile(
+      join(repoRoot, 'src', 'controllers', 'health.controller.js'),
+      `const catchAsync = require('../utils/catchAsync');\n` +
+        `exports.getHealth = catchAsync(async (req, res) => { res.json({ status: 'ok' }); });`,
+    );
+
+    // Writes exactly what a real generator would (both generators write
+    // relative imports as if co-located with the source — the bug this
+    // test guards against is the orchestrator failing to correct them for
+    // the real, nested `Unit tests/AI Based/...` output location).
+    class SiblingImportGenerator implements JestTestGenerator {
+      async generateTests(): Promise<GeneratedTestCode> {
+        return {
+          content:
+            `jest.mock('../utils/catchAsync', () => (fn) => fn);\n` +
+            `const { getHealth } = require('./health.controller');\n\n` +
+            `describe('getHealth', () => {\n` +
+            `  it('is a function', () => {\n` +
+            `    expect(typeof getHealth).toBe('function');\n` +
+            `  });\n` +
+            `});\n`,
+        };
+      }
+    }
+
+    const result = await runUnitTestGeneration(
+      repoRoot,
+      { path: 'src/controllers/health.controller.js' },
+      'gemini',
+      new SiblingImportGenerator(),
+    );
+
+    // The real bug: this used to be 0 with a misleading "check testMatch"
+    // error, because the un-rewritten imports made jest fail to even load
+    // the test suite (module not found), registering zero tests.
+    expect(result.testsTotal).toBe(1);
+    expect(result.testsPassed).toBe(1);
+    expect(result.testsFailed).toBe(0);
+  }, 30000);
 
   it('stops before running jest when the signal is already aborted', async () => {
     await writeFile(join(repoRoot, 'a.js'), `export function a() { return 1; }`);

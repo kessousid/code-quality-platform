@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { basename } from 'node:path';
 import type {
   FunctionSignature,
   GeneratedTestCode,
@@ -32,7 +33,10 @@ const requireFromHere = createRequire(import.meta.url);
  */
 export class ScriptJestTestGenerator implements JestTestGenerator {
   async generateTests(input: GenerateTestsInput): Promise<GeneratedTestCode> {
-    const importBase = input.sourceFilePath.replace(/\.[jt]sx?$/, '');
+    // Basename only — this generator's own output assumes it's saved
+    // right next to the source file (docs/adr/0047); the orchestrator
+    // rewrites the actual import to the real output location afterward.
+    const importBase = basename(input.sourceFilePath).replace(/\.[jt]sx?$/, '');
     const mod = this.tryRequireFresh(input.sourceFileAbsolutePath);
 
     const blocks: string[] = [];

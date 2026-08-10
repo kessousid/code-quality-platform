@@ -3,7 +3,7 @@ import type { GenerateTestsInput } from '@cqp/core';
 import { buildPrompt } from './prompt-builder.js';
 
 describe('buildPrompt', () => {
-  it('embeds the source code, function names, and import path derived from the source file path', () => {
+  it('embeds the source code, function names, and a same-directory-as-source import path (docs/adr/0047: rewritten to the real location by a separate step)', () => {
     const input: GenerateTestsInput = {
       sourceFilePath: 'src/math.ts',
       sourceCode: 'export function add(a: number, b: number) { return a + b; }',
@@ -24,7 +24,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('src/math.ts');
     expect(prompt).toContain('export function add(a: number, b: number)');
     expect(prompt).toContain('- add');
-    expect(prompt).toContain("from './src/math'");
+    expect(prompt).toContain("from './math'");
     expect(prompt).toContain('No markdown code fences');
   });
 
