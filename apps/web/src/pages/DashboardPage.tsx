@@ -22,6 +22,12 @@ export function DashboardPage({
   const [localPath, setLocalPath] = useState('');
   const [workerId, setWorkerId] = useState(() => localStorage.getItem(LAST_WORKER_ID_KEY) ?? '');
   const [browsing, setBrowsing] = useState(false);
+  // 'On my computer' runs via your own local worker (docs/adr/0031); 'On
+  // GitHub' skips a local folder entirely — Railway's own worker clones it
+  // fresh at run time instead (docs/adr/0047).
+  const [source, setSource] = useState<'local' | 'github'>('local');
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [accessToken, setAccessToken] = useState('');
 
   function handleWorkerIdChange(value: string) {
     setWorkerId(value);
@@ -35,17 +41,29 @@ export function DashboardPage({
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length === 0) return;
+    if (source === 'github' && remoteUrl.trim().length === 0) return;
     try {
-      await createRepo.mutateAsync({
-        name: name.trim(),
-        ...(localPath.trim().length > 0 ? { localPath: localPath.trim() } : {}),
-        ...(workerId.trim().length > 0 ? { workerId: workerId.trim() } : {}),
-      });
+      await createRepo.mutateAsync(
+        source === 'github'
+          ? {
+              name: name.trim(),
+              provider: 'github',
+              remoteUrl: remoteUrl.trim(),
+              ...(accessToken.trim().length > 0 ? { accessToken: accessToken.trim() } : {}),
+            }
+          : {
+              name: name.trim(),
+              ...(localPath.trim().length > 0 ? { localPath: localPath.trim() } : {}),
+              ...(workerId.trim().length > 0 ? { workerId: workerId.trim() } : {}),
+            },
+      );
     } catch {
       return; // surfaced via createRepo.isError, if the UI grows one
     }
     setName('');
     setLocalPath('');
+    setRemoteUrl('');
+    setAccessToken('');
   }
 
   return (
@@ -81,52 +99,94 @@ export function DashboardPage({
             Add repo
           </button>
         </div>
-        <div className="flex gap-2">
-          <input
-            value={localPath}
-            onChange={(e) => setLocalPath(e.target.value)}
-            placeholder="Local checkout path (e.g. a specific project folder, not a parent of many repos)"
-            className="flex-1 rounded border px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => setBrowsing((b) => !b)}
-            className="rounded border px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            Browse…
-          </button>
+
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-neutral-600">Where does this code live?</span>
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={source === 'local'} onChange={() => setSource('local')} />
+            On my computer
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              checked={source === 'github'}
+              onChange={() => setSource('github')}
+            />
+            On GitHub
+          </label>
         </div>
-        <input
-          value={workerId}
-          onChange={(e) => handleWorkerIdChange(e.target.value)}
-          placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
-          className="w-full rounded border px-3 py-2 text-sm"
-        />
-        {workerId.trim().length === 0 && (
-          <p className="text-xs text-amber-600">
-            No Worker ID set — Browse… and any jobs for this repo will use the shared
-            &quot;default&quot; worker, not this machine. Don&apos;t have a worker running yet?{' '}
-            <a
-              href={USER_GUIDE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:no-underline"
-            >
-              See the setup guide
-            </a>
-            .
-          </p>
-        )}
-        {browsing && (
-          <DirectoryBrowser
-            {...(localPath.trim().length > 0 ? { initialPath: localPath } : {})}
-            workerId={workerId.trim().length > 0 ? workerId.trim() : 'default'}
-            onSelect={(path) => {
-              setLocalPath(path);
-              setBrowsing(false);
-            }}
-            onClose={() => setBrowsing(false)}
-          />
+
+        {source === 'local' ? (
+          <>
+            <div className="flex gap-2">
+              <input
+                value={localPath}
+                onChange={(e) => setLocalPath(e.target.value)}
+                placeholder="Local checkout path (e.g. a specific project folder, not a parent of many repos)"
+                className="flex-1 rounded border px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => setBrowsing((b) => !b)}
+                className="rounded border px-3 py-2 text-sm hover:bg-neutral-50"
+              >
+                Browse…
+              </button>
+            </div>
+            <input
+              value={workerId}
+              onChange={(e) => handleWorkerIdChange(e.target.value)}
+              placeholder="Worker ID (optional — defaults to 'default'; set this to route jobs to a specific machine's worker)"
+              className="w-full rounded border px-3 py-2 text-sm"
+            />
+            {workerId.trim().length === 0 && (
+              <p className="text-xs text-amber-600">
+                No Worker ID set — Browse… and any jobs for this repo will use the shared
+                &quot;default&quot; worker, not this machine. Don&apos;t have a worker running yet?{' '}
+                <a
+                  href={USER_GUIDE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:no-underline"
+                >
+                  See the setup guide
+                </a>
+                .
+              </p>
+            )}
+            {browsing && (
+              <DirectoryBrowser
+                {...(localPath.trim().length > 0 ? { initialPath: localPath } : {})}
+                workerId={workerId.trim().length > 0 ? workerId.trim() : 'default'}
+                onSelect={(path) => {
+                  setLocalPath(path);
+                  setBrowsing(false);
+                }}
+                onClose={() => setBrowsing(false)}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <input
+              value={remoteUrl}
+              onChange={(e) => setRemoteUrl(e.target.value)}
+              placeholder="https://github.com/org/repo.git"
+              className="w-full rounded border px-3 py-2 text-sm"
+            />
+            <input
+              value={accessToken}
+              onChange={(e) => setAccessToken(e.target.value)}
+              type="password"
+              autoComplete="off"
+              placeholder="Personal Access Token (only needed for a private repo)"
+              className="w-full rounded border px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-neutral-500">
+              No folder or worker to set up — a Railway-hosted worker clones this repo fresh each
+              time it runs. The token is encrypted at rest and never shown again after saving.
+            </p>
+          </>
         )}
       </form>
 
@@ -144,12 +204,19 @@ export function DashboardPage({
               {repo.name}
             </Link>
             <div className="text-xs text-neutral-500">
-              {repo.provider} &middot; default branch {repo.defaultBranch} &middot; worker{' '}
-              {repo.workerId}
-              {repo.localPath ? (
-                <> &middot; {repo.localPath}</>
+              {repo.provider} &middot; default branch {repo.defaultBranch}
+              {repo.provider === 'local' ? (
+                <>
+                  {' '}
+                  &middot; worker {repo.workerId}
+                  {repo.localPath ? (
+                    <> &middot; {repo.localPath}</>
+                  ) : (
+                    <> &middot; no local checkout set</>
+                  )}
+                </>
               ) : (
-                <> &middot; no local checkout set</>
+                <> &middot; {repo.remoteUrl ?? 'no remote URL set'}</>
               )}
             </div>
           </li>

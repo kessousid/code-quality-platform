@@ -1,9 +1,11 @@
 import type {
   CoverageFileResultRepository,
   CoverageRunRepository,
+  GitCheckoutProvider,
   RepoRepository,
 } from '@cqp/core';
 import { runCoverageGate, type CoverageProgressEvent } from '@cqp/coverage-engine';
+import { ensureLocalCheckout } from './ensure-local-checkout.js';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 import { CoverageRunNotFoundError } from './get-coverage-run.use-case.js';
 
@@ -22,6 +24,8 @@ export class RunCoverageGateUseCase {
     private readonly coverageRunRepository: CoverageRunRepository,
     private readonly repoRepository: RepoRepository,
     private readonly coverageFileResultRepository: CoverageFileResultRepository,
+    private readonly checkoutProvider: GitCheckoutProvider,
+    private readonly repoTokenDecryptionKey: Buffer,
   ) {}
 
   async execute(orgId: string, runId: string): Promise<void> {
@@ -38,18 +42,6 @@ export class RunCoverageGateUseCase {
       throw new RepoNotFoundError(run.repoId);
     }
 
-    if (repo.provider !== 'local' || repo.localPath === undefined) {
-      await this.coverageRunRepository.updateStatus(
-        orgId,
-        runId,
-        'failed',
-        'Repo has no local checkout to scan.',
-      );
-      throw new Error(
-        `Repo ${repo.id} has no local checkout to run the coverage gate against (provider=${repo.provider}, localPath=${repo.localPath ?? 'unset'})`,
-      );
-    }
-
     await this.coverageRunRepository.updateStatus(orgId, runId, 'running');
 
     const controller = new AbortController();
@@ -57,27 +49,40 @@ export class RunCoverageGateUseCase {
     const onProgress = this.buildProgressHandler(orgId, runId);
 
     try {
-      const result = await runCoverageGate(repo.localPath, run.baseRef, {
-        onProgress,
-        signal: controller.signal,
-      });
+      // docs/adr/0047: `baseRef` is the diff-comparison target inside the
+      // checkout, not what gets checked out — a github/gitlab repo still
+      // just clones its default branch.
+      const { repoRoot, cleanup } = await ensureLocalCheckout(
+        repo,
+        undefined,
+        this.checkoutProvider,
+        this.repoTokenDecryptionKey,
+      );
+      try {
+        const result = await runCoverageGate(repoRoot, run.baseRef, {
+          onProgress,
+          signal: controller.signal,
+        });
 
-      if (controller.signal.aborted) {
-        // Status is already 'cancelled' (CancelCoverageRunUseCase set it) — leave it as-is, skip persisting a partial result.
-        return;
+        if (controller.signal.aborted) {
+          // Status is already 'cancelled' (CancelCoverageRunUseCase set it) — leave it as-is, skip persisting a partial result.
+          return;
+        }
+
+        await this.coverageFileResultRepository.saveMany(runId, result.fileResults);
+        await this.coverageRunRepository.updateResultsSummary(orgId, runId, {
+          testsTotal: result.testsTotal,
+          testsPassed: result.testsPassed,
+          testsFailed: result.testsFailed,
+          changedLinesTotal: result.changedLinesTotal,
+          uncoveredLinesTotal: result.uncoveredLinesTotal,
+          gatePassed: result.gatePassed,
+        });
+
+        await this.coverageRunRepository.updateStatus(orgId, runId, 'completed');
+      } finally {
+        await cleanup();
       }
-
-      await this.coverageFileResultRepository.saveMany(runId, result.fileResults);
-      await this.coverageRunRepository.updateResultsSummary(orgId, runId, {
-        testsTotal: result.testsTotal,
-        testsPassed: result.testsPassed,
-        testsFailed: result.testsFailed,
-        changedLinesTotal: result.changedLinesTotal,
-        uncoveredLinesTotal: result.uncoveredLinesTotal,
-        gatePassed: result.gatePassed,
-      });
-
-      await this.coverageRunRepository.updateStatus(orgId, runId, 'completed');
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);

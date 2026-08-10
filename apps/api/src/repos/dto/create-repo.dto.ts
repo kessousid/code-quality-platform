@@ -42,4 +42,13 @@ export class CreateRepoRequestDto {
   @IsOptional()
   @IsString()
   defaultBranch?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Personal access token for a private github/gitlab repo (see docs/adr/0047) — encrypted at rest, never echoed back in any response.',
+  })
+  @IsOptional()
+  @IsString()
+  accessToken?: string;
 }

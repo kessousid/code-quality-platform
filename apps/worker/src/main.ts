@@ -6,6 +6,8 @@ import {
   scanQueueName,
   unitTestQueueName,
 } from '@cqp/queue';
+import { parseRepoTokenEncryptionKey } from '@cqp/application';
+import { GitCloneCheckoutProvider } from '@cqp/git-checkout';
 import {
   createCoverageWorker,
   createDirectoryBrowseWorker,
@@ -20,6 +22,15 @@ function redisHost(redisUrl: string): string {
   } catch {
     return '(unparseable URL)';
   }
+}
+
+/** Bootstrap-time, not per-job — a missing/malformed key should fail loudly at startup, not silently on the first github/gitlab repo's run (docs/adr/0047). */
+function getRepoTokenEncryptionKey(): Buffer {
+  const value = process.env.REPO_TOKEN_ENCRYPTION_KEY;
+  if (!value) {
+    throw new Error('Missing required env var: REPO_TOKEN_ENCRYPTION_KEY');
+  }
+  return parseRepoTokenEncryptionKey(value);
 }
 
 /**
@@ -37,8 +48,22 @@ async function main(): Promise<void> {
   const workerId = process.env.WORKER_ID ?? 'default';
   const connection = createRedisConnection(redisUrl);
   const prisma = createPrismaClient();
+  // Only ever exercised by a github/gitlab repo (docs/adr/0047) — a 'local'
+  // repo (the common case for a user's own laptop worker) never touches
+  // either of these, so a worker that only ever sees local repos doesn't
+  // strictly need REPO_TOKEN_ENCRYPTION_KEY set... but every worker
+  // (including a laptop one) still requires it, matching ALERT_EMAIL_*'s
+  // fail-loudly-at-boot precedent rather than deferring to first use.
+  const checkoutProvider = new GitCloneCheckoutProvider();
+  const repoTokenDecryptionKey = getRepoTokenEncryptionKey();
 
-  const scanWorker = createScanWorker(connection, prisma, workerId);
+  const scanWorker = createScanWorker(
+    connection,
+    prisma,
+    workerId,
+    checkoutProvider,
+    repoTokenDecryptionKey,
+  );
   scanWorker.on('completed', (job) => {
     console.log(`[worker] scan job ${job.id} (scan ${job.data.scanId}) completed`);
   });
@@ -46,7 +71,13 @@ async function main(): Promise<void> {
     console.error(`[worker] scan job ${job?.id} (scan ${job?.data.scanId}) failed:`, error);
   });
 
-  const unitTestWorker = createUnitTestWorker(connection, prisma, workerId);
+  const unitTestWorker = createUnitTestWorker(
+    connection,
+    prisma,
+    workerId,
+    checkoutProvider,
+    repoTokenDecryptionKey,
+  );
   unitTestWorker.on('completed', (job) => {
     console.log(`[worker] unit-test job ${job.id} (run ${job.data.runId}) completed`);
   });
@@ -54,7 +85,13 @@ async function main(): Promise<void> {
     console.error(`[worker] unit-test job ${job?.id} (run ${job?.data.runId}) failed:`, error);
   });
 
-  const coverageWorker = createCoverageWorker(connection, prisma, workerId);
+  const coverageWorker = createCoverageWorker(
+    connection,
+    prisma,
+    workerId,
+    checkoutProvider,
+    repoTokenDecryptionKey,
+  );
   coverageWorker.on('completed', (job) => {
     console.log(`[worker] coverage job ${job.id} (run ${job.data.runId}) completed`);
   });

@@ -16,6 +16,7 @@ export interface Repo {
   name: string;
   provider: string;
   localPath?: string;
+  remoteUrl?: string;
   workerId: string;
   defaultBranch: string;
   createdAt: string;
@@ -362,15 +363,20 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
 
     if (method === 'POST' && pathname === '/repos') {
       const input = await readJsonBody(req);
+      const provider = input.provider ?? 'local';
       const repo: Repo = {
         id: id('repo'),
         orgId: 'org_1',
         name: input.name ?? '',
-        provider: 'local',
-        workerId: input.workerId ?? 'default',
+        provider,
+        // A github/gitlab repo is always forced to 'default' (docs/adr/0047)
+        // — mirrors CreateRepoUseCase.resolveWorkerId, ignoring any
+        // client-supplied workerId for that provider.
+        workerId: provider === 'local' ? (input.workerId ?? 'default') : 'default',
         defaultBranch: 'main',
         createdAt: new Date().toISOString(),
         ...(input.localPath ? { localPath: input.localPath } : {}),
+        ...(input.remoteUrl ? { remoteUrl: input.remoteUrl } : {}),
       };
       repos.push(repo);
       send(res, 201, repo);
@@ -388,6 +394,21 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
         res,
         repos.find((r) => r.id === repoMatch[1]),
       );
+      return;
+    }
+
+    const repoAccessTokenMatch = pathname.match(/^\/repos\/([^/]+)\/access-token$/);
+    if (method === 'PUT' && repoAccessTokenMatch) {
+      const repo = repos.find((r) => r.id === repoAccessTokenMatch[1]);
+      if (!repo) {
+        send(res, 404, { message: 'Repo not found' });
+        return;
+      }
+      // Real API never echoes back the ciphertext either (docs/adr/0047) —
+      // this fixture doesn't even bother persisting the token, since no
+      // test needs to observe it.
+      await readJsonBody(req);
+      send(res, 200, repo);
       return;
     }
 

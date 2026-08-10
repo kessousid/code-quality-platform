@@ -4,6 +4,7 @@ import type {
   BrowseDirectoryRequest,
   BrowseDirectoryResult,
   CoverageJobData,
+  GitCheckoutProvider,
   ScanJobData,
   UnitTestJobData,
 } from '@cqp/core';
@@ -49,10 +50,12 @@ export function createScanWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
   workerId: string,
+  checkoutProvider: GitCheckoutProvider,
+  repoTokenDecryptionKey: Buffer,
 ): Worker<ScanJobData> {
   return createScanBullWorker(
     connection,
-    async (job) => processRunScanJob(prisma, job.data),
+    async (job) => processRunScanJob(prisma, job.data, checkoutProvider, repoTokenDecryptionKey),
     workerId,
   );
 }
@@ -62,10 +65,13 @@ export function createUnitTestWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
   workerId: string,
+  checkoutProvider: GitCheckoutProvider,
+  repoTokenDecryptionKey: Buffer,
 ): Worker<UnitTestJobData> {
   return createUnitTestBullWorker(
     connection,
-    async (job) => processRunUnitTestGenerationJob(prisma, job.data),
+    async (job) =>
+      processRunUnitTestGenerationJob(prisma, job.data, checkoutProvider, repoTokenDecryptionKey),
     workerId,
   );
 }
@@ -75,10 +81,13 @@ export function createCoverageWorker(
   connection: ConnectionOptions,
   prisma: PrismaClient,
   workerId: string,
+  checkoutProvider: GitCheckoutProvider,
+  repoTokenDecryptionKey: Buffer,
 ): Worker<CoverageJobData> {
   return createCoverageBullWorker(
     connection,
-    async (job) => processRunCoverageGateJob(prisma, job.data),
+    async (job) =>
+      processRunCoverageGateJob(prisma, job.data, checkoutProvider, repoTokenDecryptionKey),
     workerId,
   );
 }

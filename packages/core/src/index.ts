@@ -3,6 +3,7 @@ export * from './plugin.js';
 export * from './scan.js';
 export * from './pagination.js';
 export * from './repo.js';
+export * from './git-checkout.js';
 export * from './report.js';
 export * from './api-token.js';
 export * from './object-storage.js';

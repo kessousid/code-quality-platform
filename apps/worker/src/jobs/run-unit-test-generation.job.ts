@@ -1,4 +1,9 @@
-import type { JestTestGenerator, TestGeneratorType, UnitTestJobData } from '@cqp/core';
+import type {
+  GitCheckoutProvider,
+  JestTestGenerator,
+  TestGeneratorType,
+  UnitTestJobData,
+} from '@cqp/core';
 import type { PrismaClient } from '@cqp/db';
 import {
   PrismaGeneratedTestFileRepository,
@@ -18,10 +23,14 @@ import { ScriptJestTestGenerator } from '@cqp/script-test-generator';
  * constructs `GeminiJestTestGenerator`/`ScriptJestTestGenerator`. Which
  * one actually runs is the persisted run's own choice (docs/adr/0026),
  * not fixed here — both are always constructed, and the use case picks.
+ * `checkoutProvider`/`repoTokenDecryptionKey` are for a github/gitlab repo
+ * (docs/adr/0047) — a no-op for the far more common 'local' repo case.
  */
 export async function processRunUnitTestGenerationJob(
   prisma: PrismaClient,
   data: UnitTestJobData,
+  checkoutProvider: GitCheckoutProvider,
+  repoTokenDecryptionKey: Buffer,
 ): Promise<void> {
   const unitTestRunRepository = new PrismaUnitTestRunRepository(prisma);
   const repoRepository = new PrismaRepoRepository(prisma);
@@ -42,6 +51,8 @@ export async function processRunUnitTestGenerationJob(
     generatedTestFileRepository,
     testCaseResultRepository,
     generators,
+    checkoutProvider,
+    repoTokenDecryptionKey,
   );
   await useCase.execute(data.orgId, data.runId);
 }

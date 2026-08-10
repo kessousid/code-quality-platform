@@ -1,6 +1,7 @@
 import type {
   Finding,
   FindingRepository,
+  GitCheckoutProvider,
   RepoRepository,
   Scan,
   ScanRepository,
@@ -15,6 +16,7 @@ import {
   type ScanProgressEvent,
 } from '@cqp/scan-engine';
 import { computeFingerprint } from '@cqp/correlation';
+import { ensureLocalCheckout } from './ensure-local-checkout.js';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 import { ScanNotFoundError } from './get-scan.use-case.js';
 
@@ -35,6 +37,8 @@ export class RunScanUseCase {
     private readonly scanRepository: ScanRepository,
     private readonly repoRepository: RepoRepository,
     private readonly findingRepository: FindingRepository,
+    private readonly checkoutProvider: GitCheckoutProvider,
+    private readonly repoTokenDecryptionKey: Buffer,
     private readonly timeoutMsPerPlugin: number = DEFAULT_TIMEOUT_MS_PER_PLUGIN,
   ) {}
 
@@ -55,16 +59,6 @@ export class RunScanUseCase {
       throw new RepoNotFoundError(scan.repoId);
     }
 
-    if (repo.provider !== 'local' || repo.localPath === undefined) {
-      // No cloning mechanism exists yet (ADR-0003) — a repo without a
-      // real local checkout is not scannable, and that has to fail
-      // loudly, not be silently skipped.
-      await this.scanRepository.updateStatus(orgId, scanId, 'failed');
-      throw new Error(
-        `Repo ${repo.id} has no local checkout to scan (provider=${repo.provider}, localPath=${repo.localPath ?? 'unset'})`,
-      );
-    }
-
     await this.scanRepository.updateStatus(orgId, scanId, 'running');
 
     const plugins = this.selectPlugins(scan.categories);
@@ -73,24 +67,38 @@ export class RunScanUseCase {
     const onProgress = this.buildProgressHandler(orgId, scanId);
 
     try {
-      const target = await this.resolveTarget(orgId, repo.localPath, scan);
-
-      const { findings, pluginStatuses } = await runScan(
-        plugins,
-        { scanId, orgId, repoId: repo.id, target },
-        { timeoutMsPerPlugin: this.timeoutMsPerPlugin, onProgress, signal: controller.signal },
+      // docs/adr/0047: for a 'local' repo this is today's exact guard,
+      // just relocated (same error/message) — for github/gitlab it clones
+      // fresh. Either way `cleanup()` below always removes whatever was
+      // materialized, or is a no-op for the local case.
+      const { repoRoot, cleanup } = await ensureLocalCheckout(
+        repo,
+        scan.ref,
+        this.checkoutProvider,
+        this.repoTokenDecryptionKey,
       );
+      try {
+        const target = await this.resolveTarget(orgId, repoRoot, scan);
 
-      if (controller.signal.aborted) {
-        // Status is already 'cancelled' (CancelScanUseCase set it) — leave
-        // it as-is and skip persisting a partial/inconsistent finding set.
-        return;
+        const { findings, pluginStatuses } = await runScan(
+          plugins,
+          { scanId, orgId, repoId: repo.id, target },
+          { timeoutMsPerPlugin: this.timeoutMsPerPlugin, onProgress, signal: controller.signal },
+        );
+
+        if (controller.signal.aborted) {
+          // Status is already 'cancelled' (CancelScanUseCase set it) — leave
+          // it as-is and skip persisting a partial/inconsistent finding set.
+          return;
+        }
+
+        this.logFailedPlugins(scanId, pluginStatuses);
+        await this.persistFindings(orgId, repo.id, scanId, findings);
+
+        await this.scanRepository.updateStatus(orgId, scanId, 'completed');
+      } finally {
+        await cleanup();
       }
-
-      this.logFailedPlugins(scanId, pluginStatuses);
-      await this.persistFindings(orgId, repo.id, scanId, findings);
-
-      await this.scanRepository.updateStatus(orgId, scanId, 'completed');
     } catch (error) {
       if (!controller.signal.aborted) {
         await this.scanRepository.updateStatus(orgId, scanId, 'failed');

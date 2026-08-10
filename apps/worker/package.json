@@ -17,6 +17,7 @@
     "@cqp/application": "workspace:*",
     "@cqp/queue": "workspace:*",
     "@cqp/filesystem-browser": "workspace:*",
+    "@cqp/git-checkout": "workspace:*",
     "@cqp/gemini-test-generator": "workspace:*",
     "@cqp/script-test-generator": "workspace:*",
     "bullmq": "^5.34.0"

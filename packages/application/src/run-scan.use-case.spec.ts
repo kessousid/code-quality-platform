@@ -1,12 +1,16 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  FakeGitCheckoutProvider,
   InMemoryFindingRepository,
   InMemoryRepoRepository,
   InMemoryScanRepository,
 } from './testing/index.js';
 import { RunScanUseCase } from './run-scan.use-case.js';
+
+const REPO_TOKEN_KEY = randomBytes(32);
 
 /**
  * Real end to end (see docs/adr/0021): the actual Phase 7 worker-thread
@@ -30,7 +34,13 @@ async function setUp() {
     name: 'sample-repo',
     localPath: sampleRepoRoot,
   });
-  const useCase = new RunScanUseCase(scanRepository, repoRepository, findingRepository);
+  const useCase = new RunScanUseCase(
+    scanRepository,
+    repoRepository,
+    findingRepository,
+    new FakeGitCheckoutProvider(),
+    REPO_TOKEN_KEY,
+  );
 
   return { repo, repoRepository, scanRepository, findingRepository, useCase };
 }
@@ -100,7 +110,13 @@ describe('RunScanUseCase', () => {
     const scanRepository = new InMemoryScanRepository();
     const repoRepository = new InMemoryRepoRepository();
     const findingRepository = new InMemoryFindingRepository();
-    const useCase = new RunScanUseCase(scanRepository, repoRepository, findingRepository);
+    const useCase = new RunScanUseCase(
+      scanRepository,
+      repoRepository,
+      findingRepository,
+      new FakeGitCheckoutProvider(),
+      REPO_TOKEN_KEY,
+    );
 
     // Scan referencing a repo that was never created.
     const scan = await scanRepository.create({
@@ -116,7 +132,13 @@ describe('RunScanUseCase', () => {
     const repoRepository = new InMemoryRepoRepository();
     const scanRepository = new InMemoryScanRepository();
     const findingRepository = new InMemoryFindingRepository();
-    const useCase = new RunScanUseCase(scanRepository, repoRepository, findingRepository);
+    const useCase = new RunScanUseCase(
+      scanRepository,
+      repoRepository,
+      findingRepository,
+      new FakeGitCheckoutProvider(),
+      REPO_TOKEN_KEY,
+    );
 
     const repo = await repoRepository.create({ orgId: 'org_1', name: 'no-checkout' }); // no localPath
     const scan = await scanRepository.create({
@@ -128,6 +150,42 @@ describe('RunScanUseCase', () => {
 
     await expect(useCase.execute('org_1', scan.id)).rejects.toThrow('no local checkout');
 
+    const failed = await scanRepository.findById('org_1', scan.id);
+    expect(failed?.status).toBe('failed');
+  });
+
+  it('clones a github repo via the checkout provider and always cleans up, even on failure', async () => {
+    const repoRepository = new InMemoryRepoRepository();
+    const scanRepository = new InMemoryScanRepository();
+    const findingRepository = new InMemoryFindingRepository();
+    const checkoutProvider = new FakeGitCheckoutProvider();
+    checkoutProvider.error = new Error('git clone exited with code 128');
+    const useCase = new RunScanUseCase(
+      scanRepository,
+      repoRepository,
+      findingRepository,
+      checkoutProvider,
+      REPO_TOKEN_KEY,
+    );
+    const repo = await repoRepository.create({
+      orgId: 'org_1',
+      name: 'private-repo',
+      provider: 'github',
+      remoteUrl: 'https://github.com/org/private-repo.git',
+    });
+    const scan = await scanRepository.create({
+      orgId: 'org_1',
+      repoId: repo.id,
+      ref: 'main',
+      mode: 'full',
+    });
+
+    await expect(useCase.execute('org_1', scan.id)).rejects.toThrow('git clone exited');
+
+    expect(checkoutProvider.checkoutCalls).toHaveLength(1);
+    // Nothing to clean up — checkoutProvider itself threw before returning
+    // a checkout, so there's no cleanup callback to have called.
+    expect(checkoutProvider.cleanupCalls).toBe(0);
     const failed = await scanRepository.findById('org_1', scan.id);
     expect(failed?.status).toBe('failed');
   });

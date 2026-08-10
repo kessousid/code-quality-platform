@@ -48,6 +48,27 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/C:\\repos\\brand-new-repo/)).toBeInTheDocument();
   });
 
+  it('creates a github repo via the toggle, with no local folder or worker involved (docs/adr/0047)', async () => {
+    renderWithProviders(<DashboardPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('New repo name'), 'cloned-repo');
+    await user.click(screen.getByRole('radio', { name: 'On GitHub' }));
+    await user.type(
+      screen.getByPlaceholderText('https://github.com/org/repo.git'),
+      'https://github.com/org/cloned-repo.git',
+    );
+    await user.type(screen.getByPlaceholderText(/Personal Access Token/), 'ghp_realtoken1234');
+    await user.click(screen.getByRole('button', { name: 'Add repo' }));
+
+    await waitFor(() => expect(screen.getByText('cloned-repo')).toBeInTheDocument());
+    const created = server.repos.find((r) => r.name === 'cloned-repo');
+    expect(created?.provider).toBe('github');
+    expect(created?.remoteUrl).toBe('https://github.com/org/cloned-repo.git');
+    expect(created?.workerId).toBe('default');
+    expect(screen.getByText(/https:\/\/github\.com\/org\/cloned-repo\.git/)).toBeInTheDocument();
+  });
+
   it('picks a local checkout path through the real GET /fs/browse endpoint', async () => {
     server.directories.set('C:\\projects', {
       path: 'C:\\projects',

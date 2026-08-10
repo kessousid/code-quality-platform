@@ -52,9 +52,25 @@ export function useRepo(repoId: string | undefined) {
 export function useCreateRepo() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: Pick<CreateRepoInput, 'name' | 'localPath' | 'workerId'>) =>
-      apiPost<Repo>('/repos', input),
+    mutationFn: (
+      input: Pick<CreateRepoInput, 'name' | 'localPath' | 'workerId' | 'provider' | 'remoteUrl'> & {
+        accessToken?: string;
+      },
+    ) => apiPost<Repo>('/repos', input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['repos'] }),
+  });
+}
+
+/** Rotates or clears a github/gitlab repo's PAT after creation (docs/adr/0047) — without recreating the repo. */
+export function useUpdateRepoAccessToken(repoId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (accessToken: string | null) =>
+      apiPut<Repo>(`/repos/${repoId}/access-token`, { accessToken }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['repo', repoId] });
+      void queryClient.invalidateQueries({ queryKey: ['repos'] });
+    },
   });
 }
 

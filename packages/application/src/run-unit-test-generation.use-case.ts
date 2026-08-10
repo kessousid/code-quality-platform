@@ -1,5 +1,6 @@
 import type {
   GeneratedTestFileRepository,
+  GitCheckoutProvider,
   JestTestGenerator,
   RepoRepository,
   TestCaseResultRepository,
@@ -7,6 +8,7 @@ import type {
   UnitTestRunRepository,
 } from '@cqp/core';
 import { runUnitTestGeneration, type UnitTestProgressEvent } from '@cqp/unit-test-engine';
+import { ensureLocalCheckout } from './ensure-local-checkout.js';
 import { RepoNotFoundError } from './get-repo.use-case.js';
 import { UnitTestRunNotFoundError } from './get-unit-test-run.use-case.js';
 
@@ -34,6 +36,8 @@ export class RunUnitTestGenerationUseCase {
     private readonly generatedTestFileRepository: GeneratedTestFileRepository,
     private readonly testCaseResultRepository: TestCaseResultRepository,
     private readonly generators: Record<TestGeneratorType, JestTestGenerator>,
+    private readonly checkoutProvider: GitCheckoutProvider,
+    private readonly repoTokenDecryptionKey: Buffer,
   ) {}
 
   async execute(orgId: string, runId: string): Promise<void> {
@@ -50,18 +54,6 @@ export class RunUnitTestGenerationUseCase {
       throw new RepoNotFoundError(run.repoId);
     }
 
-    if (repo.provider !== 'local' || repo.localPath === undefined) {
-      await this.unitTestRunRepository.updateStatus(
-        orgId,
-        runId,
-        'failed',
-        'Repo has no local checkout to scan.',
-      );
-      throw new Error(
-        `Repo ${repo.id} has no local checkout to generate tests against (provider=${repo.provider}, localPath=${repo.localPath ?? 'unset'})`,
-      );
-    }
-
     await this.unitTestRunRepository.updateStatus(orgId, runId, 'running');
 
     const controller = new AbortController();
@@ -69,29 +61,38 @@ export class RunUnitTestGenerationUseCase {
     const onProgress = this.buildProgressHandler(orgId, runId);
 
     try {
-      const generator = this.generators[run.generator];
-      const result = await runUnitTestGeneration(
-        repo.localPath,
-        run.target,
-        run.generator,
-        generator,
-        { onProgress, signal: controller.signal },
+      // docs/adr/0047: no branch/ref concept for a unit-test run — a
+      // github/gitlab repo clones its default branch.
+      const { repoRoot, cleanup } = await ensureLocalCheckout(
+        repo,
+        undefined,
+        this.checkoutProvider,
+        this.repoTokenDecryptionKey,
       );
+      try {
+        const generator = this.generators[run.generator];
+        const result = await runUnitTestGeneration(repoRoot, run.target, run.generator, generator, {
+          onProgress,
+          signal: controller.signal,
+        });
 
-      if (controller.signal.aborted) {
-        // Status is already 'cancelled' (CancelUnitTestRunUseCase set it) — leave it as-is, skip persisting a partial result.
-        return;
+        if (controller.signal.aborted) {
+          // Status is already 'cancelled' (CancelUnitTestRunUseCase set it) — leave it as-is, skip persisting a partial result.
+          return;
+        }
+
+        await this.generatedTestFileRepository.saveMany(runId, result.generatedFiles);
+        await this.testCaseResultRepository.saveMany(runId, result.testResults);
+        await this.unitTestRunRepository.updateResultsSummary(orgId, runId, {
+          testsTotal: result.testsTotal,
+          testsPassed: result.testsPassed,
+          testsFailed: result.testsFailed,
+        });
+
+        await this.unitTestRunRepository.updateStatus(orgId, runId, 'completed');
+      } finally {
+        await cleanup();
       }
-
-      await this.generatedTestFileRepository.saveMany(runId, result.generatedFiles);
-      await this.testCaseResultRepository.saveMany(runId, result.testResults);
-      await this.unitTestRunRepository.updateResultsSummary(orgId, runId, {
-        testsTotal: result.testsTotal,
-        testsPassed: result.testsPassed,
-        testsFailed: result.testsFailed,
-      });
-
-      await this.unitTestRunRepository.updateStatus(orgId, runId, 'completed');
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);

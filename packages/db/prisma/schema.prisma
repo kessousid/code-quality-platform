@@ -264,10 +264,15 @@ model Repo {
   provider      RepoProvider @default(LOCAL)
   remoteUrl     String?
   /// Absolute path on the worker's filesystem — see docs/adr/0021. Only a
-  /// `local` repo with this set is actually scannable; no cloning exists yet.
+  /// `local` repo with this set is actually scannable via a pre-existing
+  /// checkout; a github/gitlab repo instead gets a fresh clone at run time
+  /// (docs/adr/0047).
   localPath     String?
+  /// Opaque ciphertext (AES-256-GCM) — never the raw PAT. See docs/adr/0047.
+  encryptedAccessToken String?
   /// Which worker instance's filesystem localPath lives on — see docs/adr/0031. Routes every job for
   /// this repo to a queue only that worker consumes. Defaults to 'default' (the single-machine setup).
+  /// A github/gitlab repo is always forced to 'default' (docs/adr/0047).
   workerId      String       @default("default")
   defaultBranch String       @default("main")
   createdAt     DateTime     @default(now())

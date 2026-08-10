@@ -21,8 +21,28 @@ export class InMemoryRepoRepository implements RepoRepository {
       createdAt: new Date(),
       ...(input.remoteUrl !== undefined ? { remoteUrl: input.remoteUrl } : {}),
       ...(input.localPath !== undefined ? { localPath: input.localPath } : {}),
+      ...(input.encryptedAccessToken !== undefined
+        ? { encryptedAccessToken: input.encryptedAccessToken }
+        : {}),
     };
     this.repos.set(repo.id, repo);
+    return repo;
+  }
+
+  async updateAccessToken(
+    orgId: string,
+    id: string,
+    encryptedAccessToken: string | null,
+  ): Promise<Repo> {
+    const repo = this.repos.get(id);
+    if (!repo || repo.orgId !== orgId) {
+      throw new Error(`Repo not found: ${id}`);
+    }
+    if (encryptedAccessToken === null) {
+      delete repo.encryptedAccessToken;
+    } else {
+      repo.encryptedAccessToken = encryptedAccessToken;
+    }
     return repo;
   }
 

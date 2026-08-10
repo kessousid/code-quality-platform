@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { randomBytes } from 'node:crypto';
 import {
+  FakeGitCheckoutProvider,
   InMemoryCoverageFileResultRepository,
   InMemoryCoverageRunRepository,
   InMemoryRepoRepository,
@@ -13,6 +15,7 @@ import {
 import { RunCoverageGateUseCase } from './run-coverage-gate.use-case.js';
 
 const execFileAsync = promisify(execFile);
+const REPO_TOKEN_KEY = randomBytes(32);
 
 /**
  * Real end to end (project convention: no mocking) — a real git repo, a
@@ -31,13 +34,22 @@ async function setUp() {
   const coverageRunRepository = new InMemoryCoverageRunRepository();
   const coverageFileResultRepository = new InMemoryCoverageFileResultRepository();
 
+  const checkoutProvider = new FakeGitCheckoutProvider();
   const useCase = new RunCoverageGateUseCase(
     coverageRunRepository,
     repoRepository,
     coverageFileResultRepository,
+    checkoutProvider,
+    REPO_TOKEN_KEY,
   );
 
-  return { repoRepository, coverageRunRepository, coverageFileResultRepository, useCase };
+  return {
+    repoRepository,
+    coverageRunRepository,
+    coverageFileResultRepository,
+    checkoutProvider,
+    useCase,
+  };
 }
 
 describe('RunCoverageGateUseCase', () => {
@@ -148,6 +160,27 @@ describe('RunCoverageGateUseCase', () => {
     expect(failed?.status).toBe('failed');
     expect(failed?.errorMessage).toBeTruthy();
   });
+
+  it('cleans up the checkout after a github repo run', async () => {
+    const { repoRepository, coverageRunRepository, checkoutProvider, useCase } = await setUp();
+    checkoutProvider.repoRoot = repoRoot;
+    const repo = await repoRepository.create({
+      orgId: 'org_1',
+      name: 'demo',
+      provider: 'github',
+      remoteUrl: 'https://github.com/org/demo.git',
+    });
+    const run = await coverageRunRepository.create({
+      orgId: 'org_1',
+      repoId: repo.id,
+      baseRef: 'main',
+    });
+
+    await useCase.execute('org_1', run.id);
+
+    expect(checkoutProvider.checkoutCalls).toHaveLength(1);
+    expect(checkoutProvider.cleanupCalls).toBe(1);
+  }, 30000);
 
   it('never starts a run that was already cancelled while queued', async () => {
     const { repoRepository, coverageRunRepository, useCase } = await setUp();

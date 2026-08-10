@@ -3,7 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import {
+  FakeGitCheckoutProvider,
   FakeJestTestGenerator,
   InMemoryGeneratedTestFileRepository,
   InMemoryRepoRepository,
@@ -11,6 +13,8 @@ import {
   InMemoryUnitTestRunRepository,
 } from './testing/index.js';
 import { RunUnitTestGenerationUseCase } from './run-unit-test-generation.use-case.js';
+
+const REPO_TOKEN_KEY = randomBytes(32);
 
 /**
  * Real end to end, same philosophy as run-scan.use-case.spec.ts (docs/adr/0021):
@@ -34,12 +38,15 @@ async function setUp() {
   const generator = new FakeJestTestGenerator();
   const scriptGenerator = new FakeJestTestGenerator();
 
+  const checkoutProvider = new FakeGitCheckoutProvider();
   const useCase = new RunUnitTestGenerationUseCase(
     unitTestRunRepository,
     repoRepository,
     generatedTestFileRepository,
     testCaseResultRepository,
     { gemini: generator, script: scriptGenerator },
+    checkoutProvider,
+    REPO_TOKEN_KEY,
   );
 
   return {
@@ -49,6 +56,7 @@ async function setUp() {
     testCaseResultRepository,
     generator,
     scriptGenerator,
+    checkoutProvider,
     useCase,
   };
 }
@@ -169,6 +177,31 @@ describe('RunUnitTestGenerationUseCase', () => {
     const failed = await unitTestRunRepository.findById('org_1', run.id);
     expect(failed?.status).toBe('failed');
   });
+
+  it('cleans up the checkout after a github repo run, on both success and failure', async () => {
+    const { repoRepository, unitTestRunRepository, checkoutProvider, useCase } = await setUp();
+    checkoutProvider.repoRoot = repoRoot;
+    const repo = await repoRepository.create({
+      orgId: 'org_1',
+      name: 'demo',
+      provider: 'github',
+      remoteUrl: 'https://github.com/org/demo.git',
+    });
+    await writeFile(
+      join(repoRoot, 'greet.js'),
+      `export function greet(name) { return 'hello ' + name; }`,
+    );
+    const run = await unitTestRunRepository.create({
+      orgId: 'org_1',
+      repoId: repo.id,
+      target: { path: 'greet.js' },
+    });
+
+    await useCase.execute('org_1', run.id);
+
+    expect(checkoutProvider.checkoutCalls).toHaveLength(1);
+    expect(checkoutProvider.cleanupCalls).toBe(1);
+  }, 30000);
 
   it('never starts a run that was already cancelled while queued', async () => {
     const { repoRepository, unitTestRunRepository, generator, useCase } = await setUp();

@@ -369,4 +369,53 @@ describe('RepoDetailPage', () => {
     ).not.toBeInTheDocument();
     expect(screen.getAllByText(/Generate unit tests/).length).toBeGreaterThan(0);
   });
+
+  it('shows the access token section only for a github/gitlab repo, not a local one', async () => {
+    server.repos.push({
+      id: 'repo_github',
+      orgId: 'org_1',
+      name: 'cloned-repo',
+      provider: 'github',
+      remoteUrl: 'https://github.com/org/cloned-repo.git',
+      workerId: 'default',
+      defaultBranch: 'main',
+      createdAt: new Date().toISOString(),
+    });
+
+    renderWithProviders(<RepoDetailPage />, { route: '/repos/repo_1', path: '/repos/:repoId' });
+    await waitFor(() => expect(screen.getByText('demo-repo')).toBeInTheDocument());
+    expect(screen.queryByText('Access token')).not.toBeInTheDocument();
+
+    renderWithProviders(<RepoDetailPage />, {
+      route: '/repos/repo_github',
+      path: '/repos/:repoId',
+    });
+    await waitFor(() => expect(screen.getAllByText('cloned-repo')[0]).toBeInTheDocument());
+    expect(screen.getByText('Access token')).toBeInTheDocument();
+  });
+
+  it('rotates an access token through the real PUT /repos/:id/access-token endpoint', async () => {
+    server.repos.push({
+      id: 'repo_github',
+      orgId: 'org_1',
+      name: 'cloned-repo',
+      provider: 'github',
+      remoteUrl: 'https://github.com/org/cloned-repo.git',
+      workerId: 'default',
+      defaultBranch: 'main',
+      createdAt: new Date().toISOString(),
+    });
+
+    renderWithProviders(<RepoDetailPage />, {
+      route: '/repos/repo_github',
+      path: '/repos/:repoId',
+    });
+    await waitFor(() => expect(screen.getByText('Access token')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('New Personal Access Token'), 'ghp_newtoken1234');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.getByText('Access token updated.')).toBeInTheDocument());
+  });
 });

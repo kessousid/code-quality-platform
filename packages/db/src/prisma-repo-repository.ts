@@ -19,6 +19,7 @@ export class PrismaRepoRepository implements RepoRepository {
         provider: repoProviderToDb(input.provider ?? 'local'),
         remoteUrl: input.remoteUrl ?? null,
         localPath: input.localPath ?? null,
+        encryptedAccessToken: input.encryptedAccessToken ?? null,
         workerId: input.workerId ?? 'default',
         defaultBranch: input.defaultBranch ?? 'main',
       },
@@ -51,6 +52,22 @@ export class PrismaRepoRepository implements RepoRepository {
     };
   }
 
+  async updateAccessToken(
+    orgId: string,
+    id: string,
+    encryptedAccessToken: string | null,
+  ): Promise<Repo> {
+    const existing = await this.prisma.repo.findFirst({ where: { id, orgId } });
+    if (!existing) {
+      throw new Error(`Repo not found: ${id}`);
+    }
+    const row = await this.prisma.repo.update({
+      where: { id },
+      data: { encryptedAccessToken },
+    });
+    return this.toDomain(row);
+  }
+
   private toDomain(row: {
     id: string;
     orgId: string;
@@ -58,6 +75,7 @@ export class PrismaRepoRepository implements RepoRepository {
     provider: Parameters<typeof repoProviderFromDb>[0];
     remoteUrl: string | null;
     localPath: string | null;
+    encryptedAccessToken: string | null;
     workerId: string;
     defaultBranch: string;
     createdAt: Date;
@@ -72,6 +90,9 @@ export class PrismaRepoRepository implements RepoRepository {
       createdAt: row.createdAt,
       ...(row.remoteUrl !== null ? { remoteUrl: row.remoteUrl } : {}),
       ...(row.localPath !== null ? { localPath: row.localPath } : {}),
+      ...(row.encryptedAccessToken !== null
+        ? { encryptedAccessToken: row.encryptedAccessToken }
+        : {}),
     };
   }
 }

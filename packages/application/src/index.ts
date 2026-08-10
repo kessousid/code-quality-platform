@@ -1,6 +1,7 @@
 export * from './create-scan.use-case.js';
 export * from './get-scan.use-case.js';
 export * from './create-repo.use-case.js';
+export * from './update-repo-access-token.use-case.js';
 export * from './get-repo.use-case.js';
 export * from './list-repos.use-case.js';
 export * from './list-findings.use-case.js';
@@ -19,6 +20,8 @@ export * from './validate-api-token.use-case.js';
 export * from './create-api-token.use-case.js';
 export * from './curatal-domain.js';
 export * from './password-hash.js';
+export * from './repo-token-cipher.js';
+export * from './ensure-local-checkout.js';
 export * from './signup.use-case.js';
 export * from './verify-email.use-case.js';
 export * from './login.use-case.js';

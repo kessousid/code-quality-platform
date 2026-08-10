@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -53,12 +54,15 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
   const rawToken = 'cqp_dashboard_flow_token';
   const findingRepository = new InMemoryFindingRepository();
   const originalWebBaseUrl = process.env.WEB_BASE_URL;
+  const originalRepoTokenEncryptionKey = process.env.REPO_TOKEN_ENCRYPTION_KEY;
 
   beforeAll(async () => {
     // Read directly by AuthController's constructor (docs/adr/0041) — real
     // Postgres/Redis are already avoided below via provider overrides, this
     // is the same idea for the one plain env var that isn't a DI token.
     process.env.WEB_BASE_URL = 'https://e2e.example.com';
+    // Read directly by RepoModule's provider factories (docs/adr/0047) — same reasoning.
+    process.env.REPO_TOKEN_ENCRYPTION_KEY = randomBytes(32).toString('base64');
 
     const tokenRepository = new InMemoryApiTokenRepository();
     await tokenRepository.create({
@@ -105,6 +109,11 @@ describe('Dashboard flow (e2e, in-memory repositories)', () => {
       delete process.env.WEB_BASE_URL;
     } else {
       process.env.WEB_BASE_URL = originalWebBaseUrl;
+    }
+    if (originalRepoTokenEncryptionKey === undefined) {
+      delete process.env.REPO_TOKEN_ENCRYPTION_KEY;
+    } else {
+      process.env.REPO_TOKEN_ENCRYPTION_KEY = originalRepoTokenEncryptionKey;
     }
   });
 
