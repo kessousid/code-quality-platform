@@ -166,6 +166,11 @@ written.
   flow. GitLab stays enum-only; `GitCloneCheckoutProvider` is generic
   enough (raw git URL + optional token) to support it later with no
   redesign.
+- `apps/worker`'s Docker image only ever installed `openssl` (for
+  Prisma) — a live scan against a real public repo failed immediately
+  with `ToolNotFoundError: git not found` until `git` was added
+  alongside it. Caught during this ADR's own deployment verification,
+  not in advance; fixed in the same rollout.
 - This platform still never _pushes_ anything — the clone is read-only,
   torn down after each run, exactly like the staging test runner's own
   checkout.
