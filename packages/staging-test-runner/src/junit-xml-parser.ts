@@ -86,12 +86,15 @@ export function parseJunitXml(xml: string): StagingTestResult[] {
           details: firstMessage(errors) || 'Test errored (no message recorded).',
         });
       } else if (skipped.length > 0) {
-        // Not a real failure — recorded as passed so a skipped test never
-        // triggers a false alert, but the detail still says it was skipped.
+        // Per the user: a skipped test is not a pass — counted (and
+        // alerted on) as a failure, same as a real FAILED/ERROR outcome.
+        // The `SKIPPED:` detail prefix is what the reporting layer keys
+        // off of to break it out into its own section instead of trying
+        // to classify it as a real traceback (docs/adr/0036).
         results.push({
           testId,
           testName: name,
-          passed: true,
+          passed: false,
           details: `SKIPPED: ${firstMessage(skipped) || 'no reason recorded'}`,
         });
       } else {

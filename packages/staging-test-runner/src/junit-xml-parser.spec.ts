@@ -46,8 +46,9 @@ describe('parseJunitXml', () => {
     expect(errored?.passed).toBe(false);
     expect(errored?.details).toContain('TimeoutError: locator not found');
 
+    // Per the user: a skip is counted as a failure, not a pass.
     const skipped = results.find((r) => r.testId.endsWith('test_mentor_calendar_sync'));
-    expect(skipped?.passed).toBe(true);
+    expect(skipped?.passed).toBe(false);
     expect(skipped?.details).toBe('SKIPPED: requires calendar integration credentials');
   });
 

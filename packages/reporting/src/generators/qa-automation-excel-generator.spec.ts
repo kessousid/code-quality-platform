@@ -33,15 +33,28 @@ describe('ExcelQaAutomationReportGenerator', () => {
     expect(testResults!.rowCount).toBeGreaterThan(1);
   });
 
-  it('counts a skipped test as its own bucket, not as a Pass, in the Summary sheet', async () => {
+  it('counts a skipped test as a Failed, not a Pass, in the Summary sheet, with its own Skipped breakout', async () => {
+    // Per the user: a skip is stamped passed=false by the JUnit parser
+    // (docs/adr/0036) — not a genuine pass.
     const results = [
-      makeQaAutomationTestResult({ id: 'r1', passed: true, details: 'Passed.' }),
+      makeQaAutomationTestResult({
+        id: 'r1',
+        testId: 'test-pass',
+        passed: true,
+        details: 'Passed.',
+      }),
       makeQaAutomationTestResult({
         id: 'r2',
-        passed: true,
+        testId: 'test-skip',
+        passed: false,
         details: 'SKIPPED: 404 in this environment',
       }),
-      makeQaAutomationTestResult({ id: 'r3', passed: false, details: 'AssertionError: nope' }),
+      makeQaAutomationTestResult({
+        id: 'r3',
+        testId: 'test-fail',
+        passed: false,
+        details: 'AssertionError: nope',
+      }),
     ];
     const model = buildQaAutomationReportModel(makeQaAutomationRun(), results);
     const buffer = await new ExcelQaAutomationReportGenerator().generate(model);
@@ -50,15 +63,22 @@ describe('ExcelQaAutomationReportGenerator', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await workbook.xlsx.load(buffer as any);
     const summary = workbook.getWorksheet('Summary')!;
-    const rows = summary
+    const summaryRows = summary
       .getSheetValues()
       .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row));
-    const asField = (name: string) => rows.find((row) => row[1] === name)?.[2];
+    const asField = (name: string) => summaryRows.find((row) => row[1] === name)?.[2];
 
     expect(asField('Total')).toBe(3);
     expect(asField('Passed')).toBe(1);
-    expect(asField('Failed')).toBe(1);
+    expect(asField('Failed')).toBe(2);
     expect(asField('Skipped')).toBe(1);
+
+    const testResults = workbook.getWorksheet('Test Results')!;
+    const statusCol = testResults
+      .getSheetValues()
+      .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row))
+      .find((row) => row[1] === 'test-skip')?.[3];
+    expect(statusCol).toBe('Fail (skipped)');
   });
 
   it('groups failures by category and lists skips with their reason on the Failure & Skip Analysis sheet', async () => {
@@ -84,13 +104,13 @@ describe('ExcelQaAutomationReportGenerator', () => {
       makeQaAutomationTestResult({
         id: 'r4',
         testId: 'test-d',
-        passed: true,
+        passed: false,
         details: 'SKIPPED: Hangs indefinitely',
       }),
       makeQaAutomationTestResult({
         id: 'r5',
         testId: 'test-e',
-        passed: true,
+        passed: false,
         details: 'SKIPPED: 404 in this environment',
       }),
     ];
@@ -112,6 +132,9 @@ describe('ExcelQaAutomationReportGenerator', () => {
     expect(values).toContain('Missing credentials (env var mismatch)');
     expect(values).toContain(2);
     expect(values).toContain('Assertion failure (content/state mismatch)');
+    // Skips are real failures now too, but must not get swept into the
+    // failure-category classification (they'd land as noise in "Other").
+    expect(values).not.toContain('Other / unclassified');
     expect(values).toContain('test-d');
     expect(values).toContain('Hangs indefinitely');
     expect(values).toContain('Yes'); // flagged as a possible hang

@@ -18,13 +18,12 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     const workbook = new ExcelJS.Workbook();
     workbook.created = generatedAt;
 
-    // A pytest skip is stamped passed=true (docs/adr/0036) so it never
-    // triggers a false failure alert — but it isn't a genuine pass either,
-    // so it must come out of "Passed" here or the two counts would double
-    // up the same rows.
+    // Per the user, a pytest skip counts as a failure, not a pass
+    // (stamped passed=false by the JUnit parser) — `skipped` here is only
+    // for its own breakout row, not subtracted from `failed`.
     const skipped = results.filter((r) => isSkipped(r.details)).length;
     const failed = results.filter((r) => !r.passed).length;
-    const passed = results.length - failed - skipped;
+    const passed = results.length - failed;
 
     const summary = workbook.addWorksheet('Summary');
     summary.columns = [
@@ -61,7 +60,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       results.map((result) => ({
         testId: result.testId,
         testName: result.testName,
-        status: !result.passed ? 'Fail' : isSkipped(result.details) ? 'Skip' : 'Pass',
+        status: result.passed ? 'Pass' : isSkipped(result.details) ? 'Fail (skipped)' : 'Fail',
         details: result.details,
         sourceUrl: result.sourceUrl ?? '',
       })),
@@ -84,7 +83,10 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
   private addAnalysisSheet(workbook: ExcelJS.Workbook, results: QaAutomationTestResult[]): void {
     const analysis = workbook.addWorksheet('Failure & Skip Analysis');
 
-    const failures = results.filter((r) => !r.passed);
+    // Skips are also passed=false now (per the user), but a "SKIPPED: ..."
+    // string isn't a real traceback — classifying it here would just add
+    // noise to "Other / unclassified" instead of the dedicated section below.
+    const failures = results.filter((r) => !r.passed && !isSkipped(r.details));
     const failureCounts = new Map<string, { count: number; example: string }>();
     for (const result of failures) {
       const category = classifyFailureReason(result.details);
