@@ -44,16 +44,27 @@ coverage) will either show someone else's machine's files or fail with
    corepack pnpm install
    corepack pnpm run build
    ```
-2. Get the shared Railway `DATABASE_URL` and `REDIS_URL` (and a
-   `GEMINI_API_KEY` if you'll use AI-based test generation) from whoever
-   manages this deployment — these are the same for everyone, not
-   per-developer. Put them in a file named `.env.<you>-worker` at the
-   repo root (gitignored — never commit real credentials):
+2. Get the shared Railway `DATABASE_URL`, `REDIS_URL`, and
+   `REPO_TOKEN_ENCRYPTION_KEY` (and a `GEMINI_API_KEY` if you'll use
+   AI-based test generation) from whoever manages this deployment —
+   these are the same for everyone, not per-developer. Put them in a
+   file named `.env.<you>-worker` at the repo root (gitignored — never
+   commit real credentials):
    ```
    DATABASE_URL=...
    REDIS_URL=...
+   REPO_TOKEN_ENCRYPTION_KEY=...
    GEMINI_API_KEY=...
    ```
+   `REPO_TOKEN_ENCRYPTION_KEY` is required for every worker to even boot
+   (docs/adr/0047), regardless of whether you ever register a GitHub
+   repo yourself — it must be the exact same value everywhere (every
+   worker and the API), not something you generate yourself.
+   `GEMINI_API_KEY` is the only genuinely optional one: skip it if
+   you'll always set your own personal key via the web UI's "Set a
+   custom Gemini API key" option instead, or if you'll only use the
+   deterministic script-based generator/coverage gate (neither calls
+   Gemini at all).
 3. Pick a **Worker ID** unique to you — your name plus machine is enough
    (`priya-laptop`, `raj-desktop`). Run your worker:
    ```
