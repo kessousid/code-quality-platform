@@ -1,10 +1,21 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Repo } from '@cqp/core';
 import type { PaginatedResult } from '@cqp/core';
 import {
   CreateRepoUseCase,
   GetRepoUseCase,
+  HomeDirectoryLocalPathError,
   ListReposUseCase,
   RepoNotFoundError,
   UpdateRepoAccessTokenUseCase,
@@ -34,8 +45,15 @@ export class RepoController {
 
   @Post()
   async create(@CurrentOrg() orgId: string, @Body() dto: CreateRepoRequestDto) {
-    const repo = await this.createRepoUseCase.execute({ orgId, ...dto });
-    return toRepoResponse(repo);
+    try {
+      const repo = await this.createRepoUseCase.execute({ orgId, ...dto });
+      return toRepoResponse(repo);
+    } catch (error) {
+      if (error instanceof HomeDirectoryLocalPathError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Get()

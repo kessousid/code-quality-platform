@@ -69,6 +69,20 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/https:\/\/github\.com\/org\/cloned-repo\.git/)).toBeInTheDocument();
   });
 
+  it("shows the server's error and does not create a repo when localPath looks like a home directory (docs/adr/0051)", async () => {
+    renderWithProviders(<DashboardPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('New repo name'), 'Divith/Testing');
+    await user.type(screen.getByPlaceholderText(/Local checkout path/), 'C:\\Users\\pvpl1');
+    await user.click(screen.getByRole('button', { name: 'Add repo' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/looks like your entire user home directory/)).toBeInTheDocument(),
+    );
+    expect(server.repos.find((r) => r.name === 'Divith/Testing')).toBeUndefined();
+  });
+
   it('picks a local checkout path through the real GET /fs/browse endpoint', async () => {
     server.directories.set('C:\\projects', {
       path: 'C:\\projects',

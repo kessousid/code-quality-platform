@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { CreateRepoUseCase } from './create-repo.use-case.js';
 import { decryptRepoToken } from './repo-token-cipher.js';
+import { HomeDirectoryLocalPathError } from './local-path-validation.js';
 import { InMemoryRepoRepository } from './testing/in-memory-repo-repository.js';
 
 const KEY = randomBytes(32);
@@ -67,5 +68,31 @@ describe('CreateRepoUseCase', () => {
     });
 
     expect(repo.encryptedAccessToken).toBeUndefined();
+  });
+
+  it("rejects a localPath that looks like the user's entire home directory (live-reproduced misconfiguration)", async () => {
+    const repoRepository = new InMemoryRepoRepository();
+    const useCase = new CreateRepoUseCase(repoRepository, KEY);
+
+    await expect(
+      useCase.execute({
+        orgId: 'org_1',
+        name: 'Divith/Testing',
+        localPath: 'C:\\Users\\pvpl1',
+      }),
+    ).rejects.toThrow(HomeDirectoryLocalPathError);
+  });
+
+  it('still accepts a real project folder nested under a home directory', async () => {
+    const repoRepository = new InMemoryRepoRepository();
+    const useCase = new CreateRepoUseCase(repoRepository, KEY);
+
+    const repo = await useCase.execute({
+      orgId: 'org_1',
+      name: 'cod',
+      localPath: 'C:\\Users\\pvpl1\\cod',
+    });
+
+    expect(repo.localPath).toBe('C:\\Users\\pvpl1\\cod');
   });
 });

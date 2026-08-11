@@ -1,6 +1,7 @@
 export * from './create-scan.use-case.js';
 export * from './get-scan.use-case.js';
 export * from './create-repo.use-case.js';
+export * from './local-path-validation.js';
 export * from './update-repo-access-token.use-case.js';
 export * from './get-repo.use-case.js';
 export * from './list-repos.use-case.js';

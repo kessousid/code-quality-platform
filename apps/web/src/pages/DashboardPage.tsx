@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ApiError } from '../api/client.js';
 import { useCreateRepo, useRepos } from '../api/hooks.js';
 import { DirectoryBrowser } from '../components/DirectoryBrowser.js';
 import { FEATURE_LABELS, USER_GUIDE_URL, type AppFeature } from '../components/FeatureSelector.js';
@@ -58,7 +59,7 @@ export function DashboardPage({
             },
       );
     } catch {
-      return; // surfaced via createRepo.isError, if the UI grows one
+      return; // surfaced via createRepo.isError below
     }
     setName('');
     setLocalPath('');
@@ -187,6 +188,13 @@ export function DashboardPage({
               time it runs. The token is encrypted at rest and never shown again after saving.
             </p>
           </>
+        )}
+        {createRepo.isError && (
+          <p className="text-sm text-red-600">
+            {createRepo.error instanceof ApiError
+              ? createRepo.error.message
+              : 'Failed to create the repo. Please try again.'}
+          </p>
         )}
       </form>
 

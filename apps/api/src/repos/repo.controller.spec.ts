@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { randomBytes } from 'node:crypto';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import {
@@ -122,5 +122,13 @@ describe('RepoController', () => {
     await expect(
       controller.updateAccessToken('org_2', created.id, { accessToken: 'ghp_x' }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it("400s when localPath looks like the user's entire home directory (docs/adr/0051)", async () => {
+    const controller = await buildTestingModule();
+
+    await expect(
+      controller.create('org_1', { name: 'Divith/Testing', localPath: 'C:\\Users\\pvpl1' }),
+    ).rejects.toThrow(BadRequestException);
   });
 });

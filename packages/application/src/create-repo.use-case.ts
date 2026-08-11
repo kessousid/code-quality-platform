@@ -1,5 +1,6 @@
 import type { CreateRepoInput, Repo, RepoProvider, RepoRepository } from '@cqp/core';
 import { encryptRepoToken } from './repo-token-cipher.js';
+import { HomeDirectoryLocalPathError, looksLikeHomeDirectory } from './local-path-validation.js';
 
 export interface CreateRepoUseCaseInput extends Omit<CreateRepoInput, 'encryptedAccessToken'> {
   /** Plaintext, in memory only for this call — encrypted below before it ever reaches a `RepoRepository` (docs/adr/0047). */
@@ -29,6 +30,9 @@ export class CreateRepoUseCase {
   ) {}
 
   async execute(input: CreateRepoUseCaseInput): Promise<Repo> {
+    if (input.localPath !== undefined && looksLikeHomeDirectory(input.localPath)) {
+      throw new HomeDirectoryLocalPathError(input.localPath);
+    }
     const { accessToken, ...rest } = input;
     const resolvedWorkerId = resolveWorkerId(input);
     return this.repoRepository.create({

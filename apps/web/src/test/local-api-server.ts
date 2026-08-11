@@ -222,6 +222,16 @@ function sendOrNotFound(res: ServerResponse, body: unknown): void {
   send(res, 200, body);
 }
 
+/** Mirrors @cqp/application's looksLikeHomeDirectory (docs/adr/0051) — duplicated rather than imported, since this fixture deliberately doesn't depend on the backend application layer. */
+function looksLikeHomeDirectory(localPath: string): boolean {
+  const trimmed = localPath.trim();
+  return [
+    /^[a-zA-Z]:[\\/]Users[\\/][^\\/]+[\\/]?$/,
+    /^\/home\/[^/]+\/?$/,
+    /^\/Users\/[^/]+\/?$/,
+  ].some((pattern) => pattern.test(trimmed));
+}
+
 async function readJsonBody(req: IncomingMessage): Promise<Record<string, string>> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -363,6 +373,12 @@ export async function startLocalApiServer(): Promise<LocalApiServer> {
 
     if (method === 'POST' && pathname === '/repos') {
       const input = await readJsonBody(req);
+      if (input.localPath && looksLikeHomeDirectory(input.localPath)) {
+        send(res, 400, {
+          message: `"${input.localPath}" looks like your entire user home directory, not a project folder. Point localPath at the specific project you want to scan or test.`,
+        });
+        return;
+      }
       const provider = input.provider ?? 'local';
       const repo: Repo = {
         id: id('repo'),
