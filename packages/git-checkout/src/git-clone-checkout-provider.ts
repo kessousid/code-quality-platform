@@ -18,11 +18,29 @@ export interface GitCloneCheckoutProviderOptions {
   gitCommand?: string;
 }
 
-/** Never logged/thrown anywhere — same discipline as PytestStagingTestRunner.cloneUrl(). */
-function cloneUrl(remoteUrl: string, accessToken: string | undefined): string {
-  if (!accessToken) return remoteUrl;
-  const url = new URL(remoteUrl);
-  url.username = accessToken;
+/**
+ * Never logged/thrown anywhere — same discipline as
+ * PytestStagingTestRunner.cloneUrl(). GitHub and GitLab embed a token
+ * differently: GitHub accepts the token as the URL username with no
+ * password, but GitLab does not — a bare token-as-username leaves the
+ * request looking unauthenticated, so GitLab challenges for real
+ * credentials, which fails outright with `GIT_TERMINAL_PROMPT=0` set
+ * (live-confirmed: "terminal prompts disabled" → exit code 128).
+ * GitLab's own documented convention is a placeholder username
+ * (`oauth2`) with the token as the password.
+ */
+export function cloneUrl(
+  repo: Pick<Repo, 'provider' | 'remoteUrl'>,
+  accessToken: string | undefined,
+): string {
+  if (!accessToken) return repo.remoteUrl ?? '';
+  const url = new URL(repo.remoteUrl ?? '');
+  if (repo.provider === 'gitlab') {
+    url.username = 'oauth2';
+    url.password = accessToken;
+  } else {
+    url.username = accessToken;
+  }
   return url.toString();
 }
 
@@ -51,7 +69,7 @@ export class GitCloneCheckoutProvider implements GitCheckoutProvider {
 
     const args = ['clone', '--depth', '1'];
     if (ref) args.push('--branch', ref);
-    args.push(cloneUrl(repo.remoteUrl, accessToken), repoDir);
+    args.push(cloneUrl(repo, accessToken), repoDir);
 
     try {
       const result = await runSubprocess(git, args, {

@@ -169,7 +169,17 @@ written.
   `@IsIn` validator, and `GitCloneCheckoutProvider` were already
   provider-agnostic. Only `DashboardPage`'s toggle needed a third
   option ("On GitLab" alongside "On my computer"/"On GitHub"), exactly
-  as anticipated above.
+  as anticipated above. **One real bug this surfaced**:
+  `GitCloneCheckoutProvider`'s `cloneUrl()` embedded a private repo's
+  token as the URL username only — GitHub's own convention (no password
+  needed), but GitLab doesn't accept that shape. A bare token-as-
+  username on GitLab looks unauthenticated, so GitLab challenges for
+  real credentials, which fails outright with `GIT_TERMINAL_PROMPT=0`
+  set ("terminal prompts disabled... clone fails with exit code 128",
+  live-reported by a team member's private GitLab repo). Fixed by
+  branching on `repo.provider`: GitLab gets the token in the _password_
+  position with GitLab's own documented `oauth2` username placeholder;
+  GitHub is unchanged.
 - `apps/worker`'s Docker image only ever installed `openssl` (for
   Prisma) — a live scan against a real public repo failed immediately
   with `ToolNotFoundError: git not found` until `git` was added
