@@ -23,10 +23,12 @@ export function DashboardPage({
   const [localPath, setLocalPath] = useState('');
   const [workerId, setWorkerId] = useState(() => localStorage.getItem(LAST_WORKER_ID_KEY) ?? '');
   const [browsing, setBrowsing] = useState(false);
-  // 'On my computer' runs via your own local worker (docs/adr/0031); 'On
-  // GitHub' skips a local folder entirely — Railway's own worker clones it
-  // fresh at run time instead (docs/adr/0047).
-  const [source, setSource] = useState<'local' | 'github'>('local');
+  // 'On my computer' runs via your own local worker (docs/adr/0031);
+  // 'On GitHub'/'On GitLab' skip a local folder entirely — Railway's own
+  // worker clones it fresh at run time instead (docs/adr/0047) —
+  // GitCloneCheckoutProvider only ever needs a raw git URL, so both
+  // hosts share the exact same flow.
+  const [source, setSource] = useState<'local' | 'github' | 'gitlab'>('local');
   const [remoteUrl, setRemoteUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
 
@@ -42,13 +44,13 @@ export function DashboardPage({
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length === 0) return;
-    if (source === 'github' && remoteUrl.trim().length === 0) return;
+    if (source !== 'local' && remoteUrl.trim().length === 0) return;
     try {
       await createRepo.mutateAsync(
-        source === 'github'
+        source !== 'local'
           ? {
               name: name.trim(),
-              provider: 'github',
+              provider: source,
               remoteUrl: remoteUrl.trim(),
               ...(accessToken.trim().length > 0 ? { accessToken: accessToken.trim() } : {}),
             }
@@ -115,6 +117,14 @@ export function DashboardPage({
             />
             On GitHub
           </label>
+          <label className="flex items-center gap-1.5">
+            <input
+              type="radio"
+              checked={source === 'gitlab'}
+              onChange={() => setSource('gitlab')}
+            />
+            On GitLab
+          </label>
         </div>
 
         {source === 'local' ? (
@@ -172,7 +182,11 @@ export function DashboardPage({
             <input
               value={remoteUrl}
               onChange={(e) => setRemoteUrl(e.target.value)}
-              placeholder="https://github.com/org/repo.git"
+              placeholder={
+                source === 'gitlab'
+                  ? 'https://gitlab.com/org/repo.git'
+                  : 'https://github.com/org/repo.git'
+              }
               className="w-full rounded border px-3 py-2 text-sm"
             />
             <input

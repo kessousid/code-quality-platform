@@ -69,6 +69,25 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/https:\/\/github\.com\/org\/cloned-repo\.git/)).toBeInTheDocument();
   });
 
+  it('creates a gitlab repo via the toggle, the same way as github', async () => {
+    renderWithProviders(<DashboardPage />);
+
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('New repo name'), 'gitlab-repo');
+    await user.click(screen.getByRole('radio', { name: 'On GitLab' }));
+    await user.type(
+      screen.getByPlaceholderText('https://gitlab.com/org/repo.git'),
+      'https://gitlab.com/org/gitlab-repo.git',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add repo' }));
+
+    await waitFor(() => expect(screen.getByText('gitlab-repo')).toBeInTheDocument());
+    const created = server.repos.find((r) => r.name === 'gitlab-repo');
+    expect(created?.provider).toBe('gitlab');
+    expect(created?.remoteUrl).toBe('https://gitlab.com/org/gitlab-repo.git');
+    expect(created?.workerId).toBe('default');
+  });
+
   it("shows the server's error and does not create a repo when localPath looks like a home directory (docs/adr/0051)", async () => {
     renderWithProviders(<DashboardPage />);
 

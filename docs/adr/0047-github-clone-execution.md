@@ -163,9 +163,13 @@ written.
   each independently fresh-clone. Matches the existing staging-runner
   precedent; can be revisited if clone time becomes a real bottleneck.
 - No GitHub OAuth or repo-picker UI — a pasted URL + PAT is the whole v1
-  flow. GitLab stays enum-only; `GitCloneCheckoutProvider` is generic
-  enough (raw git URL + optional token) to support it later with no
-  redesign.
+  flow.
+- **Update**: GitLab support followed with no backend changes at all —
+  the team started using it, and `GIT_HOSTED_PROVIDERS`, the API DTO's
+  `@IsIn` validator, and `GitCloneCheckoutProvider` were already
+  provider-agnostic. Only `DashboardPage`'s toggle needed a third
+  option ("On GitLab" alongside "On my computer"/"On GitHub"), exactly
+  as anticipated above.
 - `apps/worker`'s Docker image only ever installed `openssl` (for
   Prisma) — a live scan against a real public repo failed immediately
   with `ToolNotFoundError: git not found` until `git` was added
