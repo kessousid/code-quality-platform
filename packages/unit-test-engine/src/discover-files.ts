@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { extname, isAbsolute, join } from 'node:path';
 
 export const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
 const EXCLUDED_DIR_NAMES = new Set([
@@ -55,6 +55,18 @@ export async function discoverSourceFiles(
   repoRoot: string,
   targetPath: string,
 ): Promise<DiscoveredFile[]> {
+  // `targetPath` must be relative to `repoRoot` by contract (docs/adr/0024).
+  // `join()` doesn't special-case an absolute second argument — it just
+  // concatenates, silently producing a nonsensical path like
+  // "C:\repo\C:\repo\src" that then fails with a confusing generic
+  // "not found" below. A caller sending an absolute path here is always a
+  // bug upstream (e.g. a client-side prefix-strip that silently fell
+  // through) — fail with a message that says so, instead of masking it.
+  if (isAbsolute(targetPath)) {
+    throw new TargetNotFoundError(
+      `${targetPath} (expected a path relative to the repo root, got an absolute path)`,
+    );
+  }
   const absoluteTarget = join(repoRoot, targetPath);
   let stats;
   try {

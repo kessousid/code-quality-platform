@@ -62,6 +62,16 @@ describe('discoverSourceFiles', () => {
     });
   });
 
+  it('rejects an absolute targetPath with a message explaining why, instead of silently joining into a bogus path', async () => {
+    await withTempRepo(async (repoRoot) => {
+      const absoluteTarget = join(repoRoot, 'src');
+      await mkdir(absoluteTarget, { recursive: true });
+      await expect(discoverSourceFiles(repoRoot, absoluteTarget)).rejects.toThrow(
+        /expected a path relative to the repo root/,
+      );
+    });
+  });
+
   it('caps discovery at MAX_DISCOVERED_FILES so a huge folder cannot run away (see docs/adr/0023)', async () => {
     await withTempRepo(async (repoRoot) => {
       for (let i = 0; i < 20; i++) {

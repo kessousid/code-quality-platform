@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { TestGeneratorType } from '@cqp/core';
 import { useCreateUnitTestRun, useUnitTestRuns } from '../api/hooks.js';
 import { formatTargetPath } from '../lib/format-target-path.js';
+import { toRepoRelativeTarget } from '../lib/to-repo-relative-target.js';
 import { DirectoryBrowser } from './DirectoryBrowser.js';
 import {
   GeminiApiKeyOverrideControl,
@@ -30,18 +31,9 @@ export function GenerateUnitTestsSection({
   const [generator, setGenerator] = useState<TestGeneratorType>('gemini');
   const [apiKeyOverride, setApiKeyOverride] = useState(() => readSavedGeminiApiKeyOverride());
 
-  // Browsing shows the real, recognizable absolute path in the field (never a cryptic '.' or a blank-looking
-  // empty string) — converting down to a path relative to the repo root only matters at submit time, which is
-  // exactly where the API needs it, so that's where it happens.
-  function toRepoRelativeTarget(path: string): string {
-    if (!localPath) return path;
-    if (path === localPath) return '.';
-    return path.startsWith(localPath) ? path.slice(localPath.length).replace(/^[/\\]/, '') : path;
-  }
-
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    const target = toRepoRelativeTarget(targetPath.trim());
+    const target = toRepoRelativeTarget(targetPath.trim(), localPath);
     if (target.length === 0) return;
     try {
       await createUnitTestRun.mutateAsync({
