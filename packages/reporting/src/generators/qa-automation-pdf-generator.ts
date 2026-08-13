@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import { QA_AUTOMATION_RUN_STATUS_LABELS } from '@cqp/core';
 import type { QaAutomationReportGenerator } from '../qa-automation-generator.js';
 import type { QaAutomationReportModel } from '../qa-automation-report-model.js';
+import { isSkipped } from '../qa-automation-failure-classifier.js';
 
 /** Mirrors PdfUnitTestReportGenerator exactly — pure JS `pdfkit`, no native binary or headless browser. */
 export class PdfQaAutomationReportGenerator implements QaAutomationReportGenerator {
@@ -30,27 +31,29 @@ export class PdfQaAutomationReportGenerator implements QaAutomationReportGenerat
       .fillColor('#000');
 
     doc.moveDown();
+    // A pytest skip is stamped passed=false by the JUnit parser, but it's
+    // a real third outcome, not a genuine failure — split it out of
+    // `failed` here too (see @cqp/reporting's ExcelQaAutomationReportGenerator).
     const passed = results.filter((r) => r.passed).length;
+    const skipped = results.filter((r) => !r.passed && isSkipped(r.details)).length;
+    const failed = results.length - passed - skipped;
     doc.fontSize(16).text('Summary');
     doc
       .fontSize(11)
-      .text(`Total: ${results.length}  Passed: ${passed}  Failed: ${results.length - passed}`);
+      .text(`Total: ${results.length}  Passed: ${passed}  Failed: ${failed}  Skipped: ${skipped}`);
 
     doc.moveDown();
     doc.fontSize(16).text(`Test results (${results.length})`);
     doc.moveDown(0.5);
 
     for (const result of results) {
-      doc
-        .fontSize(11)
-        .fillColor(result.passed ? '#000' : '#991b1b')
-        .text(`[${result.passed ? 'PASS' : 'FAIL'}] ${result.testName}`, {
-          underline: !result.passed,
-        });
-      doc
-        .fontSize(9)
-        .fillColor(result.passed ? '#333' : '#991b1b')
-        .text(result.details);
+      const skip = !result.passed && isSkipped(result.details);
+      const label = result.passed ? 'PASS' : skip ? 'SKIP' : 'FAIL';
+      const color = result.passed ? '#000' : skip ? '#92400e' : '#991b1b';
+      doc.fontSize(11).fillColor(color).text(`[${label}] ${result.testName}`, {
+        underline: !result.passed,
+      });
+      doc.fontSize(9).fillColor(color).text(result.details);
       // Only ever set for a staging run — production has only ever had one source.
       if (result.sourceUrl !== undefined) {
         doc.fontSize(8).fillColor('#2563eb').text(`Source: ${result.sourceUrl}`);

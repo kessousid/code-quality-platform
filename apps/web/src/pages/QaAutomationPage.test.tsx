@@ -62,7 +62,56 @@ describe('QaAutomationPage', () => {
       ).toBeInTheDocument(),
     );
     expect(screen.getByText('PASS')).toBeInTheDocument();
-    expect(screen.getByText('1 passed, 0 failed (of 1)')).toBeInTheDocument();
+    expect(screen.getByText('1 passed, 0 failed, 0 skipped (of 1)')).toBeInTheDocument();
+  });
+
+  it('breaks a skipped test out into its own Skipped count and label, instead of counting it as a failure', async () => {
+    renderWithProviders(<QaAutomationPage />);
+    const user = userEvent.setup();
+    await switchToStagingTab(user);
+
+    await waitFor(() => expect(screen.getByText('No runs yet.')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Run now' }));
+    await waitFor(() => expect(screen.getByText('Successfully Executed')).toBeInTheDocument());
+
+    const runId = server.qaAutomationRuns[0]!.id;
+    server.qaAutomationResultsByRun.set(runId, [
+      {
+        id: 'r1',
+        runId,
+        testId: 'test-pass',
+        testName: 'A passing test',
+        passed: true,
+        details: 'ok',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'r2',
+        runId,
+        testId: 'test-fail',
+        testName: 'A genuinely failing test',
+        passed: false,
+        details: 'AssertionError: nope',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'r3',
+        runId,
+        testId: 'test-skip',
+        testName: 'A skipped test',
+        passed: false,
+        details: 'SKIPPED: 404 in this environment',
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    await user.click(screen.getByText('Successfully Executed'));
+    await waitFor(() =>
+      expect(screen.getByText('1 passed, 1 failed, 1 skipped (of 3)')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+    expect(screen.getByText('FAIL')).toBeInTheDocument();
+    expect(screen.getByText('SKIP')).toBeInTheDocument();
   });
 
   it('generates a PDF report for a production run through the real endpoint and can download it', async () => {

@@ -33,9 +33,9 @@ describe('ExcelQaAutomationReportGenerator', () => {
     expect(testResults!.rowCount).toBeGreaterThan(1);
   });
 
-  it('counts a skipped test as a Failed, not a Pass, in the Summary sheet, with its own Skipped breakout', async () => {
-    // Per the user: a skip is stamped passed=false by the JUnit parser
-    // (docs/adr/0036) — not a genuine pass.
+  it('counts a skipped test as its own Skipped bucket, not folded into Passed or Failed, in the Summary sheet', async () => {
+    // A skip is stamped passed=false by the JUnit parser (docs/adr/0036),
+    // but it's a real third outcome, not a genuine failure.
     const results = [
       makeQaAutomationTestResult({
         id: 'r1',
@@ -70,7 +70,7 @@ describe('ExcelQaAutomationReportGenerator', () => {
 
     expect(asField('Total')).toBe(3);
     expect(asField('Passed')).toBe(1);
-    expect(asField('Failed')).toBe(2);
+    expect(asField('Failed')).toBe(1);
     expect(asField('Skipped')).toBe(1);
 
     const testResults = workbook.getWorksheet('Test Results')!;
@@ -78,7 +78,7 @@ describe('ExcelQaAutomationReportGenerator', () => {
       .getSheetValues()
       .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row))
       .find((row) => row[1] === 'test-skip')?.[3];
-    expect(statusCol).toBe('Fail (skipped)');
+    expect(statusCol).toBe('Skipped');
   });
 
   it('groups failures by category and lists skips with their reason on the Failure & Skip Analysis sheet', async () => {

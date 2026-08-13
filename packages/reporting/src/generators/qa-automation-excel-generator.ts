@@ -18,12 +18,13 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     const workbook = new ExcelJS.Workbook();
     workbook.created = generatedAt;
 
-    // Per the user, a pytest skip counts as a failure, not a pass
-    // (stamped passed=false by the JUnit parser) — `skipped` here is only
-    // for its own breakout row, not subtracted from `failed`.
+    // A pytest skip is stamped passed=false by the JUnit parser, but it's
+    // a real third outcome, not a genuine failure — split it out of
+    // `failed` here too, matching the per-row Status column below and the
+    // Failure & Skip Analysis sheet, which already treat it separately.
     const skipped = results.filter((r) => isSkipped(r.details)).length;
-    const failed = results.filter((r) => !r.passed).length;
-    const passed = results.length - failed;
+    const passed = results.filter((r) => r.passed).length;
+    const failed = results.length - passed - skipped;
 
     const summary = workbook.addWorksheet('Summary');
     summary.columns = [
@@ -60,7 +61,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       results.map((result) => ({
         testId: result.testId,
         testName: result.testName,
-        status: result.passed ? 'Pass' : isSkipped(result.details) ? 'Fail (skipped)' : 'Fail',
+        status: result.passed ? 'Pass' : isSkipped(result.details) ? 'Skipped' : 'Fail',
         details: result.details,
         sourceUrl: result.sourceUrl ?? '',
       })),

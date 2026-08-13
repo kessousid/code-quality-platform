@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  isSkippedTestResult,
   QA_AUTOMATION_RUN_STATUS_LABELS,
   type QaAutomationEnvironment,
   type QaAutomationReportFormat,
@@ -59,35 +60,43 @@ function RunResults({ runId }: { runId: string }) {
     return <p className="text-xs text-neutral-500">No test results recorded.</p>;
 
   const passedCount = results.filter((r) => r.passed).length;
-  const failedCount = results.length - passedCount;
+  const skippedCount = results.filter((r) => !r.passed && isSkippedTestResult(r.details)).length;
+  const failedCount = results.length - passedCount - skippedCount;
 
   return (
     <div className="mt-2 border-t pt-2">
       <p className="text-xs font-semibold text-neutral-700">
-        {passedCount} passed, {failedCount} failed (of {results.length})
+        {passedCount} passed, {failedCount} failed, {skippedCount} skipped (of {results.length})
       </p>
       <ul className="mt-1 space-y-1">
-        {results.map((result) => (
-          <li key={result.id} className="text-xs">
-            <div className="flex items-center gap-2">
-              <span className={result.passed ? 'text-green-700' : 'text-red-700'}>
-                {result.passed ? 'PASS' : 'FAIL'}
-              </span>
-              <span className="font-medium">{result.testName}</span>
-            </div>
-            <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
-            {result.sourceUrl && (
-              <a
-                href={result.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                Source: {result.sourceUrl}
-              </a>
-            )}
-          </li>
-        ))}
+        {results.map((result) => {
+          const skipped = !result.passed && isSkippedTestResult(result.details);
+          const label = result.passed ? 'PASS' : skipped ? 'SKIP' : 'FAIL';
+          const color = result.passed
+            ? 'text-green-700'
+            : skipped
+              ? 'text-amber-700'
+              : 'text-red-700';
+          return (
+            <li key={result.id} className="text-xs">
+              <div className="flex items-center gap-2">
+                <span className={color}>{label}</span>
+                <span className="font-medium">{result.testName}</span>
+              </div>
+              <div className="whitespace-pre-line text-neutral-500">{result.details}</div>
+              {result.sourceUrl && (
+                <a
+                  href={result.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  Source: {result.sourceUrl}
+                </a>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

@@ -132,10 +132,20 @@ its own run history) — both reusing the same `RunResults`/
   traceback) — deeper diagnosis of a staging failure still requires
   looking at the external repo directly, same as before this integration
   existed.
-- A `<skipped>` JUnit testcase is recorded as `passed: true` with a
-  `SKIPPED: …` detail prefix, not as a distinct third state —
-  `QaAutomationTestResult.passed` is a plain boolean, so a skip is treated
-  as "did not fail" rather than triggering a false alert.
+- A `<skipped>` JUnit testcase is recorded as `passed: false` with a
+  `SKIPPED: …` detail prefix — `QaAutomationTestResult.passed` stays a
+  plain boolean (no schema/domain-model change), so at the data layer a
+  skip still counts toward "not passed," same as a real failure/error.
+  What changed since this ADR was first written: every place that
+  _counts or displays_ results (the web UI's run summary, and both the
+  PDF and Excel report generators) now uses the `SKIPPED:` prefix to
+  split a skip out into its own bucket instead of folding it into
+  "Failed" — a real staging run once showed "110 failed" when only 81
+  were genuine failures (the other 29 were skips), which read as a much
+  worse signal than reality. `@cqp/core`'s `isSkippedTestResult()` (and
+  `@cqp/reporting`'s pre-existing `isSkipped()`) is the shared check
+  every counting site now goes through, so they can't drift on what
+  counts as a skip.
 - One Railway service now runs two independent long-lived BullMQ workers
   in one Node process — an accepted simplification (no new service, no
   new Redis connection) over splitting staging into its own deployment.

@@ -64,6 +64,23 @@ export interface QaAutomationTestResult {
   createdAt: Date;
 }
 
+/**
+ * A pytest skip is stamped `passed: false` with a `SKIPPED: <reason>` detail
+ * prefix (see @cqp/staging-test-runner's JUnit parser) — a real, third
+ * outcome that's neither a pass nor a genuine failure. `passed` stays a
+ * plain boolean (no schema/domain-model change), but every place that
+ * counts or displays a run's results should split a skip out of "failed"
+ * using this shared check, instead of treating "not passed" as "failed".
+ * Shared here (rather than duplicated per-caller) so the web UI's run
+ * summary and both report generators can never drift on what counts as a
+ * skip.
+ */
+const SKIPPED_DETAIL_PREFIX = 'SKIPPED: ';
+
+export function isSkippedTestResult(details: string): boolean {
+  return details.startsWith(SKIPPED_DETAIL_PREFIX);
+}
+
 export interface CreateQaAutomationRunInput {
   orgId: string;
   environment: QaAutomationEnvironment;
