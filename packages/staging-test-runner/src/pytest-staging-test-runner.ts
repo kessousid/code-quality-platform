@@ -41,11 +41,23 @@ const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
  * Live-confirmed necessary (docs/adr/0045): two separate real staging runs
  * each hung for 2+ hours at the same point (a `admin_page` fixture/test
  * combination) with zero output, even with stdout unbuffered — genuinely
- * stuck, not just slow. 3 hours is comfortably above every real full-suite
- * duration observed so far (the fastest healthy stretch extrapolated to
- * well under 2 hours) while still bounding the worst case.
+ * stuck, not just slow. This still needs to exist even after per-test
+ * pytest-timeout was added (docs/adr/0052) — that only bounds a single
+ * test's own execution and can't catch a stall between tests or below
+ * pytest's own event loop.
+ *
+ * 3 hours turned out to be too tight for a genuinely healthy run: two
+ * live runs on 2026-08-13 each took 3h12m+ to reach only ~82% (511 real
+ * tests, real page loads, the suite's own SLOW_MO delay), correctly
+ * caught individual hung tests via pytest-timeout and kept going, then
+ * still got killed by this outer ceiling before finishing — the exact
+ * "genuinely slow-but-healthy run" false-positive risk flagged when this
+ * constant was first chosen. Raised to 6 hours: comfortably above every
+ * real full-suite duration observed so far, including one that hit a
+ * pytest-timeout-caught hang partway through, while still bounding a
+ * genuine silent hang to a finite, known worst case.
  */
-const MAX_PYTEST_DURATION_MS = 3 * 60 * 60 * 1000;
+const MAX_PYTEST_DURATION_MS = 6 * 60 * 60 * 1000;
 
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
