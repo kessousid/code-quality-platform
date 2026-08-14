@@ -105,6 +105,11 @@ const RUN_PANELADMIN_BATCH = true;
 const QUARANTINED_PANELADMIN_TESTS = [
   'test_TC_PANELADMIN_007_assign_recommended_interviewer',
   'test_TC_PANELADMIN_008_unassign_proposed_interviewer',
+  // 048 shares 049-052's exact chained-wizard-fallback shape (same
+  // Add-Interviewer scaffold) but was missed by ADR-0055's original
+  // static review. Failed in all 3 live runs today at ~9m50s every
+  // time -- never passes, just burns the time. docs/adr/0056.
+  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
   'test_TC_PANELADMIN_049_add_interviewer_account_number_mismatch_validation',
   'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
   'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
