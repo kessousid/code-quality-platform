@@ -74,16 +74,22 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
 
 /**
  * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
- * specific tests below — a static, read-only review of the whole file (no
- * execution) found these six sharing one of two concretely hang-prone
- * shapes: `TC_PANELADMIN_049` is the confirmed live culprit (20-30+ min
- * stuck on chained 30s-timeout wizard-field fallbacks); `050`/`051`/`052`
- * share that exact Add-Interviewer-wizard scaffold and haven't been
- * caught live yet only by chance; `007`/`008` have a separate shape —
- * nested pagination/retry loops gated on live staging data with no upper
- * bound if that data condition never arrives. The other ~101 tests in the
- * file showed no such pattern (fixed iteration counts, normal 30s
- * `expect()` calls) and run normally as part of batch 2.
+ * specific tests below. The first six were found by a static, read-only
+ * review (no execution) of two known hang-prone shapes: `TC_PANELADMIN_049`
+ * is the confirmed live culprit (20-30+ min stuck on chained 30s-timeout
+ * wizard-field fallbacks); `050`/`051`/`052` share that exact
+ * Add-Interviewer-wizard scaffold and haven't been caught live yet only by
+ * chance; `007`/`008` have a separate shape — nested pagination/retry loops
+ * gated on live staging data with no upper bound if that data condition
+ * never arrives.
+ *
+ * `053`-`058` were added later (docs/adr/0056) from a real live run, not
+ * static review: `053` (a report download) stalled and errored at the
+ * suite's own 600s per-test timeout, and every test after it in the same
+ * Uploaded-Profiles-Reports section did too, six in a row — one shared
+ * broken page/fixture state cascading forward, not six independent bugs.
+ * The rest of the file (the other ~95 tests) showed no such pattern and
+ * runs normally as part of batch 2.
  */
 const RUN_PANELADMIN_BATCH = true;
 
@@ -94,6 +100,12 @@ const QUARANTINED_PANELADMIN_TESTS = [
   'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
   'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
   'test_TC_PANELADMIN_052_add_interviewer_successfully',
+  'test_TC_PANELADMIN_053_download_basic_predefined_reports_as_excel',
+  'test_TC_PANELADMIN_054_download_interviewers_payment_report_with_date_filter',
+  'test_TC_PANELADMIN_055_download_uploaded_profiles_report_as_excel',
+  'test_TC_PANELADMIN_056_uploaded_profiles_first_date_range_filter',
+  'test_TC_PANELADMIN_057_uploaded_profiles_company_filter',
+  'test_TC_PANELADMIN_058_uploaded_profiles_company_and_job_title_filter',
 ];
 
 /**
