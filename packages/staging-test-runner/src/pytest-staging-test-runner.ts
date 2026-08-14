@@ -96,6 +96,15 @@ const QUARANTINED_PANELADMIN_TESTS = [
   'test_TC_PANELADMIN_052_add_interviewer_successfully',
 ];
 
+/**
+ * Env-var escape hatch (not a source constant like `RUN_PANELADMIN_BATCH`)
+ * so batch 1 can be skipped for a single run — e.g. re-running just batch 2
+ * against a fresh deselect list right after a batch 1 that already
+ * completed under the old code — without a redeploy. Unset/anything else
+ * means both batches run as normal.
+ */
+const SKIP_BATCH_1 = process.env.STAGING_SKIP_BATCH_1 === 'true';
+
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -288,26 +297,34 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       const sourceUrl = this.sourceUrl();
       const results: StagingTestResult[] = [];
-      // If batch 2 is ever disabled entirely (RUN_PANELADMIN_BATCH = false),
-      // batch 1 owns the full 0-100% progress range instead of just 0-79%.
-      const batch1Weight = RUN_PANELADMIN_BATCH ? 0.79 : 1;
+      // Both batches run -> 79/21 split. Only one runs (batch 2 disabled,
+      // or batch 1 skipped via STAGING_SKIP_BATCH_1) -> that one owns the
+      // full 0-100% range.
+      const bothBatchesRun = RUN_PANELADMIN_BATCH && !SKIP_BATCH_1;
+      const batch1Weight = bothBatchesRun ? 0.79 : 1;
 
       // Batch 1: everything except test_paneladmin.py (~79% of tests, or
-      // effectively the whole suite while batch 2 is disabled).
-      try {
-        const batch1 = await this.runBatch(
-          python,
-          repoDir,
-          path.join(workDir, 'report-1.xml'),
-          ['tests', `--ignore=${PANELADMIN_FILE}`],
-          sourceUrl,
-          onStdout,
-          onStderr,
-          onProgress ? (percent) => onProgress(Math.round(percent * batch1Weight)) : undefined,
-        );
-        results.push(...batch1);
-      } catch (error) {
-        console.error(`[staging batch 1] failed: ${(error as Error).message}`);
+      // effectively the whole suite while batch 2 is disabled). Skipped
+      // entirely when STAGING_SKIP_BATCH_1=true (e.g. re-running just batch
+      // 2 right after a batch 1 that already completed).
+      if (!SKIP_BATCH_1) {
+        try {
+          const batch1 = await this.runBatch(
+            python,
+            repoDir,
+            path.join(workDir, 'report-1.xml'),
+            ['tests', `--ignore=${PANELADMIN_FILE}`],
+            sourceUrl,
+            onStdout,
+            onStderr,
+            onProgress ? (percent) => onProgress(Math.round(percent * batch1Weight)) : undefined,
+          );
+          results.push(...batch1);
+        } catch (error) {
+          console.error(`[staging batch 1] failed: ${(error as Error).message}`);
+        }
+      } else {
+        console.error('[staging batch 1] skipped (STAGING_SKIP_BATCH_1=true)');
       }
 
       // Batch 2: test_paneladmin.py (~21% of tests), minus the six
@@ -329,7 +346,11 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             sourceUrl,
             onStdout,
             onStderr,
-            onProgress ? (percent) => onProgress(79 + Math.round(percent * 0.21)) : undefined,
+            bothBatchesRun
+              ? onProgress
+                ? (percent) => onProgress(79 + Math.round(percent * 0.21))
+                : undefined
+              : onProgress,
           );
           results.push(...batch2);
         } catch (error) {
