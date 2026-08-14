@@ -73,14 +73,28 @@ const MAX_PYTEST_DURATION_MS = 5 * 60 * 60 * 1000;
 const PANELADMIN_FILE = 'tests/test_paneladmin.py';
 
 /**
- * Temporarily disabled per user request (docs/adr/0054): batch 2
- * (`test_paneladmin.py` alone) does not run at all right now. The user
- * wants to see clean results from the other ~400 tests first, without
- * `test_paneladmin.py`'s own slowness/stalls in the picture at all,
- * before re-enabling it. Flip back to `true` to resume running it as
- * batch 2 once that's ready to be revisited.
+ * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
+ * specific tests below — a static, read-only review of the whole file (no
+ * execution) found these six sharing one of two concretely hang-prone
+ * shapes: `TC_PANELADMIN_049` is the confirmed live culprit (20-30+ min
+ * stuck on chained 30s-timeout wizard-field fallbacks); `050`/`051`/`052`
+ * share that exact Add-Interviewer-wizard scaffold and haven't been
+ * caught live yet only by chance; `007`/`008` have a separate shape —
+ * nested pagination/retry loops gated on live staging data with no upper
+ * bound if that data condition never arrives. The other ~101 tests in the
+ * file showed no such pattern (fixed iteration counts, normal 30s
+ * `expect()` calls) and run normally as part of batch 2.
  */
-const RUN_PANELADMIN_BATCH = false;
+const RUN_PANELADMIN_BATCH = true;
+
+const QUARANTINED_PANELADMIN_TESTS = [
+  'test_TC_PANELADMIN_007_assign_recommended_interviewer',
+  'test_TC_PANELADMIN_008_unassign_proposed_interviewer',
+  'test_TC_PANELADMIN_049_add_interviewer_account_number_mismatch_validation',
+  'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
+  'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
+  'test_TC_PANELADMIN_052_add_interviewer_successfully',
+];
 
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
@@ -207,10 +221,13 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * that fails outright (timeout, crash, no report produced) is logged and
    * skipped rather than aborting the whole run.
    *
-   * Batch 2 is currently disabled entirely (`RUN_PANELADMIN_BATCH`, see
-   * docs/adr/0054) — the run reports batch 1's results alone while that's
-   * off, and batch 1's progress maps to the full 0-100% range instead of
-   * the 0-79% split used when both batches run.
+   * Batch 2 also deselects the six specific tests identified by static
+   * analysis as hang-prone (`QUARANTINED_PANELADMIN_TESTS`, docs/adr/0055)
+   * rather than skipping the whole file — the other ~101 tests in
+   * `test_paneladmin.py` still run as part of batch 2. `RUN_PANELADMIN_BATCH`
+   * remains available as an escape hatch to drop batch 2 entirely (in which
+   * case batch 1's progress maps to the full 0-100% range instead of the
+   * 0-79% split used when both batches run).
    */
   private async runSuite(onProgress?: (percent: number) => void): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
@@ -271,8 +288,8 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       const sourceUrl = this.sourceUrl();
       const results: StagingTestResult[] = [];
-      // While batch 2 is disabled (RUN_PANELADMIN_BATCH = false), batch 1
-      // owns the full 0-100% progress range instead of just 0-79%.
+      // If batch 2 is ever disabled entirely (RUN_PANELADMIN_BATCH = false),
+      // batch 1 owns the full 0-100% progress range instead of just 0-79%.
       const batch1Weight = RUN_PANELADMIN_BATCH ? 0.79 : 1;
 
       // Batch 1: everything except test_paneladmin.py (~79% of tests, or
@@ -293,16 +310,22 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         console.error(`[staging batch 1] failed: ${(error as Error).message}`);
       }
 
-      // Batch 2: test_paneladmin.py alone (~21% of tests, and the one file
-      // every real stall observed so far happened inside) — temporarily
-      // disabled per user request (docs/adr/0054).
+      // Batch 2: test_paneladmin.py (~21% of tests), minus the six
+      // quarantined tests identified by static analysis as hang-prone
+      // (docs/adr/0055) — deselected by exact node ID rather than
+      // dropping the whole file, so the other ~101 tests in it still run.
       if (RUN_PANELADMIN_BATCH) {
         try {
           const batch2 = await this.runBatch(
             python,
             repoDir,
             path.join(workDir, 'report-2.xml'),
-            [PANELADMIN_FILE],
+            [
+              PANELADMIN_FILE,
+              ...QUARANTINED_PANELADMIN_TESTS.map(
+                (name) => `--deselect=${PANELADMIN_FILE}::TestPanelAdminLogin::${name}`,
+              ),
+            ],
             sourceUrl,
             onStdout,
             onStderr,
