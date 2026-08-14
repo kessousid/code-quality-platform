@@ -383,6 +383,24 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         } catch (error) {
           console.error(`[staging batch 2] failed: ${(error as Error).message}`);
         }
+
+        // Per the user: the quarantined tests should still show up in the
+        // report, not just vanish -- otherwise there's no record they were
+        // ever excluded. Synthesized with the same `SKIPPED:` prefix the
+        // JUnit parser stamps on a real pytest skip, so these fall into
+        // the existing "Skipped tests" report section and the "possible
+        // hang" flag (which just greps for "hang" in the details text)
+        // picks them up automatically -- no reporting-layer changes needed.
+        results.push(
+          ...QUARANTINED_PANELADMIN_TESTS.map((name) => ({
+            testId: `${PANELADMIN_FILE}::TestPanelAdminLogin::${name}`,
+            testName: name,
+            passed: false,
+            details:
+              'SKIPPED: Deselected before this run -- known to hang (docs/adr/0055, docs/adr/0056). Not executed.',
+            sourceUrl,
+          })),
+        );
       }
 
       if (results.length === 0) {
