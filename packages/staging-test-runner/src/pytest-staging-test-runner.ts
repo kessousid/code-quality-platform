@@ -83,13 +83,22 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
  * gated on live staging data with no upper bound if that data condition
  * never arrives.
  *
- * `053`-`058` were added later (docs/adr/0056) from a real live run, not
- * static review: `053` (a report download) stalled and errored at the
- * suite's own 600s per-test timeout, and every test after it in the same
- * Uploaded-Profiles-Reports section did too, six in a row — one shared
- * broken page/fixture state cascading forward, not six independent bugs.
- * The rest of the file (the other ~95 tests) showed no such pattern and
- * runs normally as part of batch 2.
+ * `053`-`059` were added later (docs/adr/0056) from a real live run and a
+ * source-level trace, not static review: every one of these calls
+ * Playwright's `page.expect_download(timeout=TIMEOUT)` (`TIMEOUT` = 30s,
+ * config.py) waiting for a real browser download event. `053` stalled and
+ * errored at the suite's own 600s per-test timeout — far longer than the
+ * 30s the code's own try/except should allow, meaning the browser itself
+ * gets wedged waiting on the download, not a clean timeout — and every
+ * test after it that hits the same `expect_download` call did too, seven
+ * in a row. `034` hits the identical `expect_download` call but has a
+ * graceful fallback after it and fails fast (~90s) instead of hanging —
+ * its own comment ("Case C: download (observed primary behavior on
+ * staging)") confirms staging doesn't reliably fire download events at
+ * all. No other test in the file calls `expect_download`, so the blast
+ * radius stops at `059`. One shared root cause, not eight independent
+ * bugs. The rest of the file (the other ~94 tests) showed no such
+ * pattern and runs normally as part of batch 2.
  */
 const RUN_PANELADMIN_BATCH = true;
 
@@ -106,6 +115,7 @@ const QUARANTINED_PANELADMIN_TESTS = [
   'test_TC_PANELADMIN_056_uploaded_profiles_first_date_range_filter',
   'test_TC_PANELADMIN_057_uploaded_profiles_company_filter',
   'test_TC_PANELADMIN_058_uploaded_profiles_company_and_job_title_filter',
+  'test_TC_PANELADMIN_059_uploaded_profiles_interview_status_filter',
 ];
 
 /**
