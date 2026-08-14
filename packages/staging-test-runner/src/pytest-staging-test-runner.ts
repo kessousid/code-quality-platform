@@ -53,8 +53,13 @@ const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
  * test needs too. docs/adr/0053 splits the run into two independent
  * batches instead (see `runSuite` below) — each gets its own ceiling, so
  * a slow patch in one batch can no longer starve the other.
+ *
+ * Raised again 3h -> 5h per user request (docs/adr/0054) — this now
+ * applies per-batch (not to the whole suite, see docs/adr/0053), so it's
+ * a genuinely different, more generous number than the original 0045
+ * figure even though it looks similar.
  */
-const MAX_PYTEST_DURATION_MS = 3 * 60 * 60 * 1000;
+const MAX_PYTEST_DURATION_MS = 5 * 60 * 60 * 1000;
 
 /**
  * `test_paneladmin.py` alone is ~107 of the suite's ~512 tests (~21%) —
@@ -66,6 +71,16 @@ const MAX_PYTEST_DURATION_MS = 3 * 60 * 60 * 1000;
  * else's time budget — raising the single shared ceiling didn't.
  */
 const PANELADMIN_FILE = 'tests/test_paneladmin.py';
+
+/**
+ * Temporarily disabled per user request (docs/adr/0054): batch 2
+ * (`test_paneladmin.py` alone) does not run at all right now. The user
+ * wants to see clean results from the other ~400 tests first, without
+ * `test_paneladmin.py`'s own slowness/stalls in the picture at all,
+ * before re-enabling it. Flip back to `true` to resume running it as
+ * batch 2 once that's ready to be revisited.
+ */
+const RUN_PANELADMIN_BATCH = false;
 
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
@@ -183,15 +198,19 @@ export class PytestStagingTestRunner implements StagingTestRunner {
   }
 
   /**
-   * One full clone -> install -> browser -> two pytest batches -> parse
+   * One full clone -> install -> browser -> pytest batch(es) -> parse
    * cycle against `main`. Split into two independent batches (docs/adr/0053)
    * — everything except `test_paneladmin.py`, then `test_paneladmin.py`
    * alone — each with its own timeout ceiling and its own try/catch, so a
    * slow or hung stretch in one batch can no longer eat into the other
    * batch's time budget or destroy its already-collected results. A batch
    * that fails outright (timeout, crash, no report produced) is logged and
-   * skipped rather than aborting the whole run; only if *both* batches
-   * produce zero results does the run fail.
+   * skipped rather than aborting the whole run.
+   *
+   * Batch 2 is currently disabled entirely (`RUN_PANELADMIN_BATCH`, see
+   * docs/adr/0054) — the run reports batch 1's results alone while that's
+   * off, and batch 1's progress maps to the full 0-100% range instead of
+   * the 0-79% split used when both batches run.
    */
   private async runSuite(onProgress?: (percent: number) => void): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
@@ -252,8 +271,12 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       const sourceUrl = this.sourceUrl();
       const results: StagingTestResult[] = [];
+      // While batch 2 is disabled (RUN_PANELADMIN_BATCH = false), batch 1
+      // owns the full 0-100% progress range instead of just 0-79%.
+      const batch1Weight = RUN_PANELADMIN_BATCH ? 0.79 : 1;
 
-      // Batch 1/2: everything except test_paneladmin.py (~79% of tests).
+      // Batch 1: everything except test_paneladmin.py (~79% of tests, or
+      // effectively the whole suite while batch 2 is disabled).
       try {
         const batch1 = await this.runBatch(
           python,
@@ -263,33 +286,36 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           sourceUrl,
           onStdout,
           onStderr,
-          onProgress ? (percent) => onProgress(Math.round(percent * 0.79)) : undefined,
+          onProgress ? (percent) => onProgress(Math.round(percent * batch1Weight)) : undefined,
         );
         results.push(...batch1);
       } catch (error) {
-        console.error(`[staging batch 1/2] failed: ${(error as Error).message}`);
+        console.error(`[staging batch 1] failed: ${(error as Error).message}`);
       }
 
-      // Batch 2/2: test_paneladmin.py alone (~21% of tests, and the one
-      // file every real stall observed so far happened inside).
-      try {
-        const batch2 = await this.runBatch(
-          python,
-          repoDir,
-          path.join(workDir, 'report-2.xml'),
-          [PANELADMIN_FILE],
-          sourceUrl,
-          onStdout,
-          onStderr,
-          onProgress ? (percent) => onProgress(79 + Math.round(percent * 0.21)) : undefined,
-        );
-        results.push(...batch2);
-      } catch (error) {
-        console.error(`[staging batch 2/2] failed: ${(error as Error).message}`);
+      // Batch 2: test_paneladmin.py alone (~21% of tests, and the one file
+      // every real stall observed so far happened inside) — temporarily
+      // disabled per user request (docs/adr/0054).
+      if (RUN_PANELADMIN_BATCH) {
+        try {
+          const batch2 = await this.runBatch(
+            python,
+            repoDir,
+            path.join(workDir, 'report-2.xml'),
+            [PANELADMIN_FILE],
+            sourceUrl,
+            onStdout,
+            onStderr,
+            onProgress ? (percent) => onProgress(79 + Math.round(percent * 0.21)) : undefined,
+          );
+          results.push(...batch2);
+        } catch (error) {
+          console.error(`[staging batch 2] failed: ${(error as Error).message}`);
+        }
       }
 
       if (results.length === 0) {
-        throw new Error('Both staging test batches failed to produce any results.');
+        throw new Error('Staging test batch(es) failed to produce any results.');
       }
       return results;
     } finally {
