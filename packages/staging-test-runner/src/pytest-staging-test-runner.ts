@@ -46,18 +46,26 @@ const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
  * test's own execution and can't catch a stall between tests or below
  * pytest's own event loop.
  *
- * 3 hours turned out to be too tight for a genuinely healthy run: two
- * live runs on 2026-08-13 each took 3h12m+ to reach only ~82% (511 real
- * tests, real page loads, the suite's own SLOW_MO delay), correctly
- * caught individual hung tests via pytest-timeout and kept going, then
- * still got killed by this outer ceiling before finishing — the exact
- * "genuinely slow-but-healthy run" false-positive risk flagged when this
- * constant was first chosen. Raised to 6 hours: comfortably above every
- * real full-suite duration observed so far, including one that hit a
- * pytest-timeout-caught hang partway through, while still bounding a
- * genuine silent hang to a finite, known worst case.
+ * Raising this alone (3h -> 6h, still docs/adr/0052) didn't actually fix
+ * anything: a third live run on 2026-08-13/14 still got killed, this
+ * time at 85% after 6 hours. One giant ceiling shared across the whole
+ * suite means one slow stretch anywhere eats into the budget every other
+ * test needs too. docs/adr/0053 splits the run into two independent
+ * batches instead (see `runSuite` below) — each gets its own ceiling, so
+ * a slow patch in one batch can no longer starve the other.
  */
-const MAX_PYTEST_DURATION_MS = 6 * 60 * 60 * 1000;
+const MAX_PYTEST_DURATION_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * `test_paneladmin.py` alone is ~107 of the suite's ~512 tests (~21%) —
+ * confirmed live (docs/adr/0053) as the one file every stall/slow-stretch
+ * observed on 2026-08-13/14 happened inside (always in the 74-85%
+ * progress range, three separate real runs). Running it as its own
+ * batch, with its own timeout ceiling independent of the other ~400
+ * tests, is what actually stops one slow file from starving everything
+ * else's time budget — raising the single shared ceiling didn't.
+ */
+const PANELADMIN_FILE = 'tests/test_paneladmin.py';
 
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
@@ -174,11 +182,20 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return { results: await this.runSuite(onProgress) };
   }
 
-  /** One full clone -> install -> browser -> pytest -> parse cycle against `main`. */
+  /**
+   * One full clone -> install -> browser -> two pytest batches -> parse
+   * cycle against `main`. Split into two independent batches (docs/adr/0053)
+   * — everything except `test_paneladmin.py`, then `test_paneladmin.py`
+   * alone — each with its own timeout ceiling and its own try/catch, so a
+   * slow or hung stretch in one batch can no longer eat into the other
+   * batch's time budget or destroy its already-collected results. A batch
+   * that fails outright (timeout, crash, no report produced) is logged and
+   * skipped rather than aborting the whole run; only if *both* batches
+   * produce zero results does the run fail.
+   */
   private async runSuite(onProgress?: (percent: number) => void): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
     const repoDir = path.join(workDir, 'repo');
-    const reportPath = path.join(workDir, 'report.xml');
     const python = this.options.pythonCommand ?? 'python3';
     // Live-forwarded to this process's own stdout/stderr for every step
     // (docs/adr/0044) — a run silently buffered until the very end was
@@ -233,25 +250,79 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         }),
       );
 
-      const pytestResult = await this.runPytest(
-        python,
-        repoDir,
-        reportPath,
-        onStdout,
-        onStderr,
-        onProgress,
-      );
-
-      const xml = await readFile(reportPath, 'utf-8').catch(() => {
-        throw new Error(
-          `pytest produced no report at ${reportPath} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
-        );
-      });
       const sourceUrl = this.sourceUrl();
-      return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
+      const results: StagingTestResult[] = [];
+
+      // Batch 1/2: everything except test_paneladmin.py (~79% of tests).
+      try {
+        const batch1 = await this.runBatch(
+          python,
+          repoDir,
+          path.join(workDir, 'report-1.xml'),
+          ['tests', `--ignore=${PANELADMIN_FILE}`],
+          sourceUrl,
+          onStdout,
+          onStderr,
+          onProgress ? (percent) => onProgress(Math.round(percent * 0.79)) : undefined,
+        );
+        results.push(...batch1);
+      } catch (error) {
+        console.error(`[staging batch 1/2] failed: ${(error as Error).message}`);
+      }
+
+      // Batch 2/2: test_paneladmin.py alone (~21% of tests, and the one
+      // file every real stall observed so far happened inside).
+      try {
+        const batch2 = await this.runBatch(
+          python,
+          repoDir,
+          path.join(workDir, 'report-2.xml'),
+          [PANELADMIN_FILE],
+          sourceUrl,
+          onStdout,
+          onStderr,
+          onProgress ? (percent) => onProgress(79 + Math.round(percent * 0.21)) : undefined,
+        );
+        results.push(...batch2);
+      } catch (error) {
+        console.error(`[staging batch 2/2] failed: ${(error as Error).message}`);
+      }
+
+      if (results.length === 0) {
+        throw new Error('Both staging test batches failed to produce any results.');
+      }
+      return results;
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }
+  }
+
+  private async runBatch(
+    python: string,
+    repoDir: string,
+    reportPath: string,
+    testPaths: string[],
+    sourceUrl: string,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void,
+    onProgress?: (percent: number) => void,
+  ): Promise<StagingTestResult[]> {
+    const pytestResult = await this.runPytest(
+      python,
+      repoDir,
+      reportPath,
+      testPaths,
+      onStdout,
+      onStderr,
+      onProgress,
+    );
+
+    const xml = await readFile(reportPath, 'utf-8').catch(() => {
+      throw new Error(
+        `pytest produced no report at ${reportPath} for ${testPaths.join(' ')} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
+      );
+    });
+    return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
   }
 
   /**
@@ -282,6 +353,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     python: string,
     repoDir: string,
     reportPath: string,
+    testPaths: string[],
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
@@ -295,7 +367,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           python,
           '-m',
           'pytest',
-          'tests',
+          ...testPaths,
           '-v',
           '--browser',
           'chromium',
@@ -317,7 +389,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     } catch (error) {
       if (error instanceof SubprocessTimeoutError) {
         throw new Error(
-          `pytest ran longer than ${MAX_PYTEST_DURATION_MS / 60_000} minutes and was killed as hung — see docs/adr/0045.`,
+          `pytest (${testPaths.join(' ')}) ran longer than ${MAX_PYTEST_DURATION_MS / 60_000} minutes and was killed as hung — see docs/adr/0045.`,
         );
       }
       throw error;
