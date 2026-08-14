@@ -14,6 +14,15 @@ export interface RunStagingTestSuiteInput {
 }
 
 /**
+ * Env-var escape hatch, same pattern as PytestStagingTestRunner's
+ * STAGING_SKIP_BATCH_1 — lets email go silent for a run without a code
+ * change, useful while re-running the same investigation repeatedly and
+ * not wanting a report email every single time. Unset/anything else means
+ * email sends as normal.
+ */
+const SKIP_EMAIL = process.env.STAGING_SKIP_EMAIL === 'true';
+
+/**
  * See docs/adr/0036. Much simpler than RunQaAutomationSuiteUseCase — there's
  * no per-test frequency gating and no per-test browser page, since the
  * whole external pytest suite runs as one opaque subprocess call via
@@ -72,25 +81,29 @@ export class RunStagingTestSuiteUseCase {
       const model = buildQaAutomationReportModel(completed, persistedResults);
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
-      await this.emailSender.send({
-        to: this.alertEmailTo,
-        ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
-        subject:
-          failing.length > 0
-            ? `[Staging] QA Automation Report: ${failing.length} of ${results.length} test(s) failed`
-            : `[Staging] QA Automation Report: all ${results.length} test(s) passed`,
-        body:
-          failing.length > 0
-            ? failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n')
-            : `All ${results.length} test(s) passed. See the attached report for full details.`,
-        attachments: [
-          {
-            filename: `qa-automation-report-${run.id}.xlsx`,
-            content: reportXlsx,
-            contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          },
-        ],
-      });
+      if (!SKIP_EMAIL) {
+        await this.emailSender.send({
+          to: this.alertEmailTo,
+          ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
+          subject:
+            failing.length > 0
+              ? `[Staging] QA Automation Report: ${failing.length} of ${results.length} test(s) failed`
+              : `[Staging] QA Automation Report: all ${results.length} test(s) passed`,
+          body:
+            failing.length > 0
+              ? failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n')
+              : `All ${results.length} test(s) passed. See the attached report for full details.`,
+          attachments: [
+            {
+              filename: `qa-automation-report-${run.id}.xlsx`,
+              content: reportXlsx,
+              contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            },
+          ],
+        });
+      } else {
+        console.error(`[staging run ${run.id}] report email skipped (STAGING_SKIP_EMAIL=true)`);
+      }
 
       return completed;
     } catch (error) {
@@ -102,12 +115,18 @@ export class RunStagingTestSuiteUseCase {
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'failed',
       });
-      await this.emailSender.send({
-        to: this.alertEmailTo,
-        ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
-        subject: '[Staging] QA Automation Alert: the run itself crashed',
-        body: `The run crashed before any test could complete: ${(error as Error).message}`,
-      });
+      if (!SKIP_EMAIL) {
+        await this.emailSender.send({
+          to: this.alertEmailTo,
+          ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
+          subject: '[Staging] QA Automation Alert: the run itself crashed',
+          body: `The run crashed before any test could complete: ${(error as Error).message}`,
+        });
+      } else {
+        console.error(
+          `[staging run ${run.id}] crash alert email skipped (STAGING_SKIP_EMAIL=true)`,
+        );
+      }
       return completed;
     }
   }
