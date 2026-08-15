@@ -74,16 +74,17 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
 
 /**
  * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
- * specific tests below. The first six were found by a static, read-only
- * review (no execution) of two known hang-prone shapes: `TC_PANELADMIN_049`
- * is the confirmed live culprit (20-30+ min stuck on chained 30s-timeout
- * wizard-field fallbacks); `050`/`051`/`052` share that exact
- * Add-Interviewer-wizard scaffold and haven't been caught live yet only by
- * chance; `007`/`008` have a separate shape — nested pagination/retry loops
- * gated on live staging data with no upper bound if that data condition
- * never arrives.
+ * specific tests below.
  *
- * `053`-`059` were added later (docs/adr/0056) from a real live run and a
+ * `007`, `008`, `048`, `049`, `050`, `052` were quarantined for
+ * chained-wizard-fallback / unbounded-retry hangs (docs/adr/0055,
+ * docs/adr/0056), then un-quarantined once curatal_tests PR #14 bounded
+ * the actual unguarded waits behind those hangs (source-level trace, not
+ * a guess — see that PR's description). `051` stays quarantined: no
+ * comparable structural defect was found for it (it doesn't share
+ * 049/050/052's `_find_banking_field` cascade), so no fix exists yet.
+ *
+ * `053`-`059` remain quarantined from a real live run and a
  * source-level trace, not static review: every one of these calls
  * Playwright's `page.expect_download(timeout=TIMEOUT)` (`TIMEOUT` = 30s,
  * config.py) waiting for a real browser download event. `053` stalled and
@@ -97,23 +98,14 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
  * staging)") confirms staging doesn't reliably fire download events at
  * all. No other test in the file calls `expect_download`, so the blast
  * radius stops at `059`. One shared root cause, not eight independent
- * bugs. The rest of the file (the other ~94 tests) showed no such
- * pattern and runs normally as part of batch 2.
+ * bugs — and conftest.py was checked clean (accept_downloads already
+ * defaults true), so this isn't a client-side config gap either. Still
+ * unresolved. The rest of the file runs normally as part of batch 2.
  */
 const RUN_PANELADMIN_BATCH = true;
 
 const QUARANTINED_PANELADMIN_TESTS = [
-  'test_TC_PANELADMIN_007_assign_recommended_interviewer',
-  'test_TC_PANELADMIN_008_unassign_proposed_interviewer',
-  // 048 shares 049-052's exact chained-wizard-fallback shape (same
-  // Add-Interviewer scaffold) but was missed by ADR-0055's original
-  // static review. Failed in all 3 live runs today at ~9m50s every
-  // time -- never passes, just burns the time. docs/adr/0056.
-  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
-  'test_TC_PANELADMIN_049_add_interviewer_account_number_mismatch_validation',
-  'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
   'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
-  'test_TC_PANELADMIN_052_add_interviewer_successfully',
   'test_TC_PANELADMIN_053_download_basic_predefined_reports_as_excel',
   'test_TC_PANELADMIN_054_download_interviewers_payment_report_with_date_filter',
   'test_TC_PANELADMIN_055_download_uploaded_profiles_report_as_excel',
