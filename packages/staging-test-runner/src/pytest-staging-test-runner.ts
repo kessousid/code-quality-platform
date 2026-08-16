@@ -145,6 +145,21 @@ const QUARANTINED_PANELADMIN_TESTS = [
  */
 const SKIP_BATCH_1 = process.env.STAGING_SKIP_BATCH_1 === 'true';
 
+/**
+ * Isolated-dev-run escape hatch, for testing a brand new test file/branch
+ * without either merging it to main (which batch 1's blanket `tests`
+ * collection would immediately sweep into every future run — there's no
+ * allowlist, just an ignore of test_paneladmin.py) or waiting through the
+ * full ~2h batch 1. When set, `STAGING_ONLY_PATH` replaces the normal
+ * batch1/batch2 split entirely with a single ad hoc batch targeting just
+ * that path (space-separated pytest args, e.g. one test file), against
+ * whatever `STAGING_TEST_BRANCH` names (defaults to the repo's normal
+ * default branch if unset). Both unset (the normal case) behaves exactly
+ * as before this existed.
+ */
+const ONLY_PATH = process.env.STAGING_ONLY_PATH?.trim() || undefined;
+const TEST_BRANCH = process.env.STAGING_TEST_BRANCH?.trim() || undefined;
+
 function pythonEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -297,7 +312,14 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         'git clone',
         await runSubprocess(
           this.options.gitCommand ?? 'git',
-          ['clone', '--depth', '1', this.cloneUrl(), repoDir],
+          [
+            'clone',
+            '--depth',
+            '1',
+            ...(TEST_BRANCH ? ['--branch', TEST_BRANCH] : []),
+            this.cloneUrl(),
+            repoDir,
+          ],
           { cwd: workDir, envVarName: 'STAGING_TESTS_GIT_PATH', onStdout, onStderr },
         ),
       );
@@ -337,6 +359,36 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       const sourceUrl = this.sourceUrl();
       const results: StagingTestResult[] = [];
+
+      // Isolated dev run: STAGING_ONLY_PATH bypasses the normal
+      // batch1/batch2 split entirely and just runs that one path,
+      // owning the full 0-100% progress range. No quarantine-list
+      // deselects or synthesized skip rows -- those only apply to the
+      // real batch 2.
+      if (ONLY_PATH) {
+        console.error(
+          `[staging] STAGING_ONLY_PATH set -- running only "${ONLY_PATH}"` +
+            (TEST_BRANCH ? ` on branch "${TEST_BRANCH}"` : '') +
+            ', skipping the normal batch1/batch2 split.',
+        );
+        const onlyBatch = await this.runBatch(
+          python,
+          repoDir,
+          path.join(workDir, 'report-only.xml'),
+          ONLY_PATH.split(/\s+/),
+          sourceUrl,
+          onStdout,
+          onStderr,
+          onProgress,
+        );
+        results.push(...onlyBatch);
+
+        if (results.length === 0) {
+          throw new Error('Staging test batch(es) failed to produce any results.');
+        }
+        return results;
+      }
+
       // Both batches run -> 79/21 split. Only one runs (batch 2 disabled,
       // or batch 1 skipped via STAGING_SKIP_BATCH_1) -> that one owns the
       // full 0-100% range.
