@@ -76,13 +76,30 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
  * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
  * specific tests below.
  *
- * `007`, `008`, `048`, `049`, `050`, `052` were quarantined for
- * chained-wizard-fallback / unbounded-retry hangs (docs/adr/0055,
- * docs/adr/0056), then un-quarantined once curatal_tests PR #14 bounded
- * the actual unguarded waits behind those hangs (source-level trace, not
- * a guess — see that PR's description). `051` stays quarantined: no
- * comparable structural defect was found for it (it doesn't share
- * 049/050/052's `_find_banking_field` cascade), so no fix exists yet.
+ * `007`/`008` were quarantined for an unbounded-retry hang (docs/adr/0055),
+ * then un-quarantined once curatal_tests PR #14 bounded the actual
+ * unguarded `.inner_text()` waits behind it — confirmed live (2026-08-15
+ * scheduled run): both ran cleanly in ~70s each.
+ *
+ * `048`/`049`/`050`/`052` were also un-quarantined by that same PR #14 on
+ * the theory that its `_find_banking_field` timeout bound fixed their
+ * shared chained-wizard-fallback hang too — that theory did NOT hold live.
+ * The same 2026-08-15 run showed all four still took the full ~10 minutes
+ * each (FAILED/ERROR), which then reproduced the exact page-poisoning
+ * cascade PR #12's recovery guard was supposed to prevent: every test from
+ * `060` through `084` (25 tests) also errored at ~10 minutes each,
+ * eventually blowing through the whole-batch `MAX_PYTEST_DURATION_MS`
+ * ceiling and getting the entire batch 2 subprocess force-killed as hung.
+ * Because that kill happens before pytest's own `pytest_sessionfinish`
+ * hook ever runs, `report-2.xml` was never written — so EVERY batch 2
+ * result from that run was lost, not just these four, including the
+ * `007`/`008`/`009`-`047` tests that had already passed cleanly. Restored
+ * to quarantine; PR #14's fix for these four specifically needs more work
+ * before retrying.
+ *
+ * `051` stays quarantined: no comparable structural defect was found for
+ * it (it doesn't share 048/049/050/052's `_find_banking_field` cascade),
+ * so no fix exists yet.
  *
  * `053`-`059` remain quarantined from a real live run and a
  * source-level trace, not static review: every one of these calls
@@ -105,7 +122,11 @@ const PANELADMIN_FILE = 'tests/test_paneladmin.py';
 const RUN_PANELADMIN_BATCH = true;
 
 const QUARANTINED_PANELADMIN_TESTS = [
+  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
+  'test_TC_PANELADMIN_049_add_interviewer_account_number_mismatch_validation',
+  'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
   'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
+  'test_TC_PANELADMIN_052_add_interviewer_successfully',
   'test_TC_PANELADMIN_053_download_basic_predefined_reports_as_excel',
   'test_TC_PANELADMIN_054_download_interviewers_payment_report_with_date_filter',
   'test_TC_PANELADMIN_055_download_uploaded_profiles_report_as_excel',
