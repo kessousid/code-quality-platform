@@ -64,6 +64,13 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_SLOT_CHECK_EMAIL'),
     password: requireEnv('PORTAL_QA_SLOT_CHECK_PASSWORD'),
   };
+  // A dedicated Platform Admin login for the three Candidate Search
+  // checks only — that feature lives on the recruiter/admin side of the
+  // app, not the candidate/employer side `credentials` normally logs into.
+  const candidateSearchCredentials = {
+    email: requireEnv('PORTAL_QA_PLATFORM_ADMIN_EMAIL'),
+    password: requireEnv('PORTAL_QA_PLATFORM_ADMIN_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -88,7 +95,7 @@ async function main(): Promise<void> {
   const useCase = new RunQaAutomationSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
     new PrismaQaAutomationTestResultRepository(prisma),
-    createPortalAutomationTests(credentials, slotCheckCredentials),
+    createPortalAutomationTests(credentials, slotCheckCredentials, candidateSearchCredentials),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });
       return {
