@@ -70,7 +70,16 @@ const MAX_PYTEST_DURATION_MS = 5 * 60 * 60 * 1000;
  * tests, is what actually stops one slow file from starving everything
  * else's time budget — raising the single shared ceiling didn't.
  */
-const PANELADMIN_FILE = 'tests/test_paneladmin.py';
+// Path updated 2026-08-19 -- curatal_tests commit b83ed99 (2026-08-18)
+// moved this file to tests/roles/panel_admin/test_paneladmin.py without
+// notice. The stale old path here silently broke both batches on the very
+// next scheduled run: batch 1's --ignore no longer matched anything real
+// (so it absorbed the whole unquarantined paneladmin file and hung on the
+// exact tests QUARANTINED_PANELADMIN_TESTS exists to keep out, eating the
+// full 5h ceiling), and batch 2's target path collected zero tests. Only
+// the unconditionally-appended quarantine stub rows survived, which is why
+// that run's report showed just 12 results instead of ~500.
+const PANELADMIN_FILE = 'tests/roles/panel_admin/test_paneladmin.py';
 
 /**
  * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
