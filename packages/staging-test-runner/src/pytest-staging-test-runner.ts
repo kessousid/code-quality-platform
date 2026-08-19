@@ -146,6 +146,26 @@ const QUARANTINED_PANELADMIN_TESTS = [
 ];
 
 /**
+ * Batch 1's own quarantine list (docs/adr/0055's pattern, applied outside
+ * test_paneladmin.py for the first time). Full `file::Class::test` node
+ * IDs, not bare names -- unlike `QUARANTINED_PANELADMIN_TESTS`, batch 1
+ * isn't scoped to one file, so a bare name alone wouldn't be enough to
+ * build a `--deselect` flag.
+ *
+ * `TC_SA_0068`/`TC_SA_0069` (tests/roles/scheduling_admin/test_netting.py)
+ * carried a working `@pytest.mark.skip(reason="Hangs indefinitely")` right
+ * up until curatal_tests commit b83ed99 (2026-08-18) commented both out.
+ * The same commit's unrelated `test_paneladmin.py` move already caused one
+ * lost run (see PANELADMIN_FILE's comment) by letting a hang-prone test
+ * back into batch 1 uncontrolled -- deselecting these here rather than
+ * waiting to see if they hang for real on a live run.
+ */
+const QUARANTINED_BATCH1_TESTS = [
+  'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0068_csv_download_successful',
+  'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
+];
+
+/**
  * Env-var escape hatch (not a source constant like `RUN_PANELADMIN_BATCH`)
  * so batch 1 can be skipped for a single run — e.g. re-running just batch 2
  * against a fresh deselect list right after a batch 1 that already
@@ -414,7 +434,11 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             python,
             repoDir,
             path.join(workDir, 'report-1.xml'),
-            ['tests', `--ignore=${PANELADMIN_FILE}`],
+            [
+              'tests',
+              `--ignore=${PANELADMIN_FILE}`,
+              ...QUARANTINED_BATCH1_TESTS.map((id) => `--deselect=${id}`),
+            ],
             sourceUrl,
             onStdout,
             onStderr,
@@ -424,6 +448,23 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         } catch (error) {
           console.error(`[staging batch 1] failed: ${(error as Error).message}`);
         }
+
+        // Same "still show up in the report" rationale as the paneladmin
+        // quarantine stubs below — pushed unconditionally, regardless of
+        // whether batch 1 itself succeeded or threw.
+        results.push(
+          ...QUARANTINED_BATCH1_TESTS.map((id) => {
+            const testName = id.split('::').pop() ?? id;
+            return {
+              testId: id,
+              testName,
+              passed: false,
+              details:
+                'SKIPPED: Deselected before this run -- known to hang (docs/adr/0055, docs/adr/0056). Not executed.',
+              sourceUrl,
+            };
+          }),
+        );
       } else {
         console.error('[staging batch 1] skipped (STAGING_SKIP_BATCH_1=true)');
       }
