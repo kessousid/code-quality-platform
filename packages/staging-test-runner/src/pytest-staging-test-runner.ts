@@ -165,16 +165,29 @@ const QUARANTINED_PANELADMIN_TESTS = [
  * separate real runs both stalled at exactly this point (right after the
  * module-scoped `masterrecruiter_page` fixture's first-use login for this
  * file), 15+ minutes with zero output, well past pytest.ini's own
- * `--timeout=600`. That timeout uses pytest-timeout's default "signal"
- * method, which can't interrupt a call that never yields back to Python's
- * signal handler -- plausibly why it never fired. Quarantined here rather
- * than losing a whole batch 1 (400+ already-collected results) to the 5h
- * whole-batch ceiling a second time.
+ * `--timeout=600` (default "signal" method). curatal_tests briefly tried
+ * `--timeout-method=thread` (PR #21) to make that timeout actually fire --
+ * confirmed live it DID fire this time (on a different test, see below),
+ * but interrupting Playwright's sync API mid-call (greenlet-based) crashed
+ * the whole pytest process instead of just failing that one test, losing
+ * batch 1's results anyway, just faster. Reverted (PR #22); quarantining
+ * specific known-hangs here is the actual mitigation, not the timeout
+ * method.
+ *
+ * `TC_MR_005_Shortlist_Specific_Candidate` (tests/roles/cod/
+ * master_recruiter/test_mr_shortlist_specific_candidate.py) -- confirmed
+ * hung live on 2026-08-20 in the SAME `ensure_recruiter_dashboard` /
+ * dashboard-navigation retry path as TC_MR_006 above, despite this exact
+ * test completing cleanly (XFAIL) in two earlier runs. Looks like a real,
+ * intermittent staging-side flakiness in master-recruiter dashboard
+ * loading rather than a deterministic code bug -- quarantined defensively
+ * since a single bad run costs the whole batch.
  */
 const QUARANTINED_BATCH1_TESTS = [
   'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0068_csv_download_successful',
   'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
   'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
+  'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
 ];
 
 /**
