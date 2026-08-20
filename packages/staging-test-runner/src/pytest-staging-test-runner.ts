@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { StagingTestRunner, StagingTestRunResult, StagingTestResult } from '@cqp/core';
@@ -325,34 +325,31 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return `${base}/tree/main/tests`;
   }
 
-  /**
-   * Resolves `git`'s real absolute path via `which` -- called once,
-   * right after a successful `git clone` (so it's known to still work at
-   * that moment), for reuse by every later git invocation in this same
-   * run instead of a bare command name needing a fresh PATH lookup each
-   * time. Falls back to the configured/default command name (unresolved)
-   * if `which` itself fails for any reason -- same behavior as before
-   * this existed, not a regression.
-   */
-  private async resolveGitAbsolutePath(): Promise<string> {
-    const configured = this.options.gitCommand ?? 'git';
-    try {
-      const result = await runSubprocess('which', [configured], {
-        cwd: process.cwd(),
-        envVarName: 'STAGING_TESTS_GIT_PATH',
-      });
-      const resolved = result.stdout.trim().split('\n')[0]?.trim();
-      return resolved && resolved.length > 0 ? resolved : configured;
-    } catch {
-      return configured;
-    }
-  }
-
   async run(
     onProgress?: (percent: number) => void,
     onlyTestNames?: string[],
   ): Promise<StagingTestRunResult> {
     return { results: await this.runSuite(onProgress, onlyTestNames) };
+  }
+
+  /**
+   * Recursively lists every `.py` file under `dir` -- the local
+   * replacement for git grep's old pathspec (tests/*.py, tests/star-star/*.py),
+   * see `resolveOnlyTestNames` below for why this is done via a plain
+   * filesystem walk rather than shelling out to git.
+   */
+  private async listPyFiles(dir: string): Promise<string[]> {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const files: string[] = [];
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...(await this.listPyFiles(full)));
+      } else if (entry.isFile() && entry.name.endsWith('.py')) {
+        files.push(full);
+      }
+    }
+    return files;
   }
 
   /**
@@ -362,70 +359,52 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * fresh clone -- the "rerun failed/skipped tests" feature. Can't be
    * done from the stored JUnit `classname` alone (dots collapse the
    * path separator, `.py`, and package boundaries into one ambiguous
-   * string), so this does what a human would: `git grep` for the `def`,
+   * string), so this does what a human would: search for the `def`,
    * then walk upward for the nearest enclosing `class` at a shallower
    * indent. A name matching zero or more than one `def` (renamed,
    * removed, or otherwise ambiguous since the source run) is dropped
    * with a logged reason rather than guessed at.
+   *
+   * Confirmed live (2026-08-20) this used to shell out to `git grep`
+   * instead: a bare `git` command that worked for the clone above went
+   * on to fail with ENOENT for the rest of that container's lifetime.
+   * Resolving git's absolute path via `which` right after the clone
+   * (tried first) did NOT fix it either -- the git *binary itself* was
+   * gone from disk by the time this ran (even `/usr/bin/git` resolved by
+   * `which` moments earlier came back ENOENT), most likely removed as a
+   * side effect of the `playwright install --with-deps` apt-get run that
+   * happens between the clone and here. Since the repo is already cloned
+   * to local disk at this point, there was never an actual need for git
+   * here at all -- a plain recursive file read+regex search over
+   * `repoDir/tests` does the same job without depending on git surviving
+   * past the initial clone.
    */
-  /**
-   * Confirmed live (2026-08-20): a bare `git` spawn can transiently fail
-   * with ENOENT right after a heavy clone/pip-install/apt burst, even
-   * though the exact same command just worked seconds earlier for the
-   * clone itself -- a real (if rare) container-level blip, not a logic
-   * bug. Previously this was never caught at all, so one transient
-   * failure crashed the entire rerun (every already-passed test's worth
-   * of intent lost) instead of just this one lookup. Returns undefined
-   * (not a thrown error) after 3 attempts, so the caller can treat it the
-   * same as "no match found" rather than aborting everything else.
-   */
-  private async gitGrepDefWithRetry(
-    repoDir: string,
-    gitCommand: string,
-    name: string,
-  ): Promise<SubprocessResult | undefined> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        return await runSubprocess(
-          gitCommand,
-          ['grep', '-n', `def ${name}(`, '--', 'tests/*.py', 'tests/**/*.py'],
-          { cwd: repoDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
-        );
-      } catch (error) {
-        lastError = error;
-        if (attempt < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
-        }
-      }
-    }
-    console.error(
-      `[staging] git grep failed 3x resolving "${name}" -- treating as unresolved: ${(lastError as Error)?.message ?? lastError}`,
-    );
-    return undefined;
-  }
-
-  private async resolveOnlyTestNames(
-    repoDir: string,
-    gitCommand: string,
-    names: string[],
-  ): Promise<string[]> {
+  private async resolveOnlyTestNames(repoDir: string, names: string[]): Promise<string[]> {
+    const testsDir = path.join(repoDir, 'tests');
+    const pyFiles = await this.listPyFiles(testsDir);
     const nodeIds: string[] = [];
     const unresolved: string[] = [];
     for (const name of names) {
-      const grepResult = await this.gitGrepDefWithRetry(repoDir, gitCommand, name);
-      if (grepResult === undefined) {
+      const defPattern = new RegExp(`\\bdef ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\(`);
+      const matches: { filePath: string; lineNo: number }[] = [];
+      for (const file of pyFiles) {
+        const content = await readFile(file, 'utf-8');
+        const fileLines = content.split('\n');
+        for (let i = 0; i < fileLines.length; i += 1) {
+          if (defPattern.test(fileLines[i]!)) {
+            matches.push({
+              filePath: path.relative(repoDir, file).replace(/\\/g, '/'),
+              lineNo: i + 1,
+            });
+          }
+        }
+      }
+      if (matches.length !== 1) {
         unresolved.push(name);
         continue;
       }
-      const lines = grepResult.stdout.split('\n').filter((line) => line.trim().length > 0);
-      if (lines.length !== 1) {
-        unresolved.push(name);
-        continue;
-      }
-      const [filePath, lineNoRaw] = lines[0]!.split(':');
-      const lineNo = Number(lineNoRaw);
-      const source = await readFile(path.join(repoDir, filePath!), 'utf-8');
+      const { filePath, lineNo } = matches[0]!;
+      const source = await readFile(path.join(repoDir, filePath), 'utf-8');
       const srcLines = source.split('\n');
       const defLine = srcLines[lineNo - 1] ?? '';
       const defIndent = defLine.length - defLine.trimStart().length;
@@ -439,8 +418,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           break;
         }
       }
-      const posixPath = filePath!.replace(/\\/g, '/');
-      nodeIds.push(className ? `${posixPath}::${className}::${name}` : `${posixPath}::${name}`);
+      nodeIds.push(className ? `${filePath}::${className}::${name}` : `${filePath}::${name}`);
     }
     if (unresolved.length > 0) {
       console.error(
@@ -459,7 +437,6 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    */
   private async runOnlyTestNamesBatch(
     python: string,
-    gitCommand: string,
     repoDir: string,
     workDir: string,
     onlyTestNames: string[],
@@ -468,7 +445,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
   ): Promise<StagingTestResult[]> {
-    const nodeIds = await this.resolveOnlyTestNames(repoDir, gitCommand, onlyTestNames);
+    const nodeIds = await this.resolveOnlyTestNames(repoDir, onlyTestNames);
     if (nodeIds.length === 0) {
       throw new Error(
         `None of the ${onlyTestNames.length} requested test name(s) could be resolved to a current source location.`,
@@ -585,21 +562,16 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       // an env var like ONLY_PATH below) — takes priority over ONLY_PATH
       // if both were somehow set.
       if (onlyTestNames && onlyTestNames.length > 0) {
-        // Confirmed live (2026-08-20): a bare `git` command that just
-        // worked for the clone above can go on to fail EVERY later
-        // invocation with ENOENT ("git not found") for the rest of this
-        // same container's lifetime -- not a one-off blip (the retry in
-        // gitGrepDefWithRetry doesn't help when it's this consistent),
-        // most likely something in the pip/apt steps between here and
-        // there disrupting PATH resolution for this container instance.
-        // Resolving git's real absolute path once, right now while it's
-        // still known to work, and reusing that for every later call
-        // sidesteps PATH lookup entirely instead of hoping it stays
-        // valid.
-        const gitCommand = await this.resolveGitAbsolutePath();
+        // See resolveOnlyTestNames's own doc comment: this used to shell
+        // out to `git grep` here, but the git binary itself was confirmed
+        // gone from disk by this point in the run (not just a PATH issue —
+        // even an absolute, `which`-resolved path came back ENOENT), most
+        // likely a side effect of the `playwright install --with-deps`
+        // apt-get run above. resolveOnlyTestNames now searches the already-
+        // cloned repo directly instead, with no git dependency beyond the
+        // initial clone.
         return this.runOnlyTestNamesBatch(
           python,
-          gitCommand,
           repoDir,
           workDir,
           onlyTestNames,
