@@ -337,9 +337,27 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * replacement for git grep's old pathspec (tests/*.py, tests/star-star/*.py),
    * see `resolveOnlyTestNames` below for why this is done via a plain
    * filesystem walk rather than shelling out to git.
+   *
+   * Confirmed live (2026-08-20): `readdir` on a subdirectory of this same
+   * run's own fresh clone threw ENOENT mid-walk -- something in this
+   * container transiently disturbs the temp tree the same way it earlier
+   * disturbed the git binary itself (see resolveOnlyTestNames's doc
+   * comment). Previously uncaught, this crashed the entire process rather
+   * than just failing this one lookup. A directory that can't be read
+   * contributes zero files rather than aborting the whole walk -- the
+   * caller already treats a name with zero matches as "unresolved", the
+   * same outcome as a genuinely renamed/removed test.
    */
   private async listPyFiles(dir: string): Promise<string[]> {
-    const entries = await readdir(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (error) {
+      console.error(
+        `[staging] could not read "${dir}" while resolving test names: ${(error as Error).message}`,
+      );
+      return [];
+    }
     const files: string[] = [];
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
@@ -388,7 +406,12 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       const defPattern = new RegExp(`\\bdef ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\(`);
       const matches: { filePath: string; lineNo: number }[] = [];
       for (const file of pyFiles) {
-        const content = await readFile(file, 'utf-8');
+        let content: string;
+        try {
+          content = await readFile(file, 'utf-8');
+        } catch {
+          continue;
+        }
         const fileLines = content.split('\n');
         for (let i = 0; i < fileLines.length; i += 1) {
           if (defPattern.test(fileLines[i]!)) {
@@ -404,7 +427,13 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         continue;
       }
       const { filePath, lineNo } = matches[0]!;
-      const source = await readFile(path.join(repoDir, filePath), 'utf-8');
+      let source: string;
+      try {
+        source = await readFile(path.join(repoDir, filePath), 'utf-8');
+      } catch {
+        unresolved.push(name);
+        continue;
+      }
       const srcLines = source.split('\n');
       const defLine = srcLines[lineNo - 1] ?? '';
       const defIndent = defLine.length - defLine.trimStart().length;

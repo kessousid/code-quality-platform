@@ -120,6 +120,13 @@ async function main(): Promise<void> {
   worker.on('failed', (job, error) => {
     console.error(`[qa-automation] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
   });
+  // EventEmitter throws synchronously if an 'error' event fires with no
+  // listener attached -- without this, any internal BullMQ error on this
+  // Worker (e.g. a Redis blip) crashes the whole process instead of just
+  // logging.
+  worker.on('error', (error) => {
+    console.error('[qa-automation] worker error:', error);
+  });
 
   const stagingUseCase = new RunStagingTestSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
@@ -150,6 +157,9 @@ async function main(): Promise<void> {
       `[qa-automation-staging] job ${job.id} (org ${job.data.orgId}, ${job.data.triggeredBy}) completed`,
     );
   });
+  stagingWorker.on('error', (error) => {
+    console.error('[qa-automation-staging] worker error:', error);
+  });
   stagingWorker.on('failed', (job, error) => {
     console.error(`[qa-automation-staging] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
   });
@@ -170,6 +180,27 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
+
+/**
+ * Confirmed live (2026-08-20): a rejection from deep inside a job's own
+ * processing (a plain `readdir` ENOENT, nothing exotic) still reached
+ * Node's default crash handler and took down this entire long-running
+ * process -- both the production and staging queues, not just the one
+ * broken job -- even though the use case wrapping it has its own
+ * try/catch. Whatever let it slip past that (most plausibly something in
+ * BullMQ's own internals under I/O-heavy load, not this file), the fix
+ * that actually matters for a worker service is not depending on every
+ * layer's error handling being perfect: logging and staying up is far
+ * better than a full-process crash that kills every other in-flight job
+ * along with it. Registered before `main()` runs so nothing during
+ * startup is unprotected either.
+ */
+process.on('uncaughtException', (error) => {
+  console.error('[qa-automation] uncaught exception (process staying up):', error);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[qa-automation] unhandled rejection (process staying up):', reason);
+});
 
 main().catch((error: unknown) => {
   console.error('[qa-automation] fatal error during bootstrap:', error);
