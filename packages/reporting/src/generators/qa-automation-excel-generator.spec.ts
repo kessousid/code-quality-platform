@@ -141,4 +141,84 @@ describe('ExcelQaAutomationReportGenerator', () => {
     expect(values).toContain('test-e');
     expect(values).toContain('404 in this environment');
   });
+
+  it('splits Failed/Skipped/Quarantined onto their own sheets, keeping a quarantined stub out of both Failed and Skipped', async () => {
+    const results = [
+      makeQaAutomationTestResult({
+        id: 'r1',
+        testId: 't1',
+        testName: 'test_TC_PANELADMIN_023_slot_availability_filter',
+        passed: false,
+        details:
+          '>       assert 0 == 6\nE       AssertionError: expected 0, got 6\n\ntest_paneladmin.py:2781: AssertionError',
+      }),
+      makeQaAutomationTestResult({
+        id: 'r2',
+        testId: 't2',
+        testName: 'test_admin_verify_interview_queue_candidate',
+        passed: false,
+        details: 'SKIPPED: No COD job in first 50 rows has an Interview Queue candidate',
+      }),
+      makeQaAutomationTestResult({
+        id: 'r3',
+        testId: 't3',
+        testName: 'test_TC_SA_0068_csv_download_successful',
+        passed: false,
+        details:
+          'SKIPPED: Deselected before this run -- known to hang (docs/adr/0055, docs/adr/0056). Not executed.',
+      }),
+      makeQaAutomationTestResult({ id: 'r4', testId: 't4', testName: 'test_passes', passed: true }),
+    ];
+    const model = buildQaAutomationReportModel(makeQaAutomationRun(), results);
+    const buffer = await new ExcelQaAutomationReportGenerator().generate(model);
+
+    const workbook = new ExcelJS.Workbook();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await workbook.xlsx.load(buffer as any);
+
+    const summary = workbook.getWorksheet('Summary')!;
+    const summaryRows = summary
+      .getSheetValues()
+      .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row));
+    const asField = (name: string) => summaryRows.find((row) => row[1] === name)?.[2];
+    expect(asField('Passed')).toBe(1);
+    expect(asField('Failed')).toBe(1);
+    expect(asField('Skipped')).toBe(1);
+    expect(asField('Quarantined')).toBe(1);
+
+    const failedNames = workbook
+      .getWorksheet('Failed')!
+      .getSheetValues()
+      .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row))
+      .map((row) => row[1]);
+    expect(failedNames).toContain('test_TC_PANELADMIN_023_slot_availability_filter');
+    expect(failedNames).not.toContain('test_admin_verify_interview_queue_candidate');
+    expect(failedNames).not.toContain('test_TC_SA_0068_csv_download_successful');
+
+    const failedRow = workbook
+      .getWorksheet('Failed')!
+      .getSheetValues()
+      .find(
+        (row) => Array.isArray(row) && row[1] === 'test_TC_PANELADMIN_023_slot_availability_filter',
+      );
+    expect((failedRow as ExcelJS.CellValue[])[3]).toBe('AssertionError: expected 0, got 6');
+
+    const skippedNames = workbook
+      .getWorksheet('Skipped')!
+      .getSheetValues()
+      .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row))
+      .map((row) => row[1]);
+    expect(skippedNames).toContain('test_admin_verify_interview_queue_candidate');
+    expect(skippedNames).not.toContain('test_TC_SA_0068_csv_download_successful');
+
+    const quarantinedNames = workbook
+      .getWorksheet('Quarantined')!
+      .getSheetValues()
+      .filter((row): row is ExcelJS.CellValue[] => Array.isArray(row))
+      .map((row) => row[1]);
+    expect(quarantinedNames).toContain('test_TC_SA_0068_csv_download_successful');
+    expect(quarantinedNames).not.toContain('test_admin_verify_interview_queue_candidate');
+
+    expect(workbook.getWorksheet('Legend')).toBeDefined();
+  });
 });
