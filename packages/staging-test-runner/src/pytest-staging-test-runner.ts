@@ -345,6 +345,43 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * removed, or otherwise ambiguous since the source run) is dropped
    * with a logged reason rather than guessed at.
    */
+  /**
+   * Confirmed live (2026-08-20): a bare `git` spawn can transiently fail
+   * with ENOENT right after a heavy clone/pip-install/apt burst, even
+   * though the exact same command just worked seconds earlier for the
+   * clone itself -- a real (if rare) container-level blip, not a logic
+   * bug. Previously this was never caught at all, so one transient
+   * failure crashed the entire rerun (every already-passed test's worth
+   * of intent lost) instead of just this one lookup. Returns undefined
+   * (not a thrown error) after 3 attempts, so the caller can treat it the
+   * same as "no match found" rather than aborting everything else.
+   */
+  private async gitGrepDefWithRetry(
+    repoDir: string,
+    gitCommand: string,
+    name: string,
+  ): Promise<SubprocessResult | undefined> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        return await runSubprocess(
+          gitCommand,
+          ['grep', '-n', `def ${name}(`, '--', 'tests/*.py', 'tests/**/*.py'],
+          { cwd: repoDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
+        );
+      } catch (error) {
+        lastError = error;
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        }
+      }
+    }
+    console.error(
+      `[staging] git grep failed 3x resolving "${name}" -- treating as unresolved: ${(lastError as Error)?.message ?? lastError}`,
+    );
+    return undefined;
+  }
+
   private async resolveOnlyTestNames(
     repoDir: string,
     gitCommand: string,
@@ -353,11 +390,11 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     const nodeIds: string[] = [];
     const unresolved: string[] = [];
     for (const name of names) {
-      const grepResult = await runSubprocess(
-        gitCommand,
-        ['grep', '-n', `def ${name}(`, '--', 'tests/*.py', 'tests/**/*.py'],
-        { cwd: repoDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
-      );
+      const grepResult = await this.gitGrepDefWithRetry(repoDir, gitCommand, name);
+      if (grepResult === undefined) {
+        unresolved.push(name);
+        continue;
+      }
       const lines = grepResult.stdout.split('\n').filter((line) => line.trim().length > 0);
       if (lines.length !== 1) {
         unresolved.push(name);
