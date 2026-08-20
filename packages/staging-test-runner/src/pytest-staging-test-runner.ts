@@ -300,8 +300,115 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return `${base}/tree/main/tests`;
   }
 
-  async run(onProgress?: (percent: number) => void): Promise<StagingTestRunResult> {
-    return { results: await this.runSuite(onProgress) };
+  async run(
+    onProgress?: (percent: number) => void,
+    onlyTestNames?: string[],
+  ): Promise<StagingTestRunResult> {
+    return { results: await this.runSuite(onProgress, onlyTestNames) };
+  }
+
+  /**
+   * Resolves bare test function names (e.g.
+   * "test_TC_ADMIN_008_search_filter_users", no `[chromium]` suffix, no
+   * file/class path) to real pytest node IDs against this run's own
+   * fresh clone -- the "rerun failed/skipped tests" feature. Can't be
+   * done from the stored JUnit `classname` alone (dots collapse the
+   * path separator, `.py`, and package boundaries into one ambiguous
+   * string), so this does what a human would: `git grep` for the `def`,
+   * then walk upward for the nearest enclosing `class` at a shallower
+   * indent. A name matching zero or more than one `def` (renamed,
+   * removed, or otherwise ambiguous since the source run) is dropped
+   * with a logged reason rather than guessed at.
+   */
+  private async resolveOnlyTestNames(
+    repoDir: string,
+    gitCommand: string,
+    names: string[],
+  ): Promise<string[]> {
+    const nodeIds: string[] = [];
+    const unresolved: string[] = [];
+    for (const name of names) {
+      const grepResult = await runSubprocess(
+        gitCommand,
+        ['grep', '-n', `def ${name}(`, '--', 'tests/*.py', 'tests/**/*.py'],
+        { cwd: repoDir, envVarName: 'STAGING_TESTS_GIT_PATH' },
+      );
+      const lines = grepResult.stdout.split('\n').filter((line) => line.trim().length > 0);
+      if (lines.length !== 1) {
+        unresolved.push(name);
+        continue;
+      }
+      const [filePath, lineNoRaw] = lines[0]!.split(':');
+      const lineNo = Number(lineNoRaw);
+      const source = await readFile(path.join(repoDir, filePath!), 'utf-8');
+      const srcLines = source.split('\n');
+      const defLine = srcLines[lineNo - 1] ?? '';
+      const defIndent = defLine.length - defLine.trimStart().length;
+      let className: string | undefined;
+      for (let i = lineNo - 2; i >= 0; i -= 1) {
+        const line = srcLines[i] ?? '';
+        const stripped = line.trimStart();
+        const indent = line.length - stripped.length;
+        if (stripped.startsWith('class ') && indent < defIndent) {
+          className = stripped.slice('class '.length).split('(')[0]!.split(':')[0]!.trim();
+          break;
+        }
+      }
+      const posixPath = filePath!.replace(/\\/g, '/');
+      nodeIds.push(className ? `${posixPath}::${className}::${name}` : `${posixPath}::${name}`);
+    }
+    if (unresolved.length > 0) {
+      console.error(
+        `[staging] could not resolve ${unresolved.length} test name(s) to a unique current ` +
+          `source location (renamed, removed, or ambiguous since the original run) -- skipped: ` +
+          unresolved.join(', '),
+      );
+    }
+    return nodeIds;
+  }
+
+  /**
+   * Resolves `onlyTestNames` against this fresh clone and runs exactly
+   * those as a single ad hoc batch owning the full 0-100% progress
+   * range — same shape as ONLY_PATH's own short-circuit in `runSuite`.
+   */
+  private async runOnlyTestNamesBatch(
+    python: string,
+    repoDir: string,
+    workDir: string,
+    onlyTestNames: string[],
+    sourceUrl: string,
+    onStdout: (chunk: string) => void,
+    onStderr: (chunk: string) => void,
+    onProgress?: (percent: number) => void,
+  ): Promise<StagingTestResult[]> {
+    const nodeIds = await this.resolveOnlyTestNames(
+      repoDir,
+      this.options.gitCommand ?? 'git',
+      onlyTestNames,
+    );
+    if (nodeIds.length === 0) {
+      throw new Error(
+        `None of the ${onlyTestNames.length} requested test name(s) could be resolved to a current source location.`,
+      );
+    }
+    console.error(
+      `[staging] rerun request -- resolved ${nodeIds.length}/${onlyTestNames.length} test name(s), skipping the normal batch1/batch2 split.`,
+    );
+    const results = await this.runBatch(
+      python,
+      repoDir,
+      path.join(workDir, 'report-rerun.xml'),
+      nodeIds,
+      sourceUrl,
+      onStdout,
+      onStderr,
+      onProgress,
+    );
+    if (results.length === 0) {
+      throw new Error('Staging test batch(es) failed to produce any results.');
+    }
+    return results;
   }
 
   /**
@@ -322,7 +429,10 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * case batch 1's progress maps to the full 0-100% range instead of the
    * 0-79% split used when both batches run).
    */
-  private async runSuite(onProgress?: (percent: number) => void): Promise<StagingTestResult[]> {
+  private async runSuite(
+    onProgress?: (percent: number) => void,
+    onlyTestNames?: string[],
+  ): Promise<StagingTestResult[]> {
     const workDir = await mkdtemp(path.join(tmpdir(), 'cqp-staging-tests-'));
     const repoDir = path.join(workDir, 'repo');
     const python = this.options.pythonCommand ?? 'python3';
@@ -388,6 +498,22 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       const sourceUrl = this.sourceUrl();
       const results: StagingTestResult[] = [];
+
+      // "Rerun failed/skipped tests" (UI-triggered, job-data-scoped, not
+      // an env var like ONLY_PATH below) — takes priority over ONLY_PATH
+      // if both were somehow set.
+      if (onlyTestNames && onlyTestNames.length > 0) {
+        return this.runOnlyTestNamesBatch(
+          python,
+          repoDir,
+          workDir,
+          onlyTestNames,
+          sourceUrl,
+          onStdout,
+          onStderr,
+          onProgress,
+        );
+      }
 
       // Isolated dev run: STAGING_ONLY_PATH bypasses the normal
       // batch1/batch2 split entirely and just runs that one path,

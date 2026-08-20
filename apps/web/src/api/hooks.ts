@@ -630,6 +630,24 @@ export function useTriggerQaAutomationStagingRun() {
   });
 }
 
+/**
+ * Enqueues a fresh staging run scoped to just `runId`'s non-passed,
+ * non-quarantined tests (the server resolves which ones — see
+ * selectRerunTargets/@cqp/core). `'nothing-to-rerun'` means every
+ * result in that run either passed or was a deliberately-quarantined
+ * stub, so there was nothing to enqueue.
+ */
+export function useRerunQaAutomationStagingTests(runId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiPost<{ status: 'queued'; testCount: number } | { status: 'nothing-to-rerun' }>(
+        `/qa-automation/staging/runs/${runId}/rerun`,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['qa-automation-runs', 'staging'] }),
+  });
+}
+
 export interface QaAutomationRunWithResults extends QaAutomationRun {
   results: QaAutomationTestResult[];
 }

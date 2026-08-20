@@ -81,6 +81,37 @@ export function isSkippedTestResult(details: string): boolean {
   return details.startsWith(SKIPPED_DETAIL_PREFIX);
 }
 
+/**
+ * The quarantine-stub detail prefix stamped by PytestStagingTestRunner for
+ * a test deselected before it even ran (known hang, docs/adr/0055,
+ * docs/adr/0056) — distinct from a real pytest skip. Re-running one of
+ * these would defeat the whole point of quarantining it.
+ */
+const QUARANTINE_DETAIL_PREFIX = 'SKIPPED: Deselected before this run';
+
+export function isQuarantinedTestResult(details: string): boolean {
+  return details.startsWith(QUARANTINE_DETAIL_PREFIX);
+}
+
+/**
+ * Bare test function names (parametrize suffix like `[chromium]`
+ * stripped) worth re-running from a completed staging run — every
+ * non-passed result except deliberately-quarantined ones. Feeds
+ * PytestStagingTestRunner's onlyTestNames, which re-derives the real
+ * file/class location itself against a fresh clone (see
+ * resolveOnlyTestNames's own doc comment for why the stored testId
+ * alone can't be used for this).
+ */
+export function selectRerunTargets(results: QaAutomationTestResult[]): string[] {
+  const names = new Set<string>();
+  for (const result of results) {
+    if (result.passed) continue;
+    if (isQuarantinedTestResult(result.details)) continue;
+    names.add(result.testName.replace(/\[.*?\]$/, ''));
+  }
+  return [...names];
+}
+
 export interface CreateQaAutomationRunInput {
   orgId: string;
   environment: QaAutomationEnvironment;

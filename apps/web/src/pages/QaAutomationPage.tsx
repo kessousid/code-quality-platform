@@ -14,6 +14,7 @@ import {
   useQaAutomationRuns,
   useQaAutomationSchedule,
   useQaAutomationStagingSchedule,
+  useRerunQaAutomationStagingTests,
   useTriggerQaAutomationRun,
   useTriggerQaAutomationStagingRun,
   useUpdateQaAutomationSchedule,
@@ -141,6 +142,44 @@ function RunReportActions({ runId }: { runId: string }) {
   );
 }
 
+/**
+ * Staging-only — a production run's test IDs come from this repo's own
+ * TS registry, not the external pytest suite, so there's nothing for
+ * PytestStagingTestRunner's name-resolution to re-target there. Scopes
+ * a fresh staging run to just this run's non-passed, non-quarantined
+ * tests (selectRerunTargets, server-side).
+ */
+function RerunFailedButton({ runId }: { runId: string }) {
+  const rerun = useRerunQaAutomationStagingTests(runId);
+  return (
+    <div className="mt-2 border-t pt-2">
+      <button
+        type="button"
+        onClick={() => rerun.mutate()}
+        disabled={rerun.isPending}
+        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+      >
+        {rerun.isPending ? 'Queuing rerun…' : 'Rerun failed & skipped tests'}
+      </button>
+      {rerun.data?.status === 'queued' && (
+        <span className="ml-2 text-xs text-green-700">
+          Queued {rerun.data.testCount} test(s) for rerun.
+        </span>
+      )}
+      {rerun.data?.status === 'nothing-to-rerun' && (
+        <span className="ml-2 text-xs text-neutral-500">
+          Nothing to rerun — every test either passed or is quarantined.
+        </span>
+      )}
+      {rerun.isError && (
+        <span className="ml-2 text-xs text-red-700">
+          {rerun.error instanceof ApiError ? rerun.error.message : 'Failed to queue rerun.'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Shared by both the production and staging sections — filtered server-side by `environment`. */
 function RunHistoryList({ environment }: { environment: QaAutomationEnvironment }) {
   const runsQuery = useQaAutomationRuns(1, 25, environment);
@@ -168,6 +207,9 @@ function RunHistoryList({ environment }: { environment: QaAutomationEnvironment 
             <>
               <RunResults runId={run.id} />
               <RunReportActions runId={run.id} />
+              {environment === 'staging' && run.status !== 'running' && (
+                <RerunFailedButton runId={run.id} />
+              )}
             </>
           )}
         </li>

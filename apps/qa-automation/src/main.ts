@@ -138,7 +138,11 @@ async function main(): Promise<void> {
   const stagingWorker = createQaAutomationStagingBullWorker(
     connection,
     async (job: Job<QaAutomationStagingJobData>) =>
-      stagingUseCase.execute({ orgId: job.data.orgId, triggeredBy: job.data.triggeredBy }),
+      stagingUseCase.execute({
+        orgId: job.data.orgId,
+        triggeredBy: job.data.triggeredBy,
+        ...(job.data.onlyTestNames !== undefined ? { onlyTestNames: job.data.onlyTestNames } : {}),
+      }),
   );
 
   stagingWorker.on('completed', (job) => {

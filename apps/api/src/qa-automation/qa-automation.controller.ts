@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -20,9 +21,11 @@ import {
   UpdateQaAutomationScheduleUseCase,
   UpdateQaAutomationStagingScheduleUseCase,
 } from '@cqp/application';
+import { selectRerunTargets } from '@cqp/core';
 import {
   enqueueManualQaAutomationRun,
   enqueueManualQaAutomationStagingRun,
+  enqueueRerunQaAutomationStagingTests,
   removeQaAutomationSchedule,
   removeQaAutomationStagingSchedule,
   upsertQaAutomationSchedule,
@@ -118,5 +121,37 @@ export class QaAutomationController {
       }
       throw error;
     }
+  }
+
+  /**
+   * "Rerun failed/skipped tests" from a completed staging run — every
+   * non-passed result except deliberately-quarantined ones (selectRerunTargets),
+   * enqueued as a fresh one-off staging job scoped to just those tests
+   * (PytestStagingTestRunner re-resolves the bare names against its own
+   * fresh clone; see that class's resolveOnlyTestNames for why).
+   * Staging-only: a production run's test IDs come from this repo's own
+   * TS registry, not the external pytest suite, so there's nothing for
+   * this mechanism to re-target there.
+   */
+  @Post('staging/runs/:id/rerun')
+  async rerunStagingRun(@CurrentOrg() orgId: string, @Param('id') id: string) {
+    let run;
+    try {
+      run = await this.getRunUseCase.execute(orgId, id);
+    } catch (error) {
+      if (error instanceof QaAutomationRunNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      throw error;
+    }
+    if (run.environment !== 'staging') {
+      throw new BadRequestException('Only a staging run can be rerun this way.');
+    }
+    const testNames = selectRerunTargets(run.results);
+    if (testNames.length === 0) {
+      return { status: 'nothing-to-rerun' as const };
+    }
+    await enqueueRerunQaAutomationStagingTests(this.stagingQueue, orgId, testNames);
+    return { status: 'queued' as const, testCount: testNames.length };
   }
 }

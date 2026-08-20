@@ -11,6 +11,8 @@ import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@c
 export interface RunStagingTestSuiteInput {
   orgId: string;
   triggeredBy: QaAutomationTrigger;
+  /** See StagingTestRunner.run's onlyTestNames -- the "rerun failed/skipped tests" feature. */
+  onlyTestNames?: string[];
 }
 
 /**
@@ -58,7 +60,7 @@ export class RunStagingTestSuiteUseCase {
         this.runRepository.updateProgress(input.orgId, run.id, percent).catch((error: unknown) => {
           console.error(`[staging run ${run.id}] failed to persist progress:`, error);
         });
-      });
+      }, input.onlyTestNames);
       for (const result of results) {
         await this.resultRepository.create({ runId: run.id, ...result });
       }

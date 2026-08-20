@@ -4,6 +4,20 @@ import type { QaAutomationTrigger } from '@cqp/core';
 export interface QaAutomationStagingJobData {
   orgId: string;
   triggeredBy: QaAutomationTrigger;
+  /**
+   * Set only for a "rerun failed/skipped tests" trigger — bare test
+   * function names (parametrize suffix like `[chromium]` already
+   * stripped) from a previous run's non-passing, non-quarantined
+   * results. Deliberately not full pytest node IDs: the JUnit XML this
+   * suite parses only gives pytest's dotted `classname` notation, which
+   * can't be mechanically converted back into a real `file.py::Class`
+   * path (dots collide with path separators, `.py`, and package
+   * boundaries). The runner resolves these to real node IDs itself,
+   * against its own fresh clone, the same way a human would (grep for
+   * the def, walk up to the enclosing class) -- see
+   * PytestStagingTestRunner's resolveOnlyTestNames.
+   */
+  onlyTestNames?: string[];
 }
 
 export const QA_AUTOMATION_STAGING_QUEUE_NAME = 'qa-automation-staging';
@@ -65,4 +79,17 @@ export async function enqueueManualQaAutomationStagingRun(
   orgId: string,
 ): Promise<void> {
   await queue.add('run-qa-automation-staging-suite', { orgId, triggeredBy: 'manual' });
+}
+
+/** Producer-side enqueue for "rerun failed/skipped tests from run X" — same one-off shape as a manual run, scoped to `onlyTestNames`. */
+export async function enqueueRerunQaAutomationStagingTests(
+  queue: Queue<QaAutomationStagingJobData>,
+  orgId: string,
+  onlyTestNames: string[],
+): Promise<void> {
+  await queue.add('run-qa-automation-staging-suite', {
+    orgId,
+    triggeredBy: 'manual',
+    onlyTestNames,
+  });
 }
