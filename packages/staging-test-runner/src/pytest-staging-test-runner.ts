@@ -159,10 +159,22 @@ const QUARANTINED_PANELADMIN_TESTS = [
  * lost run (see PANELADMIN_FILE's comment) by letting a hang-prone test
  * back into batch 1 uncontrolled -- deselecting these here rather than
  * waiting to see if they hang for real on a live run.
+ *
+ * `TC_MR_006_Shortlist_Candidate` (tests/roles/cod/master_recruiter/
+ * test_shortlist_candidate.py) confirmed hung live on 2026-08-20 -- two
+ * separate real runs both stalled at exactly this point (right after the
+ * module-scoped `masterrecruiter_page` fixture's first-use login for this
+ * file), 15+ minutes with zero output, well past pytest.ini's own
+ * `--timeout=600`. That timeout uses pytest-timeout's default "signal"
+ * method, which can't interrupt a call that never yields back to Python's
+ * signal handler -- plausibly why it never fired. Quarantined here rather
+ * than losing a whole batch 1 (400+ already-collected results) to the 5h
+ * whole-batch ceiling a second time.
  */
 const QUARANTINED_BATCH1_TESTS = [
   'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0068_csv_download_successful',
   'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
+  'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
 ];
 
 /**
