@@ -460,46 +460,6 @@ export class PytestStagingTestRunner implements StagingTestRunner {
   }
 
   /**
-   * Resolves `onlyTestNames` against this fresh clone and runs exactly
-   * those as a single ad hoc batch owning the full 0-100% progress
-   * range — same shape as ONLY_PATH's own short-circuit in `runSuite`.
-   */
-  private async runOnlyTestNamesBatch(
-    python: string,
-    repoDir: string,
-    workDir: string,
-    onlyTestNames: string[],
-    sourceUrl: string,
-    onStdout: (chunk: string) => void,
-    onStderr: (chunk: string) => void,
-    onProgress?: (percent: number) => void,
-  ): Promise<StagingTestResult[]> {
-    const nodeIds = await this.resolveOnlyTestNames(repoDir, onlyTestNames);
-    if (nodeIds.length === 0) {
-      throw new Error(
-        `None of the ${onlyTestNames.length} requested test name(s) could be resolved to a current source location.`,
-      );
-    }
-    console.error(
-      `[staging] rerun request -- resolved ${nodeIds.length}/${onlyTestNames.length} test name(s), skipping the normal batch1/batch2 split.`,
-    );
-    const results = await this.runBatch(
-      python,
-      repoDir,
-      path.join(workDir, 'report-rerun.xml'),
-      nodeIds,
-      sourceUrl,
-      onStdout,
-      onStderr,
-      onProgress,
-    );
-    if (results.length === 0) {
-      throw new Error('Staging test batch(es) failed to produce any results.');
-    }
-    return results;
-  }
-
-  /**
    * One full clone -> install -> browser -> pytest batch(es) -> parse
    * cycle against `main`. Split into two independent batches (docs/adr/0053)
    * — everything except `test_paneladmin.py`, then `test_paneladmin.py`
@@ -551,6 +511,29 @@ export class PytestStagingTestRunner implements StagingTestRunner {
         ),
       );
 
+      // "Rerun failed/skipped tests" name resolution happens here,
+      // immediately after the clone, deliberately BEFORE pip/apt-get
+      // below -- confirmed live (2026-08-20) across four separate rerun
+      // attempts that ENOENT errors reading this same fresh clone (the
+      // git binary itself, a batch1 subdirectory, then two unrelated
+      // tests/ subdirectories) only ever showed up AFTER the pip install
+      // + `playwright install --with-deps` apt-get burst below, never
+      // before it. Resolution only needs the files this clone already
+      // has on disk -- it has no actual dependency on pip/playwright
+      // being installed -- so running it on a quiet filesystem before
+      // that heavy I/O burst avoids whatever in this container's storage
+      // that burst is disturbing, rather than working around each fresh
+      // symptom of it after the fact.
+      const resolvedOnlyTestNodeIds =
+        onlyTestNames && onlyTestNames.length > 0
+          ? await this.resolveOnlyTestNames(repoDir, onlyTestNames)
+          : undefined;
+      if (resolvedOnlyTestNodeIds && resolvedOnlyTestNodeIds.length === 0) {
+        throw new Error(
+          `None of the ${onlyTestNames!.length} requested test name(s) could be resolved to a current source location.`,
+        );
+      }
+
       requireZeroExit(
         'pip install -r requirements.txt',
         await runSubprocess(python, ['-m', 'pip', 'install', '-r', 'requirements.txt'], {
@@ -589,26 +572,26 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
       // "Rerun failed/skipped tests" (UI-triggered, job-data-scoped, not
       // an env var like ONLY_PATH below) — takes priority over ONLY_PATH
-      // if both were somehow set.
-      if (onlyTestNames && onlyTestNames.length > 0) {
-        // See resolveOnlyTestNames's own doc comment: this used to shell
-        // out to `git grep` here, but the git binary itself was confirmed
-        // gone from disk by this point in the run (not just a PATH issue —
-        // even an absolute, `which`-resolved path came back ENOENT), most
-        // likely a side effect of the `playwright install --with-deps`
-        // apt-get run above. resolveOnlyTestNames now searches the already-
-        // cloned repo directly instead, with no git dependency beyond the
-        // initial clone.
-        return this.runOnlyTestNamesBatch(
+      // if both were somehow set. Names were already resolved to node IDs
+      // above, before the pip/apt-get burst -- see that comment.
+      if (resolvedOnlyTestNodeIds) {
+        console.error(
+          `[staging] rerun request -- resolved ${resolvedOnlyTestNodeIds.length}/${onlyTestNames!.length} test name(s), skipping the normal batch1/batch2 split.`,
+        );
+        const rerunResults = await this.runBatch(
           python,
           repoDir,
-          workDir,
-          onlyTestNames,
+          path.join(workDir, 'report-rerun.xml'),
+          resolvedOnlyTestNodeIds,
           sourceUrl,
           onStdout,
           onStderr,
           onProgress,
         );
+        if (rerunResults.length === 0) {
+          throw new Error('Staging test batch(es) failed to produce any results.');
+        }
+        return rerunResults;
       }
 
       // Isolated dev run: STAGING_ONLY_PATH bypasses the normal
