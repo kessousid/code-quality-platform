@@ -325,6 +325,29 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     return `${base}/tree/main/tests`;
   }
 
+  /**
+   * Resolves `git`'s real absolute path via `which` -- called once,
+   * right after a successful `git clone` (so it's known to still work at
+   * that moment), for reuse by every later git invocation in this same
+   * run instead of a bare command name needing a fresh PATH lookup each
+   * time. Falls back to the configured/default command name (unresolved)
+   * if `which` itself fails for any reason -- same behavior as before
+   * this existed, not a regression.
+   */
+  private async resolveGitAbsolutePath(): Promise<string> {
+    const configured = this.options.gitCommand ?? 'git';
+    try {
+      const result = await runSubprocess('which', [configured], {
+        cwd: process.cwd(),
+        envVarName: 'STAGING_TESTS_GIT_PATH',
+      });
+      const resolved = result.stdout.trim().split('\n')[0]?.trim();
+      return resolved && resolved.length > 0 ? resolved : configured;
+    } catch {
+      return configured;
+    }
+  }
+
   async run(
     onProgress?: (percent: number) => void,
     onlyTestNames?: string[],
@@ -436,6 +459,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    */
   private async runOnlyTestNamesBatch(
     python: string,
+    gitCommand: string,
     repoDir: string,
     workDir: string,
     onlyTestNames: string[],
@@ -444,11 +468,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
   ): Promise<StagingTestResult[]> {
-    const nodeIds = await this.resolveOnlyTestNames(
-      repoDir,
-      this.options.gitCommand ?? 'git',
-      onlyTestNames,
-    );
+    const nodeIds = await this.resolveOnlyTestNames(repoDir, gitCommand, onlyTestNames);
     if (nodeIds.length === 0) {
       throw new Error(
         `None of the ${onlyTestNames.length} requested test name(s) could be resolved to a current source location.`,
@@ -565,8 +585,21 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       // an env var like ONLY_PATH below) — takes priority over ONLY_PATH
       // if both were somehow set.
       if (onlyTestNames && onlyTestNames.length > 0) {
+        // Confirmed live (2026-08-20): a bare `git` command that just
+        // worked for the clone above can go on to fail EVERY later
+        // invocation with ENOENT ("git not found") for the rest of this
+        // same container's lifetime -- not a one-off blip (the retry in
+        // gitGrepDefWithRetry doesn't help when it's this consistent),
+        // most likely something in the pip/apt steps between here and
+        // there disrupting PATH resolution for this container instance.
+        // Resolving git's real absolute path once, right now while it's
+        // still known to work, and reusing that for every later call
+        // sidesteps PATH lookup entirely instead of hoping it stays
+        // valid.
+        const gitCommand = await this.resolveGitAbsolutePath();
         return this.runOnlyTestNamesBatch(
           python,
+          gitCommand,
           repoDir,
           workDir,
           onlyTestNames,
