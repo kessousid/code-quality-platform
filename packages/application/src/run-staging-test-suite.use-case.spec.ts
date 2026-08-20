@@ -109,6 +109,48 @@ describe('RunStagingTestSuiteUseCase', () => {
     expect(persisted?.progressPercent).toBe(50);
   });
 
+  it('skips the report email for a "rerun failed/skipped tests" run (onlyTestNames set), but still persists results normally', async () => {
+    const { testRunner, emailSender, resultRepository, useCase } = setup();
+    testRunner.result = {
+      results: [{ testId: 't1', testName: 'a', passed: false, details: 'still broken' }],
+    };
+
+    const run = await useCase.execute({
+      orgId: ORG_ID,
+      triggeredBy: 'manual',
+      onlyTestNames: ['test_a'],
+    });
+
+    expect(run.status).toBe('completed');
+    expect(emailSender.sent).toHaveLength(0);
+    const results = await resultRepository.listByRun(run.id);
+    expect(results).toHaveLength(1);
+  });
+
+  it('skips the crash alert email too when the runner throws during a rerun', async () => {
+    const runRepository = new InMemoryQaAutomationRunRepository();
+    const resultRepository = new InMemoryQaAutomationTestResultRepository();
+    const emailSender = new InMemoryEmailSender();
+    const testRunner = new FakeStagingTestRunner();
+    testRunner.run = () => Promise.reject(new Error('boom'));
+    const useCase = new RunStagingTestSuiteUseCase(
+      runRepository,
+      resultRepository,
+      testRunner,
+      emailSender,
+      ALERT_TO,
+    );
+
+    const run = await useCase.execute({
+      orgId: ORG_ID,
+      triggeredBy: 'manual',
+      onlyTestNames: ['test_a'],
+    });
+
+    expect(run.status).toBe('failed');
+    expect(emailSender.sent).toHaveLength(0);
+  });
+
   it('CCs the configured address on a failure alert when one is set', async () => {
     const runRepository = new InMemoryQaAutomationRunRepository();
     const resultRepository = new InMemoryQaAutomationTestResultRepository();

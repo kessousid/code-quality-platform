@@ -51,6 +51,14 @@ export class RunStagingTestSuiteUseCase {
       triggeredBy: input.triggeredBy,
     });
 
+    // Per the user: a "rerun failed/skipped tests" trigger (identified by
+    // onlyTestNames being set) is a quick targeted re-check, not a normal
+    // full run -- skip the report email for it "for the mean time", same
+    // as the STAGING_SKIP_EMAIL escape hatch below but scoped to reruns
+    // specifically rather than every run.
+    const isRerun = (input.onlyTestNames?.length ?? 0) > 0;
+    const skipEmail = SKIP_EMAIL || isRerun;
+
     try {
       // Fire-and-forget on purpose (docs/adr/0044) — this fires on every
       // percentage tick from a real subprocess's live stdout, and must
@@ -83,7 +91,7 @@ export class RunStagingTestSuiteUseCase {
       const model = buildQaAutomationReportModel(completed, persistedResults);
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
-      if (!SKIP_EMAIL) {
+      if (!skipEmail) {
         await this.emailSender.send({
           to: this.alertEmailTo,
           ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
@@ -104,7 +112,9 @@ export class RunStagingTestSuiteUseCase {
           ],
         });
       } else {
-        console.error(`[staging run ${run.id}] report email skipped (STAGING_SKIP_EMAIL=true)`);
+        console.error(
+          `[staging run ${run.id}] report email skipped (${isRerun ? 'rerun' : 'STAGING_SKIP_EMAIL=true'})`,
+        );
       }
 
       return completed;
@@ -117,7 +127,7 @@ export class RunStagingTestSuiteUseCase {
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'failed',
       });
-      if (!SKIP_EMAIL) {
+      if (!skipEmail) {
         await this.emailSender.send({
           to: this.alertEmailTo,
           ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
@@ -126,7 +136,7 @@ export class RunStagingTestSuiteUseCase {
         });
       } else {
         console.error(
-          `[staging run ${run.id}] crash alert email skipped (STAGING_SKIP_EMAIL=true)`,
+          `[staging run ${run.id}] crash alert email skipped (${isRerun ? 'rerun' : 'STAGING_SKIP_EMAIL=true'})`,
         );
       }
       return completed;
