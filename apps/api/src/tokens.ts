@@ -44,3 +44,6 @@ export const QA_AUTOMATION_STAGING_SCHEDULE_REPOSITORY = Symbol(
 );
 /** The raw BullMQ producer Queue for the staging suite (see docs/adr/0036) — same non-port pattern as QA_AUTOMATION_QUEUE. */
 export const QA_AUTOMATION_STAGING_QUEUE = Symbol('QA_AUTOMATION_STAGING_QUEUE');
+export const ONEDRIVE_CONNECTION_REPOSITORY = Symbol('ONEDRIVE_CONNECTION_REPOSITORY');
+export const ONEDRIVE_APP_CONFIG = Symbol('ONEDRIVE_APP_CONFIG');
+export const ONEDRIVE_TOKEN_ENCRYPTION_KEY = Symbol('ONEDRIVE_TOKEN_ENCRYPTION_KEY');

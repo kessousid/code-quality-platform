@@ -8,6 +8,8 @@ import {
 } from '@cqp/core';
 import {
   downloadQaAutomationReport,
+  useConnectOneDrive,
+  useOneDriveStatus,
   useGenerateQaAutomationReport,
   useQaAutomationReports,
   useQaAutomationRun,
@@ -342,10 +344,45 @@ function StagingSection() {
         error={triggerRun.error}
       />
 
+      <OneDriveSection />
+
       <section>
         <h2 className="mb-2 text-sm font-semibold text-neutral-600">Run history</h2>
         <RunHistoryList environment="staging" />
       </section>
+    </section>
+  );
+}
+
+/** Per the user: reports should save to OneDrive automatically and be shared with the report's email recipients — a one-time connection, then every future report handles itself. */
+function OneDriveSection() {
+  const statusQuery = useOneDriveStatus();
+  const connect = useConnectOneDrive();
+
+  return (
+    <section className="space-y-3 rounded-lg border p-4">
+      <h2 className="text-sm font-semibold text-neutral-600">OneDrive</h2>
+      {statusQuery.data?.connected ? (
+        <p className="text-xs text-neutral-500">
+          Connected{statusQuery.data.accountEmail ? ` as ${statusQuery.data.accountEmail}` : ''} —
+          every report is saved to OneDrive and shared with the report email recipients
+          automatically.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-neutral-500">
+            Not connected — reports currently only go out by email.
+          </p>
+          <button
+            type="button"
+            onClick={() => connect.mutate()}
+            disabled={connect.isPending}
+            className="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            Connect OneDrive
+          </button>
+        </>
+      )}
     </section>
   );
 }

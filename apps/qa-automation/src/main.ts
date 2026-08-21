@@ -4,6 +4,7 @@ import {
   createPrismaClient,
   PrismaQaAutomationRunRepository,
   PrismaQaAutomationTestResultRepository,
+  PrismaOneDriveConnectionRepository,
 } from '@cqp/db';
 import {
   createRedisConnection,
@@ -16,6 +17,8 @@ import {
   ReconcileOrphanedQaAutomationRunsUseCase,
   RunQaAutomationSuiteUseCase,
   RunStagingTestSuiteUseCase,
+  OneDriveReportUploader,
+  parseRepoTokenEncryptionKey,
   type QaBrowser,
 } from '@cqp/application';
 import { createPortalAutomationTests } from '@cqp/qa-automation-tests';
@@ -78,6 +81,27 @@ async function main(): Promise<void> {
   const alertEmailTo = requireEnv('ALERT_EMAIL_TO');
   const alertEmailCc = process.env.ALERT_EMAIL_CC;
 
+  // Optional feature (docs: "save QA reports to OneDrive") -- unset
+  // ONEDRIVE_CLIENT_ID/SECRET means no org has connected a OneDrive yet
+  // (or ever will), same as any other optional integration in this
+  // codebase; every report still generates and emails normally either
+  // way, this is purely an extra distribution channel.
+  const oneDriveClientId = process.env.ONEDRIVE_CLIENT_ID;
+  const oneDriveClientSecret = process.env.ONEDRIVE_CLIENT_SECRET;
+  const oneDriveUploader =
+    oneDriveClientId && oneDriveClientSecret
+      ? new OneDriveReportUploader(
+          new PrismaOneDriveConnectionRepository(prisma),
+          {
+            clientId: oneDriveClientId,
+            clientSecret: oneDriveClientSecret,
+            redirectUri: requireEnv('ONEDRIVE_REDIRECT_URI'),
+          },
+          parseRepoTokenEncryptionKey(requireEnv('REPO_TOKEN_ENCRYPTION_KEY')),
+          process.env.ONEDRIVE_FOLDER_NAME ?? 'QA Automation Reports',
+        )
+      : undefined;
+
   // See docs/adr/0043 — a container restart mid-run (e.g. this very
   // deploy) kills the process before either use case's own try/catch can
   // mark its run failed, leaving it stuck at 'running' forever. Runs
@@ -106,6 +130,7 @@ async function main(): Promise<void> {
     emailSender,
     alertEmailTo,
     alertEmailCc,
+    oneDriveUploader,
   );
 
   const worker = createQaAutomationBullWorker(connection, async (job: Job<QaAutomationJobData>) =>
@@ -140,6 +165,7 @@ async function main(): Promise<void> {
     emailSender,
     alertEmailTo,
     alertEmailCc,
+    oneDriveUploader,
   );
 
   const stagingWorker = createQaAutomationStagingBullWorker(

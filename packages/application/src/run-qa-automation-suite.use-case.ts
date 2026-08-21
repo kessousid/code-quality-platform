@@ -7,6 +7,10 @@ import type {
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import type { PortalAutomationTest } from '@cqp/qa-automation-tests';
+import {
+  parseEmailListForSharing,
+  type OneDriveReportUploader,
+} from './onedrive-report-uploader.js';
 
 /**
  * Kept structural (not a `playwright` import) so this package doesn't
@@ -44,6 +48,7 @@ export class RunQaAutomationSuiteUseCase {
     private readonly emailSender: EmailSender,
     private readonly alertEmailTo: string,
     private readonly alertEmailCc?: string,
+    private readonly oneDriveUploader?: OneDriveReportUploader,
   ) {}
 
   async execute(input: RunQaAutomationSuiteInput): Promise<QaAutomationRun> {
@@ -81,6 +86,13 @@ export class RunQaAutomationSuiteUseCase {
       const persistedResults = await this.resultRepository.listByRun(run.id);
       const model = buildQaAutomationReportModel(completed, persistedResults);
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
+
+      await this.oneDriveUploader?.uploadAndShare(
+        input.orgId,
+        `qa-automation-report-${run.id}.xlsx`,
+        reportXlsx,
+        parseEmailListForSharing(this.alertEmailTo, this.alertEmailCc),
+      );
 
       await this.emailSender.send({
         to: this.alertEmailTo,

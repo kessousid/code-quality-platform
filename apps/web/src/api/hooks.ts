@@ -621,6 +621,24 @@ export function useUpdateQaAutomationStagingSchedule() {
   });
 }
 
+export function useOneDriveStatus() {
+  return useQuery({
+    queryKey: ['onedrive-status'],
+    queryFn: () =>
+      apiGet<{ connected: boolean; accountEmail?: string }>('/qa-automation/onedrive/status'),
+  });
+}
+
+/** Navigates the whole browser tab to Microsoft's login page — a real OAuth redirect, not an XHR (see OneDriveController's own doc comment). */
+export function useConnectOneDrive() {
+  return useMutation({
+    mutationFn: async () => {
+      const { url } = await apiGet<{ url: string }>('/qa-automation/onedrive/connect');
+      window.location.href = url;
+    },
+  });
+}
+
 /** Fire-and-forget, same shape as useTriggerQaAutomationRun — refetches the staging run history, not production's. */
 export function useTriggerQaAutomationStagingRun() {
   const queryClient = useQueryClient();

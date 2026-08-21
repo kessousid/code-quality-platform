@@ -8,6 +8,10 @@ import type {
   StagingTestRunner,
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
+import {
+  parseEmailListForSharing,
+  type OneDriveReportUploader,
+} from './onedrive-report-uploader.js';
 
 export interface RunStagingTestSuiteInput {
   orgId: string;
@@ -51,6 +55,7 @@ export class RunStagingTestSuiteUseCase {
     private readonly emailSender: EmailSender,
     private readonly alertEmailTo: string,
     private readonly alertEmailCc?: string,
+    private readonly oneDriveUploader?: OneDriveReportUploader,
   ) {}
 
   async execute(input: RunStagingTestSuiteInput): Promise<QaAutomationRun> {
@@ -104,6 +109,12 @@ export class RunStagingTestSuiteUseCase {
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
       if (!skipEmail) {
+        await this.oneDriveUploader?.uploadAndShare(
+          input.orgId,
+          `qa-automation-report-${run.id}.xlsx`,
+          reportXlsx,
+          parseEmailListForSharing(this.alertEmailTo, this.alertEmailCc),
+        );
         await this.emailSender.send({
           to: this.alertEmailTo,
           ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),

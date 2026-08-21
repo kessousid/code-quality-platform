@@ -18,6 +18,8 @@ import {
   ListQaAutomationRunsUseCase,
   UpdateQaAutomationScheduleUseCase,
   UpdateQaAutomationStagingScheduleUseCase,
+  parseRepoTokenEncryptionKey,
+  type OneDriveAppConfig,
 } from '@cqp/application';
 import {
   PrismaQaAutomationReportRepository,
@@ -25,6 +27,7 @@ import {
   PrismaQaAutomationScheduleRepository,
   PrismaQaAutomationStagingScheduleRepository,
   PrismaQaAutomationTestResultRepository,
+  PrismaOneDriveConnectionRepository,
 } from '@cqp/db';
 import {
   createQaAutomationBullQueue,
@@ -35,6 +38,9 @@ import { LocalFilesystemObjectStorage } from '@cqp/storage';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   OBJECT_STORAGE,
+  ONEDRIVE_APP_CONFIG,
+  ONEDRIVE_CONNECTION_REPOSITORY,
+  ONEDRIVE_TOKEN_ENCRYPTION_KEY,
   QA_AUTOMATION_QUEUE,
   QA_AUTOMATION_REPORT_REPOSITORY,
   QA_AUTOMATION_RUN_REPOSITORY,
@@ -45,10 +51,45 @@ import {
 } from '../tokens.js';
 import { QaAutomationController } from './qa-automation.controller.js';
 import { QaAutomationReportController } from './qa-automation-report.controller.js';
+import { OneDriveController } from './onedrive.controller.js';
+
+/** Bootstrap-time, not per-request — a missing/malformed key should fail loudly at startup (same reasoning as repo.module.ts's own copy of this check). */
+function getRepoTokenEncryptionKey(): Buffer {
+  const value = process.env.REPO_TOKEN_ENCRYPTION_KEY;
+  if (!value) {
+    throw new Error('Missing required env var: REPO_TOKEN_ENCRYPTION_KEY');
+  }
+  return parseRepoTokenEncryptionKey(value);
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required env var: ${name}`);
+  }
+  return value;
+}
 
 @Module({
-  controllers: [QaAutomationController, QaAutomationReportController],
+  controllers: [QaAutomationController, QaAutomationReportController, OneDriveController],
   providers: [
+    {
+      provide: ONEDRIVE_CONNECTION_REPOSITORY,
+      useFactory: (prisma: PrismaService) => new PrismaOneDriveConnectionRepository(prisma.client),
+      inject: [PrismaService],
+    },
+    {
+      provide: ONEDRIVE_APP_CONFIG,
+      useFactory: (): OneDriveAppConfig => ({
+        clientId: requireEnv('ONEDRIVE_CLIENT_ID'),
+        clientSecret: requireEnv('ONEDRIVE_CLIENT_SECRET'),
+        redirectUri: requireEnv('ONEDRIVE_REDIRECT_URI'),
+      }),
+    },
+    {
+      provide: ONEDRIVE_TOKEN_ENCRYPTION_KEY,
+      useFactory: (): Buffer => getRepoTokenEncryptionKey(),
+    },
     {
       provide: QA_AUTOMATION_RUN_REPOSITORY,
       useFactory: (prisma: PrismaService) => new PrismaQaAutomationRunRepository(prisma.client),
