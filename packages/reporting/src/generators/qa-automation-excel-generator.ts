@@ -36,34 +36,21 @@ const HEADER_FILL: ExcelJS.Fill = {
 const HEADER_FONT: Partial<ExcelJS.Font> = { color: { argb: 'FFFFFFFF' }, bold: true };
 
 /**
- * Per the user: the Failed/Skipped/Quarantined sheets get one tracking
- * column per named reviewer, each restricted to the same fixed set of
- * values via Excel's in-cell dropdown data validation -- not a free-text
- * column, so the sheet can't drift into inconsistent status wording
- * across hundreds of rows. `'-'` is a real selectable value (meaning
- * "blank"/not applicable), not the same as truly leaving the cell empty
- * (`allowBlank` still permits that too, for a row nobody's looked at yet).
+ * Per the user: the Failed/Skipped/Quarantined sheets get one free-text
+ * tracking column per named reviewer. A fixed-choice dropdown (Excel data
+ * validation) was tried first but abandoned (2026-08-21) after extensive
+ * live testing showed exceljs 4.4.0's data-validation writer produces
+ * files real Excel either flags as damaged or silently shows no dropdown
+ * for, with no combination (single-cell/range, inline-list/helper-cell
+ * formula, even direct XML injection matching a user's own Excel-repaired
+ * reference byte-for-byte) reliably working. Plain free-text columns,
+ * while not enforcing consistent wording, are simple and known-working.
  */
-const APPROVAL_STATUS_OPTIONS = ['Completed', 'In Progress', 'Not started', '-'];
 const APPROVAL_STATUS_COLUMNS: { header: string; key: string }[] = [
   { header: 'Chandana', key: 'chandana' },
   { header: 'Saraswati', key: 'saraswati' },
   { header: 'Vikas', key: 'vikas' },
 ];
-/**
- * Confirmed live (2026-08-21): a row added via `sheet.addRow({...})`
- * without explicit keys for these columns never gets a `<c>` cell entry
- * for them, so the row's own `spans` attribute stays narrower than the
- * sheet's `<dimension>` (which the header row alone stretches out to
- * column F). That dimension/spans mismatch, combined with a data
- * validation range referencing those never-written cells, is what
- * desktop Excel's strict validator flagged as a "damaged" workbook.
- * Spreading this blank object into every `addRow` call forces every row
- * to have a real (empty) cell in each column, keeping spans consistent.
- */
-const APPROVAL_STATUS_BLANK_ROW = Object.fromEntries(
-  APPROVAL_STATUS_COLUMNS.map((column) => [column.key, '']),
-);
 
 /**
  * The first "E   <Error/Exception>:" line of a pytest traceback, or the
@@ -184,37 +171,6 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
   }
 
   /**
-   * Applies the fixed-choice dropdown to each reviewer column across the
-   * WHOLE data range in one call per column, not once per cell -- see
-   * APPROVAL_STATUS_OPTIONS's own doc comment. Confirmed live (2026-08-21):
-   * setting `cell.dataValidation` individually per row produced hundreds
-   * of separate `<dataValidation>` XML entries on a 500+-row sheet, which
-   * Excel/OneDrive's own file-integrity check flagged as a "damaged"
-   * workbook needing repair. `worksheet.dataValidations.add(range, rule)`
-   * with one range per column is the standard pattern and produces just
-   * one entry per column regardless of row count.
-   */
-  private applyApprovalStatusValidation(sheet: ExcelJS.Worksheet, lastRow: number): void {
-    if (lastRow < 2) return; // No data rows -- nothing to validate.
-    // `dataValidations` exists at runtime (exceljs's own worksheet.js sets
-    // it in the constructor) but is missing from this exceljs version's
-    // .d.ts -- a real, narrowly-scoped gap, not a justification for `any`.
-    const dataValidations = (
-      sheet as ExcelJS.Worksheet & {
-        dataValidations: { add(address: string, validation: ExcelJS.DataValidation): void };
-      }
-    ).dataValidations;
-    for (const column of APPROVAL_STATUS_COLUMNS) {
-      const letter = sheet.getColumn(column.key).letter;
-      dataValidations.add(`${letter}2:${letter}${lastRow}`, {
-        type: 'list',
-        allowBlank: true,
-        formulae: [`"${APPROVAL_STATUS_OPTIONS.join(',')}"`],
-      });
-    }
-  }
-
-  /**
    * Real, unexpected failures only — a pytest skip and a quarantined stub
    * are both excluded, they get their own sheets below. Per the user:
    * a per-test raw traceback dump doesn't scale, so this shows the one
@@ -239,11 +195,9 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: extractFailureReason(result.details),
-        ...APPROVAL_STATUS_BLANK_ROW,
       });
       row.eachCell((cell) => (cell.fill = RED_FILL));
     }
-    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Self-skips only (data/env gaps, missing creds) — a quarantined stub belongs on the Quarantined sheet instead. */
@@ -265,13 +219,11 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
-        ...APPROVAL_STATUS_BLANK_ROW,
       });
       if (isPossibleHang(result.details)) {
         row.eachCell((cell) => (cell.fill = ORANGE_FILL));
       }
     }
-    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Known hangs deselected before this run even started (docs/adr/0055, docs/adr/0056) — never executed at all. */
@@ -291,11 +243,9 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
-        ...APPROVAL_STATUS_BLANK_ROW,
       });
       row.eachCell((cell) => (cell.fill = GRAY_FILL));
     }
-    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   private addLegendSheet(workbook: ExcelJS.Workbook): void {
