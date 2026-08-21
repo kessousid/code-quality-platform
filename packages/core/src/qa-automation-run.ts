@@ -112,6 +112,37 @@ export function selectRerunTargets(results: QaAutomationTestResult[]): string[] 
   return [...names];
 }
 
+/**
+ * The quarantined stub rows from a run being rerun (selectRerunTargets'
+ * own exclusion list) -- carried forward into the *new* run's own results
+ * rather than silently dropped. Per the user: a rerun of "55 failed"
+ * where 16 are quarantined should still show 55 accounted for (39
+ * actually rerun + 16 shown as quarantined/not rerun), not quietly
+ * shrink to 39 with no record of why. Deduped by testId in case the same
+ * quarantined test's stub somehow appears more than once in the source
+ * run.
+ */
+export function selectQuarantinedCarryForward(
+  results: QaAutomationTestResult[],
+): Pick<QaAutomationTestResult, 'testId' | 'testName' | 'passed' | 'details' | 'sourceUrl'>[] {
+  const byTestId = new Map<
+    string,
+    Pick<QaAutomationTestResult, 'testId' | 'testName' | 'passed' | 'details' | 'sourceUrl'>
+  >();
+  for (const result of results) {
+    if (!isQuarantinedTestResult(result.details)) continue;
+    if (byTestId.has(result.testId)) continue;
+    byTestId.set(result.testId, {
+      testId: result.testId,
+      testName: result.testName,
+      passed: result.passed,
+      details: result.details,
+      ...(result.sourceUrl !== undefined ? { sourceUrl: result.sourceUrl } : {}),
+    });
+  }
+  return [...byTestId.values()];
+}
+
 export interface CreateQaAutomationRunInput {
   orgId: string;
   environment: QaAutomationEnvironment;

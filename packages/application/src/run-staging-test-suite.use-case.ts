@@ -4,6 +4,7 @@ import type {
   QaAutomationRunRepository,
   QaAutomationTestResultRepository,
   QaAutomationTrigger,
+  StagingTestResult,
   StagingTestRunner,
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
@@ -13,6 +14,14 @@ export interface RunStagingTestSuiteInput {
   triggeredBy: QaAutomationTrigger;
   /** See StagingTestRunner.run's onlyTestNames -- the "rerun failed/skipped tests" feature. */
   onlyTestNames?: string[];
+  /**
+   * See selectQuarantinedCarryForward -- the quarantined stub rows
+   * excluded from `onlyTestNames`, merged into this run's own results
+   * as-is (never executed) so a rerun's report still accounts for every
+   * one of the original run's non-passed tests, not just the subset
+   * actually re-run.
+   */
+  carryForwardResults?: StagingTestResult[];
 }
 
 /**
@@ -64,11 +73,14 @@ export class RunStagingTestSuiteUseCase {
       // percentage tick from a real subprocess's live stdout, and must
       // never make that stream wait on a DB round trip; a failed write
       // here is a lost progress update, not a lost test result.
-      const { results } = await this.testRunner.run((percent) => {
+      const { results: runnerResults } = await this.testRunner.run((percent) => {
         this.runRepository.updateProgress(input.orgId, run.id, percent).catch((error: unknown) => {
           console.error(`[staging run ${run.id}] failed to persist progress:`, error);
         });
       }, input.onlyTestNames);
+      // Carried-forward quarantine stubs (rerun only) are appended as-is,
+      // never executed -- see RunStagingTestSuiteInput.carryForwardResults.
+      const results = [...runnerResults, ...(input.carryForwardResults ?? [])];
       for (const result of results) {
         await this.resultRepository.create({ runId: run.id, ...result });
       }

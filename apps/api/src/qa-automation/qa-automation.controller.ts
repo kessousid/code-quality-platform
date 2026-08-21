@@ -21,7 +21,7 @@ import {
   UpdateQaAutomationScheduleUseCase,
   UpdateQaAutomationStagingScheduleUseCase,
 } from '@cqp/application';
-import { selectRerunTargets } from '@cqp/core';
+import { selectRerunTargets, selectQuarantinedCarryForward } from '@cqp/core';
 import {
   enqueueManualQaAutomationRun,
   enqueueManualQaAutomationStagingRun,
@@ -151,7 +151,13 @@ export class QaAutomationController {
     if (testNames.length === 0) {
       return { status: 'nothing-to-rerun' as const };
     }
-    await enqueueRerunQaAutomationStagingTests(this.stagingQueue, orgId, testNames);
+    const carryForwardResults = selectQuarantinedCarryForward(run.results);
+    await enqueueRerunQaAutomationStagingTests(
+      this.stagingQueue,
+      orgId,
+      testNames,
+      carryForwardResults,
+    );
     return { status: 'queued' as const, testCount: testNames.length };
   }
 }

@@ -18,6 +18,21 @@ export interface QaAutomationStagingJobData {
    * PytestStagingTestRunner's resolveOnlyTestNames.
    */
   onlyTestNames?: string[];
+  /**
+   * Set alongside `onlyTestNames` for a rerun -- the quarantined stub
+   * rows excluded from `onlyTestNames` (selectQuarantinedCarryForward),
+   * carried forward into the new run's own persisted results so its
+   * report still accounts for all of the original run's non-passed
+   * tests, not just the ones actually re-executed. Never run, just
+   * copied through as-is.
+   */
+  carryForwardResults?: {
+    testId: string;
+    testName: string;
+    passed: boolean;
+    details: string;
+    sourceUrl?: string;
+  }[];
 }
 
 export const QA_AUTOMATION_STAGING_QUEUE_NAME = 'qa-automation-staging';
@@ -86,10 +101,12 @@ export async function enqueueRerunQaAutomationStagingTests(
   queue: Queue<QaAutomationStagingJobData>,
   orgId: string,
   onlyTestNames: string[],
+  carryForwardResults?: QaAutomationStagingJobData['carryForwardResults'],
 ): Promise<void> {
   await queue.add('run-qa-automation-staging-suite', {
     orgId,
     triggeredBy: 'manual',
     onlyTestNames,
+    ...(carryForwardResults && carryForwardResults.length > 0 ? { carryForwardResults } : {}),
   });
 }

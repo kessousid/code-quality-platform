@@ -208,8 +208,8 @@ function RunHistoryList({ environment }: { environment: QaAutomationEnvironment 
               {environment === 'staging' && run.status !== 'running' && (
                 <RerunFailedButton runId={run.id} />
               )}
-              <RunResults runId={run.id} />
               <RunReportActions runId={run.id} />
+              <RunResults runId={run.id} />
             </>
           )}
         </li>

@@ -149,6 +149,9 @@ async function main(): Promise<void> {
         orgId: job.data.orgId,
         triggeredBy: job.data.triggeredBy,
         ...(job.data.onlyTestNames !== undefined ? { onlyTestNames: job.data.onlyTestNames } : {}),
+        ...(job.data.carryForwardResults !== undefined
+          ? { carryForwardResults: job.data.carryForwardResults }
+          : {}),
       }),
   );
 
