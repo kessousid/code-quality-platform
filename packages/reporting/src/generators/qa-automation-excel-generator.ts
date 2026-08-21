@@ -36,6 +36,22 @@ const HEADER_FILL: ExcelJS.Fill = {
 const HEADER_FONT: Partial<ExcelJS.Font> = { color: { argb: 'FFFFFFFF' }, bold: true };
 
 /**
+ * Per the user: the Failed/Skipped/Quarantined sheets get one tracking
+ * column per named reviewer, each restricted to the same fixed set of
+ * values via Excel's in-cell dropdown data validation -- not a free-text
+ * column, so the sheet can't drift into inconsistent status wording
+ * across hundreds of rows. `'-'` is a real selectable value (meaning
+ * "blank"/not applicable), not the same as truly leaving the cell empty
+ * (`allowBlank` still permits that too, for a row nobody's looked at yet).
+ */
+const APPROVAL_STATUS_OPTIONS = ['Completed', 'In Progress', 'Not started', '-'];
+const APPROVAL_STATUS_COLUMNS: { header: string; key: string }[] = [
+  { header: 'Chandana', key: 'chandana' },
+  { header: 'Saraswati', key: 'saraswati' },
+  { header: 'Vikas', key: 'vikas' },
+];
+
+/**
  * The first "E   <Error/Exception>:" line of a pytest traceback, or the
  * last non-empty line as a fallback — a full traceback dump doesn't scale
  * across hundreds of rows, but the one line that actually says what broke
@@ -153,6 +169,17 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     });
   }
 
+  /** Applies the same fixed-choice dropdown to each reviewer column on a just-added data row -- see APPROVAL_STATUS_OPTIONS's own doc comment. */
+  private applyApprovalStatusValidation(row: ExcelJS.Row): void {
+    for (const column of APPROVAL_STATUS_COLUMNS) {
+      row.getCell(column.key).dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [`"${APPROVAL_STATUS_OPTIONS.join(',')}"`],
+      };
+    }
+  }
+
   /**
    * Real, unexpected failures only — a pytest skip and a quarantined stub
    * are both excluded, they get their own sheets below. Per the user:
@@ -166,6 +193,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       { header: 'Test Name', key: 'testName', width: 55 },
       { header: 'Area', key: 'area', width: 22 },
       { header: 'Reason / Error', key: 'reason', width: 90 },
+      ...APPROVAL_STATUS_COLUMNS.map((column) => ({ ...column, width: 16 })),
     ];
     this.styleHeaderRow(sheet.getRow(1));
 
@@ -178,6 +206,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: extractFailureReason(result.details),
       });
+      this.applyApprovalStatusValidation(row);
       row.eachCell((cell) => (cell.fill = RED_FILL));
     }
   }
@@ -189,6 +218,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       { header: 'Test Name', key: 'testName', width: 55 },
       { header: 'Area', key: 'area', width: 22 },
       { header: 'Skip Reason', key: 'reason', width: 90 },
+      ...APPROVAL_STATUS_COLUMNS.map((column) => ({ ...column, width: 16 })),
     ];
     this.styleHeaderRow(sheet.getRow(1));
 
@@ -201,6 +231,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
       });
+      this.applyApprovalStatusValidation(row);
       if (isPossibleHang(result.details)) {
         row.eachCell((cell) => (cell.fill = ORANGE_FILL));
       }
@@ -214,6 +245,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       { header: 'Test Name', key: 'testName', width: 55 },
       { header: 'Area', key: 'area', width: 22 },
       { header: 'Reason', key: 'reason', width: 90 },
+      ...APPROVAL_STATUS_COLUMNS.map((column) => ({ ...column, width: 16 })),
     ];
     this.styleHeaderRow(sheet.getRow(1));
 
@@ -224,6 +256,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
       });
+      this.applyApprovalStatusValidation(row);
       row.eachCell((cell) => (cell.fill = GRAY_FILL));
     }
   }
