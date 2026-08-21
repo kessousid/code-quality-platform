@@ -169,14 +169,34 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     });
   }
 
-  /** Applies the same fixed-choice dropdown to each reviewer column on a just-added data row -- see APPROVAL_STATUS_OPTIONS's own doc comment. */
-  private applyApprovalStatusValidation(row: ExcelJS.Row): void {
+  /**
+   * Applies the fixed-choice dropdown to each reviewer column across the
+   * WHOLE data range in one call per column, not once per cell -- see
+   * APPROVAL_STATUS_OPTIONS's own doc comment. Confirmed live (2026-08-21):
+   * setting `cell.dataValidation` individually per row produced hundreds
+   * of separate `<dataValidation>` XML entries on a 500+-row sheet, which
+   * Excel/OneDrive's own file-integrity check flagged as a "damaged"
+   * workbook needing repair. `worksheet.dataValidations.add(range, rule)`
+   * with one range per column is the standard pattern and produces just
+   * one entry per column regardless of row count.
+   */
+  private applyApprovalStatusValidation(sheet: ExcelJS.Worksheet, lastRow: number): void {
+    if (lastRow < 2) return; // No data rows -- nothing to validate.
+    // `dataValidations` exists at runtime (exceljs's own worksheet.js sets
+    // it in the constructor) but is missing from this exceljs version's
+    // .d.ts -- a real, narrowly-scoped gap, not a justification for `any`.
+    const dataValidations = (
+      sheet as ExcelJS.Worksheet & {
+        dataValidations: { add(address: string, validation: ExcelJS.DataValidation): void };
+      }
+    ).dataValidations;
     for (const column of APPROVAL_STATUS_COLUMNS) {
-      row.getCell(column.key).dataValidation = {
+      const letter = sheet.getColumn(column.key).letter;
+      dataValidations.add(`${letter}2:${letter}${lastRow}`, {
         type: 'list',
         allowBlank: true,
         formulae: [`"${APPROVAL_STATUS_OPTIONS.join(',')}"`],
-      };
+      });
     }
   }
 
@@ -206,9 +226,9 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: extractFailureReason(result.details),
       });
-      this.applyApprovalStatusValidation(row);
       row.eachCell((cell) => (cell.fill = RED_FILL));
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Self-skips only (data/env gaps, missing creds) — a quarantined stub belongs on the Quarantined sheet instead. */
@@ -231,11 +251,11 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
       });
-      this.applyApprovalStatusValidation(row);
       if (isPossibleHang(result.details)) {
         row.eachCell((cell) => (cell.fill = ORANGE_FILL));
       }
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Known hangs deselected before this run even started (docs/adr/0055, docs/adr/0056) — never executed at all. */
@@ -256,9 +276,9 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
       });
-      this.applyApprovalStatusValidation(row);
       row.eachCell((cell) => (cell.fill = GRAY_FILL));
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   private addLegendSheet(workbook: ExcelJS.Workbook): void {
