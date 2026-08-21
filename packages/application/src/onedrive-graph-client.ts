@@ -32,9 +32,17 @@ export interface OneDriveTokenResult {
   refreshToken: string;
 }
 
-/** Personal Microsoft accounts live under the `consumers` tenant endpoint -- never `common` or `organizations`. */
-const TOKEN_ENDPOINT = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token';
-const AUTHORIZE_ENDPOINT = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize';
+/**
+ * Confirmed live (2026-08-21): `/consumers/` is only correct for an app
+ * whose Entra "Supported account types" is "Personal Microsoft accounts"
+ * only (signInAudience `PersonalMicrosoftAccount`). This app is
+ * registered as "Any Entra ID Tenant + Personal Microsoft accounts"
+ * (`AzureADandPersonalMicrosoftAccount`), which Microsoft's own docs
+ * require using `/common/` for -- `/consumers/` returned a bare
+ * `error=server_error` with no description for that combination.
+ */
+const TOKEN_ENDPOINT = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+const AUTHORIZE_ENDPOINT = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
 const GRAPH_SCOPE = 'Files.ReadWrite offline_access';
 
 /** The one-time URL the user visits in their browser to grant this app access to their OneDrive. */
