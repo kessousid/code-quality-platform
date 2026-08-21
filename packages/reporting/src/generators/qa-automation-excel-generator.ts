@@ -50,6 +50,20 @@ const APPROVAL_STATUS_COLUMNS: { header: string; key: string }[] = [
   { header: 'Saraswati', key: 'saraswati' },
   { header: 'Vikas', key: 'vikas' },
 ];
+/**
+ * Confirmed live (2026-08-21): a row added via `sheet.addRow({...})`
+ * without explicit keys for these columns never gets a `<c>` cell entry
+ * for them, so the row's own `spans` attribute stays narrower than the
+ * sheet's `<dimension>` (which the header row alone stretches out to
+ * column F). That dimension/spans mismatch, combined with a data
+ * validation range referencing those never-written cells, is what
+ * desktop Excel's strict validator flagged as a "damaged" workbook.
+ * Spreading this blank object into every `addRow` call forces every row
+ * to have a real (empty) cell in each column, keeping spans consistent.
+ */
+const APPROVAL_STATUS_BLANK_ROW = Object.fromEntries(
+  APPROVAL_STATUS_COLUMNS.map((column) => [column.key, '']),
+);
 
 /**
  * The first "E   <Error/Exception>:" line of a pytest traceback, or the
@@ -225,6 +239,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: extractFailureReason(result.details),
+        ...APPROVAL_STATUS_BLANK_ROW,
       });
       row.eachCell((cell) => (cell.fill = RED_FILL));
     }
@@ -250,6 +265,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
+        ...APPROVAL_STATUS_BLANK_ROW,
       });
       if (isPossibleHang(result.details)) {
         row.eachCell((cell) => (cell.fill = ORANGE_FILL));
@@ -275,6 +291,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testName: result.testName,
         area: categorizeArea(result.testName),
         reason: skipReason(result.details),
+        ...APPROVAL_STATUS_BLANK_ROW,
       });
       row.eachCell((cell) => (cell.fill = GRAY_FILL));
     }
