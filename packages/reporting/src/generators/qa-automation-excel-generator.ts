@@ -53,6 +53,26 @@ const APPROVAL_STATUS_COLUMNS: { header: string; key: string }[] = [
 ];
 
 /**
+ * Confirmed live (2026-08-21) as the ACTUAL root cause of every "damaged
+ * workbook" report this whole investigation chased through the Failed/
+ * Skipped/Quarantined sheets: Excel has a hard 32,767-character-per-cell
+ * limit, and two real test results' full, untruncated `details` (written
+ * to the Test Results sheet unmodified) were 38,656 and 34,403 characters
+ * -- both over the limit. Desktop Excel's "repair" silently truncates an
+ * oversized cell to fit; OneDrive's stricter online validator rejects the
+ * file outright instead. Completely unrelated to the reviewer columns
+ * this investigation spent hours on -- this sheet was never touched by
+ * any of that work, and the two oversized cells were always there.
+ */
+const EXCEL_MAX_CELL_LENGTH = 32767;
+
+function truncateForExcelCell(value: string): string {
+  if (value.length <= EXCEL_MAX_CELL_LENGTH) return value;
+  const suffix = '\n... [truncated, exceeded Excel’s 32,767-character cell limit]';
+  return value.slice(0, EXCEL_MAX_CELL_LENGTH - suffix.length) + suffix;
+}
+
+/**
  * The first "E   <Error/Exception>:" line of a pytest traceback, or the
  * last non-empty line as a fallback — a full traceback dump doesn't scale
  * across hundreds of rows, but the one line that actually says what broke
@@ -147,7 +167,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         testId: result.testId,
         testName: result.testName,
         status: result.passed ? 'Pass' : isSkipped(result.details) ? 'Skipped' : 'Fail',
-        details: result.details,
+        details: truncateForExcelCell(result.details),
         sourceUrl: result.sourceUrl ?? '',
       })),
     );
