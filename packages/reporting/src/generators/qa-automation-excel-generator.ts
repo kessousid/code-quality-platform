@@ -36,16 +36,19 @@ const HEADER_FILL: ExcelJS.Fill = {
 const HEADER_FONT: Partial<ExcelJS.Font> = { color: { argb: 'FFFFFFFF' }, bold: true };
 
 /**
- * Per the user: the Failed/Skipped/Quarantined sheets get one free-text
- * tracking column per named reviewer. A fixed-choice dropdown (Excel data
- * validation) was tried first but abandoned (2026-08-21) after extensive
- * live testing showed exceljs 4.4.0's data-validation writer produces
- * files real Excel either flags as damaged or silently shows no dropdown
- * for, with no combination (single-cell/range, inline-list/helper-cell
- * formula, even direct XML injection matching a user's own Excel-repaired
- * reference byte-for-byte) reliably working. Plain free-text columns,
- * while not enforcing consistent wording, are simple and known-working.
+ * Per the user: the Failed/Skipped/Quarantined sheets get one tracking
+ * column per named reviewer, restricted to a fixed set of values via
+ * Excel's in-cell dropdown data validation. An earlier attempt at this
+ * (2026-08-21) appeared to fail every test -- but the real cause turned
+ * out to be an unrelated, pre-existing bug (see truncateForExcelCell's
+ * own doc comment): two Test Results cells exceeded Excel's 32,767-char
+ * limit, corrupting the whole workbook regardless of what this code did.
+ * With that fixed, the dropdown approach is back to the simplest form
+ * that was tried (one data validation range per column, inline list
+ * formula) rather than the more convoluted workarounds explored while
+ * still misdiagnosing the cause.
  */
+const APPROVAL_STATUS_OPTIONS = ['Completed', 'In Progress', 'Not started', '-'];
 const APPROVAL_STATUS_COLUMNS: { header: string; key: string }[] = [
   { header: 'Chandana', key: 'chandana' },
   { header: 'Saraswati', key: 'saraswati' },
@@ -190,6 +193,26 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
     });
   }
 
+  /** One data validation range per column, covering the whole data range in a single call -- not once per cell/row. */
+  private applyApprovalStatusValidation(sheet: ExcelJS.Worksheet, lastRow: number): void {
+    if (lastRow < 2) return; // No data rows -- nothing to validate.
+    // `dataValidations` exists at runtime (exceljs's own worksheet.js sets
+    // it in the constructor) but is missing from this exceljs version's .d.ts.
+    const dataValidations = (
+      sheet as ExcelJS.Worksheet & {
+        dataValidations: { add(address: string, validation: ExcelJS.DataValidation): void };
+      }
+    ).dataValidations;
+    for (const column of APPROVAL_STATUS_COLUMNS) {
+      const letter = sheet.getColumn(column.key).letter;
+      dataValidations.add(`${letter}2:${letter}${lastRow}`, {
+        type: 'list',
+        allowBlank: true,
+        formulae: [`"${APPROVAL_STATUS_OPTIONS.join(',')}"`],
+      });
+    }
+  }
+
   /**
    * Real, unexpected failures only — a pytest skip and a quarantined stub
    * are both excluded, they get their own sheets below. Per the user:
@@ -218,6 +241,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       });
       row.eachCell((cell) => (cell.fill = RED_FILL));
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Self-skips only (data/env gaps, missing creds) — a quarantined stub belongs on the Quarantined sheet instead. */
@@ -244,6 +268,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
         row.eachCell((cell) => (cell.fill = ORANGE_FILL));
       }
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   /** Known hangs deselected before this run even started (docs/adr/0055, docs/adr/0056) — never executed at all. */
@@ -266,6 +291,7 @@ export class ExcelQaAutomationReportGenerator implements QaAutomationReportGener
       });
       row.eachCell((cell) => (cell.fill = GRAY_FILL));
     }
+    this.applyApprovalStatusValidation(sheet, sheet.rowCount);
   }
 
   private addLegendSheet(workbook: ExcelJS.Workbook): void {
