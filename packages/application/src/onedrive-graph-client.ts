@@ -160,28 +160,32 @@ export async function uploadToOneDrive(
   return { id: json.id, webUrl: json.webUrl };
 }
 
-/** Grants edit access to a list of emails -- personal OneDrive's equivalent of "share with write permission". */
-export async function shareOneDriveItem(
-  accessToken: string,
-  itemId: string,
-  emails: string[],
-): Promise<void> {
-  if (emails.length === 0) return;
-  const response = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/invite`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+/**
+ * Confirmed live (2026-08-21): Graph's per-recipient `/invite` action
+ * (named-permission sharing, the OneDrive-for-Business norm) consistently
+ * fails with a generic `sharingFailed` 400 on a personal OneDrive account
+ * -- reproduced twice, not a transient blip. `/createLink` (an
+ * "anyone with the link can edit" link) is the sharing mechanism personal
+ * OneDrive actually supports reliably; the link itself is then handed to
+ * the report email's own recipient list rather than named per-person
+ * Graph permissions, since that's the only reliable way to scope it to
+ * "those who are part of the email" for a personal account.
+ */
+export async function createOneDriveEditLink(accessToken: string, itemId: string): Promise<string> {
+  const response = await fetch(
+    `https://graph.microsoft.com/v1.0/me/drive/items/${itemId}/createLink`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type: 'edit', scope: 'anonymous' }),
     },
-    body: JSON.stringify({
-      recipients: emails.map((email) => ({ email })),
-      message: 'QA Automation report',
-      requireSignIn: false,
-      sendInvitation: true,
-      roles: ['write'],
-    }),
-  });
+  );
   if (!response.ok) {
-    throw new OneDriveGraphError('sharing', response.status, await response.text());
+    throw new OneDriveGraphError('link creation', response.status, await response.text());
   }
+  const json = (await response.json()) as { link: { webUrl: string } };
+  return json.link.webUrl;
 }

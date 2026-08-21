@@ -9,7 +9,7 @@ import type {
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import {
-  parseEmailListForSharing,
+  formatOneDriveReportFilename,
   type OneDriveReportUploader,
 } from './onedrive-report-uploader.js';
 
@@ -109,12 +109,15 @@ export class RunStagingTestSuiteUseCase {
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
       if (!skipEmail) {
-        await this.oneDriveUploader?.uploadAndShare(
+        const oneDriveLink = await this.oneDriveUploader?.upload(
           input.orgId,
-          `qa-automation-report-${run.id}.xlsx`,
+          formatOneDriveReportFilename(
+            'qa-automation-report-staging',
+            completed.completedAt ?? new Date(),
+          ),
           reportXlsx,
-          parseEmailListForSharing(this.alertEmailTo, this.alertEmailCc),
         );
+        const oneDriveLine = oneDriveLink ? `\n\nEditable copy on OneDrive: ${oneDriveLink}` : '';
         await this.emailSender.send({
           to: this.alertEmailTo,
           ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
@@ -123,9 +126,10 @@ export class RunStagingTestSuiteUseCase {
               ? `[Staging] QA Automation Report: ${failing.length} of ${results.length} test(s) failed`
               : `[Staging] QA Automation Report: all ${results.length} test(s) passed`,
           body:
-            failing.length > 0
+            (failing.length > 0
               ? failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n')
-              : `All ${results.length} test(s) passed. See the attached report for full details.`,
+              : `All ${results.length} test(s) passed. See the attached report for full details.`) +
+            oneDriveLine,
           attachments: [
             {
               filename: `qa-automation-report-${run.id}.xlsx`,
