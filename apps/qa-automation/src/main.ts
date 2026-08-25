@@ -130,7 +130,6 @@ async function main(): Promise<void> {
     emailSender,
     alertEmailTo,
     alertEmailCc,
-    oneDriveUploader,
   );
 
   const worker = createQaAutomationBullWorker(connection, async (job: Job<QaAutomationJobData>) =>

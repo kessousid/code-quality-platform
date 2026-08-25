@@ -7,10 +7,6 @@ import type {
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import type { PortalAutomationTest } from '@cqp/qa-automation-tests';
-import {
-  formatOneDriveReportFilename,
-  type OneDriveReportUploader,
-} from './onedrive-report-uploader.js';
 
 /**
  * Kept structural (not a `playwright` import) so this package doesn't
@@ -38,6 +34,10 @@ export interface RunQaAutomationSuiteInput {
  * test runs together on every trigger, scheduled or manual — the
  * schedule itself (fixed twice-daily, docs/adr/0042) is what controls
  * cadence, not per-test gating. Sends one alert email if anything failed.
+ *
+ * Per the user: OneDrive upload is staging-only (see
+ * RunStagingTestSuiteUseCase) -- production reports are email-only, no
+ * `oneDriveUploader` constructor param here.
  */
 export class RunQaAutomationSuiteUseCase {
   constructor(
@@ -48,7 +48,6 @@ export class RunQaAutomationSuiteUseCase {
     private readonly emailSender: EmailSender,
     private readonly alertEmailTo: string,
     private readonly alertEmailCc?: string,
-    private readonly oneDriveUploader?: OneDriveReportUploader,
   ) {}
 
   async execute(input: RunQaAutomationSuiteInput): Promise<QaAutomationRun> {
@@ -87,16 +86,6 @@ export class RunQaAutomationSuiteUseCase {
       const model = buildQaAutomationReportModel(completed, persistedResults);
       const reportXlsx = await getQaAutomationReportGenerator('xlsx').generate(model);
 
-      const oneDriveLink = await this.oneDriveUploader?.upload(
-        input.orgId,
-        formatOneDriveReportFilename(
-          'qa-automation-report-production',
-          completed.completedAt ?? new Date(),
-        ),
-        reportXlsx,
-      );
-      const oneDriveLine = oneDriveLink ? `\n\nEditable copy on OneDrive: ${oneDriveLink}` : '';
-
       await this.emailSender.send({
         to: this.alertEmailTo,
         ...(this.alertEmailCc !== undefined ? { cc: this.alertEmailCc } : {}),
@@ -105,10 +94,9 @@ export class RunQaAutomationSuiteUseCase {
             ? `[Production] QA Automation Report: ${failing.length} of ${results.length} test(s) failed`
             : `[Production] QA Automation Report: all ${results.length} test(s) passed`,
         body:
-          (failing.length > 0
+          failing.length > 0
             ? failing.map((f) => `${f.testName}: ${f.details}`).join('\n\n')
-            : `All ${results.length} test(s) passed. See the attached report for full details.`) +
-          oneDriveLine,
+            : `All ${results.length} test(s) passed. See the attached report for full details.`,
         attachments: [
           {
             filename: `qa-automation-report-${run.id}.xlsx`,
