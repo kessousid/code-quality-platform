@@ -94,9 +94,29 @@ export function isQuarantinedTestResult(details: string): boolean {
 }
 
 /**
+ * Bare test names (parametrize suffix stripped) presently quarantined by
+ * PytestStagingTestRunner (see that class's QUARANTINED_PANELADMIN_TESTS /
+ * QUARANTINED_BATCH1_TESTS) — kept manually in sync here since @cqp/core
+ * can't depend on @cqp/staging-test-runner (an adapter package) without
+ * breaking layering. Used by selectRerunTargets/selectQuarantinedCarryForward
+ * to decide "should this test actually run in a rerun" against CURRENT
+ * quarantine status, not whatever an old run's own stored result happened
+ * to record. Confirmed live (2026-08-25): a "rerun failed/skipped" of a
+ * run that predated an un-quarantine fix kept treating those tests as
+ * quarantined forever, since the old check only looked at that one old
+ * run's own historical details text, not the current list.
+ */
+export const CURRENTLY_QUARANTINED_TEST_NAMES: string[] = [
+  'test_TC_SA_0068_csv_download_successful',
+  'test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
+  'test_TC_MR_006_Shortlist_Candidate',
+  'test_TC_MR_005_Shortlist_Specific_Candidate',
+];
+
+/**
  * Bare test function names (parametrize suffix like `[chromium]`
  * stripped) worth re-running from a completed staging run — every
- * non-passed result except deliberately-quarantined ones. Feeds
+ * non-passed result except currently-quarantined ones. Feeds
  * PytestStagingTestRunner's onlyTestNames, which re-derives the real
  * file/class location itself against a fresh clone (see
  * resolveOnlyTestNames's own doc comment for why the stored testId
@@ -106,21 +126,22 @@ export function selectRerunTargets(results: QaAutomationTestResult[]): string[] 
   const names = new Set<string>();
   for (const result of results) {
     if (result.passed) continue;
-    if (isQuarantinedTestResult(result.details)) continue;
-    names.add(result.testName.replace(/\[.*?\]$/, ''));
+    const bareName = result.testName.replace(/\[.*?\]$/, '');
+    if (CURRENTLY_QUARANTINED_TEST_NAMES.includes(bareName)) continue;
+    names.add(bareName);
   }
   return [...names];
 }
 
 /**
- * The quarantined stub rows from a run being rerun (selectRerunTargets'
- * own exclusion list) -- carried forward into the *new* run's own results
- * rather than silently dropped. Per the user: a rerun of "55 failed"
- * where 16 are quarantined should still show 55 accounted for (39
- * actually rerun + 16 shown as quarantined/not rerun), not quietly
- * shrink to 39 with no record of why. Deduped by testId in case the same
- * quarantined test's stub somehow appears more than once in the source
- * run.
+ * The currently-quarantined stub rows from a run being rerun
+ * (selectRerunTargets' own exclusion list) -- carried forward into the
+ * *new* run's own results rather than silently dropped. Per the user: a
+ * rerun of "55 failed" where 16 are quarantined should still show 55
+ * accounted for (39 actually rerun + 16 shown as quarantined/not rerun),
+ * not quietly shrink to 39 with no record of why. Deduped by testId in
+ * case the same quarantined test's stub somehow appears more than once
+ * in the source run.
  */
 export function selectQuarantinedCarryForward(
   results: QaAutomationTestResult[],
@@ -130,7 +151,9 @@ export function selectQuarantinedCarryForward(
     Pick<QaAutomationTestResult, 'testId' | 'testName' | 'passed' | 'details' | 'sourceUrl'>
   >();
   for (const result of results) {
-    if (!isQuarantinedTestResult(result.details)) continue;
+    if (result.passed) continue;
+    const bareName = result.testName.replace(/\[.*?\]$/, '');
+    if (!CURRENTLY_QUARANTINED_TEST_NAMES.includes(bareName)) continue;
     if (byTestId.has(result.testId)) continue;
     byTestId.set(result.testId, {
       testId: result.testId,
