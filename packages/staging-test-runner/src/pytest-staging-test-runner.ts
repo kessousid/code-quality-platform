@@ -82,68 +82,28 @@ const MAX_PYTEST_DURATION_MS = 5 * 60 * 60 * 1000;
 const PANELADMIN_FILE = 'tests/roles/panel_admin/test_paneladmin.py';
 
 /**
- * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus the
- * specific tests below.
+ * Batch 2 (`test_paneladmin.py`) is re-enabled (docs/adr/0055), minus
+ * whatever's still listed below (currently nothing).
  *
  * `007`/`008` were quarantined for an unbounded-retry hang (docs/adr/0055),
  * then un-quarantined once curatal_tests PR #14 bounded the actual
  * unguarded `.inner_text()` waits behind it — confirmed live (2026-08-15
  * scheduled run): both ran cleanly in ~70s each.
  *
- * `048`/`049`/`050`/`052` were also un-quarantined by that same PR #14 on
- * the theory that its `_find_banking_field` timeout bound fixed their
- * shared chained-wizard-fallback hang too — that theory did NOT hold live.
- * The same 2026-08-15 run showed all four still took the full ~10 minutes
- * each (FAILED/ERROR), which then reproduced the exact page-poisoning
- * cascade PR #12's recovery guard was supposed to prevent: every test from
- * `060` through `084` (25 tests) also errored at ~10 minutes each,
- * eventually blowing through the whole-batch `MAX_PYTEST_DURATION_MS`
- * ceiling and getting the entire batch 2 subprocess force-killed as hung.
- * Because that kill happens before pytest's own `pytest_sessionfinish`
- * hook ever runs, `report-2.xml` was never written — so EVERY batch 2
- * result from that run was lost, not just these four, including the
- * `007`/`008`/`009`-`047` tests that had already passed cleanly. Restored
- * to quarantine; PR #14's fix for these four specifically needs more work
- * before retrying.
- *
- * `051` stays quarantined: no comparable structural defect was found for
- * it (it doesn't share 048/049/050/052's `_find_banking_field` cascade),
- * so no fix exists yet.
- *
- * `053`-`059` remain quarantined from a real live run and a
- * source-level trace, not static review: every one of these calls
- * Playwright's `page.expect_download(timeout=TIMEOUT)` (`TIMEOUT` = 30s,
- * config.py) waiting for a real browser download event. `053` stalled and
- * errored at the suite's own 600s per-test timeout — far longer than the
- * 30s the code's own try/except should allow, meaning the browser itself
- * gets wedged waiting on the download, not a clean timeout — and every
- * test after it that hits the same `expect_download` call did too, seven
- * in a row. `034` hits the identical `expect_download` call but has a
- * graceful fallback after it and fails fast (~90s) instead of hanging —
- * its own comment ("Case C: download (observed primary behavior on
- * staging)") confirms staging doesn't reliably fire download events at
- * all. No other test in the file calls `expect_download`, so the blast
- * radius stops at `059`. One shared root cause, not eight independent
- * bugs — and conftest.py was checked clean (accept_downloads already
- * defaults true), so this isn't a client-side config gap either. Still
- * unresolved. The rest of the file runs normally as part of batch 2.
+ * `048`-`052` (banking details validation/add-interviewer) and `053`-`059`
+ * (report downloads, all sharing a `page.expect_download` hang root cause
+ * -- staging didn't reliably fire download events) were quarantined after
+ * a real cascading-hang incident, then un-quarantined per the user
+ * (2026-08-25): the underlying fixes have since landed in curatal_tests,
+ * so a fresh run should include them again. If any of these start hanging
+ * again, re-add them here rather than re-diagnosing from scratch --
+ * `048`/`049`/`050`/`052` shared a `_find_banking_field` chained-wizard-
+ * fallback cascade, `051` had no comparable root cause found, and
+ * `053`-`059` all called `page.expect_download(timeout=TIMEOUT)`.
  */
 const RUN_PANELADMIN_BATCH = true;
 
-const QUARANTINED_PANELADMIN_TESTS = [
-  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
-  'test_TC_PANELADMIN_049_add_interviewer_account_number_mismatch_validation',
-  'test_TC_PANELADMIN_050_add_interviewer_invalid_ifsc_and_pan_validation',
-  'test_TC_PANELADMIN_051_add_interviewer_invalid_banking_document_upload',
-  'test_TC_PANELADMIN_052_add_interviewer_successfully',
-  'test_TC_PANELADMIN_053_download_basic_predefined_reports_as_excel',
-  'test_TC_PANELADMIN_054_download_interviewers_payment_report_with_date_filter',
-  'test_TC_PANELADMIN_055_download_uploaded_profiles_report_as_excel',
-  'test_TC_PANELADMIN_056_uploaded_profiles_first_date_range_filter',
-  'test_TC_PANELADMIN_057_uploaded_profiles_company_filter',
-  'test_TC_PANELADMIN_058_uploaded_profiles_company_and_job_title_filter',
-  'test_TC_PANELADMIN_059_uploaded_profiles_interview_status_filter',
-];
+const QUARANTINED_PANELADMIN_TESTS: string[] = [];
 
 /**
  * Batch 1's own quarantine list (docs/adr/0055's pattern, applied outside
