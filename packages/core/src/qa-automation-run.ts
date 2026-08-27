@@ -107,8 +107,6 @@ export function isQuarantinedTestResult(details: string): boolean {
  * run's own historical details text, not the current list.
  */
 export const CURRENTLY_QUARANTINED_TEST_NAMES: string[] = [
-  'test_TC_SA_0068_csv_download_successful',
-  'test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
   'test_TC_MR_006_Shortlist_Candidate',
   'test_TC_MR_005_Shortlist_Specific_Candidate',
 ];

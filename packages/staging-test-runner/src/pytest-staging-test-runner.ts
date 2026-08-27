@@ -120,6 +120,20 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [];
  * back into batch 1 uncontrolled -- deselecting these here rather than
  * waiting to see if they hang for real on a live run.
  *
+ * `TC_SA_0068`/`TC_SA_0069` un-quarantined per the user (2026-08-27).
+ * `TC_SA_0068`'s own root cause: its `page.expect_download(timeout=8000)`
+ * waited only 8s, but the real export takes ~2-5 minutes server-side
+ * (confirmed by the user manually), so the wait always timed out and fell
+ * into a silent `except` that passed the test without ever checking a
+ * download happened -- fixed in curatal_tests commit d0f773c (timeout
+ * raised to 360000ms, the swallow removed so a real failure now fails
+ * loudly). Separately, both tests were also blocked by a staging-side
+ * issue -- the Scheduling Admin dashboard's own sidebar failed to render
+ * the Netting link at all, showing a "Something Went Wrong. Please Try
+ * Again" banner instead, so neither test could even navigate past its
+ * first step. The user fixed that on staging directly (2026-08-27); both
+ * tests confirmed passing live afterward via a scoped rerun of each.
+ *
  * `TC_MR_006_Shortlist_Candidate` (tests/roles/cod/master_recruiter/
  * test_shortlist_candidate.py) confirmed hung live on 2026-08-20 -- two
  * separate real runs both stalled at exactly this point (right after the
@@ -144,8 +158,6 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [];
  * since a single bad run costs the whole batch.
  */
 const QUARANTINED_BATCH1_TESTS = [
-  'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0068_csv_download_successful',
-  'tests/roles/scheduling_admin/test_netting.py::TestSANetting::test_TC_SA_0069_verify_cancel_functionality_using_no_button_in_download_csv_popup',
   'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
   'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
 ];
