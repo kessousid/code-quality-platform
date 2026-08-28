@@ -4,6 +4,26 @@ import path from 'node:path';
 import type { StagingTestRunner, StagingTestRunResult, StagingTestResult } from '@cqp/core';
 import { runSubprocess, SubprocessTimeoutError, type SubprocessResult } from '@cqp/plugin-shared';
 import { parseJunitXml } from './junit-xml-parser.js';
+import { parseReportLog } from './report-log-parser.js';
+
+/**
+ * Prepended to `details` for a result recovered from the `--report-log`
+ * fallback instead of the normal `--junitxml` report (docs/adr/0057) --
+ * reuses the existing details-string-marker convention (same idea as the
+ * `SKIPPED:` prefix below) rather than adding a new StagingTestResult
+ * field, so no schema/reporting-layer change is needed to see it. `SKIPPED:`
+ * itself must stay the leading token when present -- every existing
+ * details-text check (isSkippedTestResult, isQuarantinedTestResult, the
+ * Excel generator's own grep) anchors on it at position 0.
+ */
+const RECOVERED_MARKER =
+  '[RECOVERED -- batch ended abnormally before the normal report was written; see docs/adr/0057] ';
+
+function markRecovered(details: string): string {
+  return details.startsWith('SKIPPED:')
+    ? `SKIPPED: ${RECOVERED_MARKER}${details.slice('SKIPPED:'.length).trimStart()}`
+    : `${RECOVERED_MARKER}${details}`;
+}
 
 /**
  * `runSubprocess` deliberately doesn't treat a non-zero exit as failure —
@@ -554,6 +574,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           python,
           repoDir,
           path.join(workDir, 'report-rerun.xml'),
+          path.join(workDir, 'report-rerun.jsonl'),
           resolvedOnlyTestNodeIds,
           sourceUrl,
           onStdout,
@@ -581,6 +602,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           python,
           repoDir,
           path.join(workDir, 'report-only.xml'),
+          path.join(workDir, 'report-only.jsonl'),
           ONLY_PATH.split(/\s+/),
           sourceUrl,
           onStdout,
@@ -611,6 +633,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             python,
             repoDir,
             path.join(workDir, 'report-1.xml'),
+            path.join(workDir, 'report-1.jsonl'),
             [
               'tests',
               `--ignore=${PANELADMIN_FILE}`,
@@ -623,7 +646,13 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           );
           results.push(...batch1);
         } catch (error) {
-          console.error(`[staging batch 1] failed: ${(error as Error).message}`);
+          // Reaching this catch means BOTH the JUnit and report-log fallback
+          // (docs/adr/0057) inside runBatch came up empty — genuine total
+          // loss for this batch, not the partial-recovery case (that returns
+          // normally, logged separately inside runBatch itself).
+          console.error(
+            `[staging batch 1] failed with ZERO recoverable results (both JUnit and report-log unavailable): ${(error as Error).message}`,
+          );
         }
 
         // Same "still show up in the report" rationale as the paneladmin
@@ -656,6 +685,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             python,
             repoDir,
             path.join(workDir, 'report-2.xml'),
+            path.join(workDir, 'report-2.jsonl'),
             [
               PANELADMIN_FILE,
               ...QUARANTINED_PANELADMIN_TESTS.map(
@@ -673,7 +703,12 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           );
           results.push(...batch2);
         } catch (error) {
-          console.error(`[staging batch 2] failed: ${(error as Error).message}`);
+          // See batch 1's catch above -- this only fires on genuine total
+          // loss (both JUnit and report-log fallback empty), not a partial
+          // recovery (which returns normally and is logged inside runBatch).
+          console.error(
+            `[staging batch 2] failed with ZERO recoverable results (both JUnit and report-log unavailable): ${(error as Error).message}`,
+          );
         }
 
         // Per the user: the quarantined tests should still show up in the
@@ -708,28 +743,57 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     python: string,
     repoDir: string,
     reportPath: string,
+    reportLogPath: string,
     testPaths: string[],
     sourceUrl: string,
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
   ): Promise<StagingTestResult[]> {
-    const pytestResult = await this.runPytest(
+    const outcome = await this.runPytest(
       python,
       repoDir,
       reportPath,
+      reportLogPath,
       testPaths,
       onStdout,
       onStderr,
       onProgress,
     );
 
-    const xml = await readFile(reportPath, 'utf-8').catch(() => {
-      throw new Error(
-        `pytest produced no report at ${reportPath} for ${testPaths.join(' ')} (exit code ${pytestResult.exitCode}).\nstderr: ${pytestResult.stderr.trim()}\nstdout: ${pytestResult.stdout.trim()}`,
+    // Primary path — unchanged from before this existed: on a clean pytest
+    // exit, the JUnit report is always the source of truth.
+    const xml = await readFile(reportPath, 'utf-8').catch(() => undefined);
+    if (xml !== undefined) {
+      return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
+    }
+
+    // Fallback path (docs/adr/0057) — JUnit was never written, because
+    // pytest's session never exited normally (SIGKILL-on-hang, docs/adr/0045,
+    // or a crash before teardown). Recover whatever pytest-reportlog managed
+    // to flush to disk before the process ended, instead of losing every
+    // already-completed result in the batch along with the one that hung.
+    const reportLog = await readFile(reportLogPath, 'utf-8').catch(() => undefined);
+    const recovered = reportLog ? parseReportLog(reportLog) : [];
+
+    if (recovered.length > 0) {
+      console.error(
+        `[staging] pytest report at ${reportPath} was never written (exit code ${outcome.exitCode}, timed out: ${outcome.timedOut}) -- ` +
+          `recovered ${recovered.length} result(s) from the report-log fallback (${reportLogPath}, docs/adr/0057). ` +
+          'Any test still in-flight when the process ended has no recorded outcome and is not included in this count.',
       );
-    });
-    return parseJunitXml(xml).map((result) => ({ ...result, sourceUrl }));
+      return recovered.map((result) => ({
+        ...result,
+        sourceUrl,
+        details: markRecovered(result.details),
+      }));
+    }
+
+    throw new Error(
+      `pytest produced no usable report at ${reportPath} or ${reportLogPath} for ${testPaths.join(' ')} ` +
+        `(exit code ${outcome.exitCode}, timed out: ${outcome.timedOut}).\n` +
+        `stderr (tail): ${outcome.stderr.trim().slice(-2000)}\nstdout (tail): ${outcome.stdout.trim().slice(-2000)}`,
+    );
   }
 
   /**
@@ -738,7 +802,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * call produces, not in the exit code. But if it failed to even start
    * (e.g. a bad CLI flag), no XML is produced at all — that case still
    * needs to surface the real stderr, not the opaque ENOENT from the read
-   * in `runSuite`.
+   * in `runBatch`.
    *
    * `--continue-on-collection-errors` is load-bearing, confirmed via a
    * real reproduction: pytest's default behavior is to abort the *entire*
@@ -754,20 +818,27 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * `timeoutMs` (docs/adr/0045) is separately load-bearing — two real
    * runs each hung for hours with zero output at the same point, and
    * nothing else in this stack can recover from a genuinely stuck child
-   * process.
+   * process. A timeout no longer propagates as a thrown error past this
+   * method (docs/adr/0057) — it's returned as just another way the
+   * subprocess concluded (`timedOut: true`), so `runBatch`'s
+   * JUnit-then-report-log fallback chain handles a clean exit, a crash, and
+   * a hang-kill uniformly instead of a hang-kill skipping past it entirely.
+   * A genuine spawn failure (e.g. `xvfb-run` itself missing) still throws —
+   * no report of any kind could ever help with that.
    */
   private async runPytest(
     python: string,
     repoDir: string,
     reportPath: string,
+    reportLogPath: string,
     testPaths: string[],
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
-  ): Promise<SubprocessResult> {
+  ): Promise<SubprocessResult & { timedOut: boolean }> {
     const percentTracker = onProgress ? makePercentTracker(onProgress) : undefined;
     try {
-      return await runSubprocess(
+      const result = await runSubprocess(
         this.options.xvfbCommand ?? 'xvfb-run',
         [
           '-a',
@@ -780,6 +851,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           'chromium',
           '--continue-on-collection-errors',
           `--junitxml=${reportPath}`,
+          `--report-log=${reportLogPath}`,
         ],
         {
           cwd: repoDir,
@@ -793,11 +865,10 @@ export class PytestStagingTestRunner implements StagingTestRunner {
           timeoutMs: MAX_PYTEST_DURATION_MS,
         },
       );
+      return { ...result, timedOut: false };
     } catch (error) {
       if (error instanceof SubprocessTimeoutError) {
-        throw new Error(
-          `pytest (${testPaths.join(' ')}) ran longer than ${MAX_PYTEST_DURATION_MS / 60_000} minutes and was killed as hung — see docs/adr/0045.`,
-        );
+        return { exitCode: null, stdout: error.stdout, stderr: error.stderr, timedOut: true };
       }
       throw error;
     }

@@ -14,7 +14,12 @@ export interface SubprocessResult {
 }
 
 export class SubprocessTimeoutError extends Error {
-  constructor(command: string, timeoutMs: number) {
+  constructor(
+    command: string,
+    timeoutMs: number,
+    readonly stdout: string,
+    readonly stderr: string,
+  ) {
     super(`${command} did not exit within ${timeoutMs}ms and was killed as hung.`);
     this.name = 'SubprocessTimeoutError';
   }
@@ -129,7 +134,7 @@ export function runSubprocess(
     child.on('close', (exitCode) => {
       if (timer) clearTimeout(timer);
       if (timedOut) {
-        reject(new SubprocessTimeoutError(command, options.timeoutMs!));
+        reject(new SubprocessTimeoutError(command, options.timeoutMs!, stdout, stderr));
         return;
       }
       resolve({ stdout, stderr, exitCode });

@@ -55,6 +55,31 @@ describe('runSubprocess', () => {
     ).rejects.toThrow(SubprocessTimeoutError);
   });
 
+  it('carries whatever stdout/stderr had already been buffered before the timeout kill', async () => {
+    // Confirmed live: a killed pytest batch used to lose its already-flowing
+    // output entirely -- SubprocessTimeoutError took no stdout/stderr args,
+    // so the buffered data (already delivered live to onStdout/onStderr)
+    // was discarded on the reject path. This is the caller's only remaining
+    // way to recover it once the subprocess is gone.
+    await expect(
+      runSubprocess(
+        process.execPath,
+        [
+          '-e',
+          'process.stdout.write("partial-before-kill"); process.stderr.write("partial-err"); setTimeout(() => {}, 60000)',
+        ],
+        {
+          cwd: process.cwd(),
+          envVarName: 'CQP_TEST_TOOL_PATH',
+          timeoutMs: 200,
+        },
+      ),
+    ).rejects.toMatchObject({
+      stdout: 'partial-before-kill',
+      stderr: 'partial-err',
+    });
+  });
+
   it('does not time out a subprocess that finishes well within timeoutMs', async () => {
     const result = await runSubprocess(process.execPath, ['--version'], {
       cwd: process.cwd(),
