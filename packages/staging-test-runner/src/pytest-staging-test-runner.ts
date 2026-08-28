@@ -120,10 +120,32 @@ const PANELADMIN_FILE = 'tests/roles/panel_admin/test_paneladmin.py';
  * `048`/`049`/`050`/`052` shared a `_find_banking_field` chained-wizard-
  * fallback cascade, `051` had no comparable root cause found, and
  * `053`-`059` all called `page.expect_download(timeout=TIMEOUT)`.
+ *
+ * `048` and `086` re-quarantined per the user (2026-08-28). Confirmed
+ * live, twice independently: `048` hit pytest's own 600s per-test
+ * timeout both under a fixture-isolation experiment (since reverted) and
+ * under the plain original fixture -- it's one of the longest,
+ * step-heaviest tests in this file (five wizard steps, two full
+ * validation passes), so it has very little time budget margin even when
+ * healthy. In the same scoped run, `086` (running right after `048`)
+ * ALSO hit the ~600s timeout, and the whole run's own session-end
+ * `context.close()` teardown then hung for 5+ minutes afterward, needing
+ * a manual container restart to clear -- a real Playwright edge case
+ * where a page/context left mid-action by a signal-based timeout can
+ * block its own `.close()` call. Worth noting: a full scheduled run two
+ * days before this (2026-08-26) completed all ~525 tests cleanly,
+ * including both of these -- so this may be scoped-single-test-rerun-
+ * specific or transient staging slowness rather than a hard, permanent
+ * hang. If a future full run shows both passing reliably again, these
+ * are reasonable to re-verify and un-quarantine, same as every other
+ * entry in this list.
  */
 const RUN_PANELADMIN_BATCH = true;
 
-const QUARANTINED_PANELADMIN_TESTS: string[] = [];
+const QUARANTINED_PANELADMIN_TESTS: string[] = [
+  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
+  'test_TC_PANELADMIN_086_change_interviewer_successful_change',
+];
 
 /**
  * Batch 1's own quarantine list (docs/adr/0055's pattern, applied outside
