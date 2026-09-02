@@ -82,6 +82,14 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_PLATFORM_ADMIN_EMAIL'),
     password: requireEnv('PORTAL_QA_PLATFORM_ADMIN_PASSWORD'),
   };
+  // A dedicated Master Recruiter login for the recruiter-persona dashboard
+  // checks only (docs/adr/0059) — the recruiter login page is a distinct
+  // flow (auth/recruiter/login) from the candidate/employer login
+  // `credentials` normally uses.
+  const recruiterCredentials = {
+    email: requireEnv('PORTAL_QA_RECRUITER_EMAIL'),
+    password: requireEnv('PORTAL_QA_RECRUITER_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -127,7 +135,12 @@ async function main(): Promise<void> {
   const useCase = new RunQaAutomationSuiteUseCase(
     new PrismaQaAutomationRunRepository(prisma),
     new PrismaQaAutomationTestResultRepository(prisma),
-    createPortalAutomationTests(credentials, slotCheckCredentials, candidateSearchCredentials),
+    createPortalAutomationTests(
+      credentials,
+      slotCheckCredentials,
+      candidateSearchCredentials,
+      recruiterCredentials,
+    ),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });
       return {

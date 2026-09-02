@@ -9,6 +9,8 @@ export * from './development-report-download.test-impl.js';
 export * from './candidate-search-skill-filters.test-impl.js';
 export * from './candidate-search-gender-breakdown.test-impl.js';
 export * from './candidate-search-education-additive.test-impl.js';
+export * from './recruiter-navigation.js';
+export * from './recruiter-dashboard-navigation.test-impl.js';
 
 import type { PortalAutomationTest, PortalCredentials } from './portal-automation-test.js';
 import { SlotListingPricingTest } from './slot-listing-pricing.test-impl.js';
@@ -19,6 +21,7 @@ import { DevelopmentReportDownloadTest } from './development-report-download.tes
 import { CandidateSearchSkillFiltersTest } from './candidate-search-skill-filters.test-impl.js';
 import { CandidateSearchGenderBreakdownTest } from './candidate-search-gender-breakdown.test-impl.js';
 import { CandidateSearchEducationAdditiveTest } from './candidate-search-education-additive.test-impl.js';
+import { RecruiterDashboardNavigationTest } from './recruiter-dashboard-navigation.test-impl.js';
 
 /**
  * The extensible registry (see docs/adr/0035) — adding a new check means
@@ -38,11 +41,19 @@ import { CandidateSearchEducationAdditiveTest } from './candidate-search-educati
  * specifically (the feature is on the recruiter/admin side of the app,
  * not the candidate/employer side `credentials` normally logs into).
  * Also defaults to `credentials` when omitted for the same reason.
+ *
+ * `recruiterCredentials` is the same pattern again for the recruiter
+ * persona checks (docs/adr/0059) — a real Master Recruiter account, the
+ * first of several planned per-persona dashboard checks. Also defaults
+ * to `credentials` when omitted, though in practice `credentials` is a
+ * candidate/employer account and this check needs a real recruiter
+ * login to mean anything.
  */
 export function createPortalAutomationTests(
   credentials: PortalCredentials,
   slotCheckCredentials: PortalCredentials = credentials,
   candidateSearchCredentials: PortalCredentials = credentials,
+  recruiterCredentials: PortalCredentials = credentials,
 ): PortalAutomationTest[] {
   return [
     new SlotListingPricingTest(slotCheckCredentials),
@@ -53,5 +64,6 @@ export function createPortalAutomationTests(
     new CandidateSearchSkillFiltersTest(candidateSearchCredentials),
     new CandidateSearchGenderBreakdownTest(candidateSearchCredentials),
     new CandidateSearchEducationAdditiveTest(candidateSearchCredentials),
+    new RecruiterDashboardNavigationTest(recruiterCredentials),
   ];
 }
