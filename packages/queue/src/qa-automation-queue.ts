@@ -61,3 +61,17 @@ export async function enqueueManualQaAutomationRun(
 ): Promise<void> {
   await queue.add('run-qa-automation-suite', { orgId, triggeredBy: 'manual' });
 }
+
+/**
+ * Producer-side enqueue for a deploy-notification-email match (docs/adr/0058)
+ * — a one-off job, same as the manual trigger, just a different
+ * `triggeredBy` label so the dashboard/reports can tell the two apart.
+ * Called from apps/qa-automation's own poll worker, not from any use case
+ * (packages/application must not depend on this adapter package).
+ */
+export async function enqueueMailTriggeredQaAutomationRun(
+  queue: Queue<QaAutomationJobData>,
+  orgId: string,
+): Promise<void> {
+  await queue.add('run-qa-automation-suite', { orgId, triggeredBy: 'mail_triggered' });
+}

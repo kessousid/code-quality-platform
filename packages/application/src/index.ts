@@ -66,3 +66,5 @@ export * from './onedrive-report-uploader.js';
 export * from './reconcile-orphaned-qa-automation-runs.use-case.js';
 export * from './get-qa-automation-staging-schedule.use-case.js';
 export * from './update-qa-automation-staging-schedule.use-case.js';
+export * from './deploy-mail-graph-client.js';
+export * from './poll-deploy-mail-and-trigger-qa-automation.use-case.js';

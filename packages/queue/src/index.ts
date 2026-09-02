@@ -5,3 +5,4 @@ export * from './redis-connection.js';
 export * from './directory-browse-queue.js';
 export * from './qa-automation-queue.js';
 export * from './qa-automation-staging-queue.js';
+export * from './deploy-mail-poll-queue.js';

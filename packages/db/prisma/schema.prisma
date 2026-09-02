@@ -147,6 +147,7 @@ enum QaAutomationRunStatus {
 enum QaAutomationTrigger {
   SCHEDULED
   MANUAL
+  MAIL_TRIGGERED
 }
 
 enum QaAutomationEnvironment {
@@ -183,6 +184,7 @@ model Org {
   qaAutomationStagingSchedule QaAutomationStagingSchedule?
   qaAutomationReports         QaAutomationReport[]
   oneDriveConnection          OneDriveConnection?
+  deployMailPollCursor        DeployMailPollCursor?
 
   @@map("orgs")
 }
@@ -747,4 +749,18 @@ model OneDriveConnection {
   org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("onedrive_connections")
+}
+
+/// Single-row-per-org watermark for the deploy-notification mailbox poller
+/// (docs/adr/0058) — how far back the next hourly poll needs to look, so an
+/// already-seen email never re-triggers a run. `lastPolledAt: null` means
+/// "never polled yet" (the use case falls back to a fixed lookback window).
+model DeployMailPollCursor {
+  orgId        String    @id
+  lastPolledAt DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("deploy_mail_poll_cursors")
 }

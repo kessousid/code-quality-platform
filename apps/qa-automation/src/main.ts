@@ -5,19 +5,27 @@ import {
   PrismaQaAutomationRunRepository,
   PrismaQaAutomationTestResultRepository,
   PrismaOneDriveConnectionRepository,
+  PrismaDeployMailPollCursorRepository,
 } from '@cqp/db';
 import {
   createRedisConnection,
+  createQaAutomationBullQueue,
   createQaAutomationBullWorker,
   createQaAutomationStagingBullWorker,
+  createDeployMailPollBullQueue,
+  createDeployMailPollBullWorker,
+  upsertDeployMailPollSchedule,
+  enqueueMailTriggeredQaAutomationRun,
   type QaAutomationJobData,
   type QaAutomationStagingJobData,
+  type DeployMailPollJobData,
 } from '@cqp/queue';
 import {
   ReconcileOrphanedQaAutomationRunsUseCase,
   RunQaAutomationSuiteUseCase,
   RunStagingTestSuiteUseCase,
   OneDriveReportUploader,
+  PollDeployMailAndTriggerQaAutomationUseCase,
   parseRepoTokenEncryptionKey,
   type QaBrowser,
 } from '@cqp/application';
@@ -135,6 +143,10 @@ async function main(): Promise<void> {
   const worker = createQaAutomationBullWorker(connection, async (job: Job<QaAutomationJobData>) =>
     useCase.execute({ orgId: job.data.orgId, triggeredBy: job.data.triggeredBy }),
   );
+  // Producer handle for enqueueMailTriggeredQaAutomationRun below -- the
+  // deploy-mail poll worker runs in this same process and feeds jobs back
+  // into this same queue/worker pair, it doesn't need its own consumer.
+  const queue = createQaAutomationBullQueue(connection);
 
   worker.on('completed', (job) => {
     console.log(
@@ -192,6 +204,65 @@ async function main(): Promise<void> {
     console.error(`[qa-automation-staging] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
   });
 
+  // Optional feature (docs/adr/0058: trigger a production run from the
+  // deploy-notification email Curatal's own GitLab CI/CD already sends) --
+  // gated purely by env var presence, same as the OneDrive integration
+  // above. All 6 must be set together or the feature stays off; there is
+  // no dashboard toggle in this first pass.
+  const deployMailTenantId = process.env.DEPLOY_MAIL_TENANT_ID;
+  const deployMailClientId = process.env.DEPLOY_MAIL_CLIENT_ID;
+  const deployMailClientSecret = process.env.DEPLOY_MAIL_CLIENT_SECRET;
+  const deployMailMailbox = process.env.DEPLOY_MAIL_MAILBOX_ADDRESS;
+  const deployMailBodyMatch = process.env.DEPLOY_MAIL_BODY_MATCH;
+  const deployMailOrgId = process.env.DEPLOY_MAIL_ORG_ID;
+
+  let deployMailPollWorker: ReturnType<typeof createDeployMailPollBullWorker> | undefined;
+  if (
+    deployMailTenantId &&
+    deployMailClientId &&
+    deployMailClientSecret &&
+    deployMailMailbox &&
+    deployMailBodyMatch &&
+    deployMailOrgId
+  ) {
+    const pollUseCase = new PollDeployMailAndTriggerQaAutomationUseCase(
+      new PrismaDeployMailPollCursorRepository(prisma),
+      {
+        tenantId: deployMailTenantId,
+        clientId: deployMailClientId,
+        clientSecret: deployMailClientSecret,
+      },
+      deployMailMailbox,
+      deployMailBodyMatch,
+    );
+
+    deployMailPollWorker = createDeployMailPollBullWorker(
+      connection,
+      async (job: Job<DeployMailPollJobData>) => {
+        const result = await pollUseCase.execute(job.data.orgId);
+        if (result.matched) {
+          await enqueueMailTriggeredQaAutomationRun(queue, job.data.orgId);
+        }
+      },
+    );
+
+    deployMailPollWorker.on('completed', (job) => {
+      console.log(`[deploy-mail-poll] job ${job.id} (org ${job.data.orgId}) completed`);
+    });
+    deployMailPollWorker.on('failed', (job, error) => {
+      console.error(`[deploy-mail-poll] job ${job?.id} (org ${job?.data.orgId}) failed:`, error);
+    });
+    deployMailPollWorker.on('error', (error) => {
+      console.error('[deploy-mail-poll] worker error:', error);
+    });
+
+    const deployMailPollQueue = createDeployMailPollBullQueue(connection);
+    await upsertDeployMailPollSchedule(deployMailPollQueue, deployMailOrgId);
+    console.log('[qa-automation] deploy-mail poll enabled (hourly)');
+  } else {
+    console.log('[qa-automation] deploy-mail poll disabled (DEPLOY_MAIL_* env vars not fully set)');
+  }
+
   console.log(
     `[qa-automation] listening on queues "qa-automation" and "qa-automation-staging" via ${redisHost(redisUrl)}`,
   );
@@ -200,6 +271,7 @@ async function main(): Promise<void> {
     console.log('[qa-automation] shutting down...');
     await worker.close();
     await stagingWorker.close();
+    await deployMailPollWorker?.close();
     await connection.quit();
     await prisma.$disconnect();
     process.exit(0);

@@ -23,7 +23,12 @@ export const QA_AUTOMATION_RUN_STATUS_LABELS: Record<QaAutomationRunStatus, stri
   failed: 'Failed to Execute',
 };
 
-export type QaAutomationTrigger = 'scheduled' | 'manual';
+/**
+ * 'mail_triggered' (docs/adr/0058): a production run enqueued by the
+ * deploy-notification mailbox poller, distinct from a person clicking
+ * "Run now" ('manual') so the dashboard/reports can tell the two apart.
+ */
+export type QaAutomationTrigger = 'scheduled' | 'manual' | 'mail_triggered';
 
 /**
  * Which environment a run actually executed against — 'production' always
@@ -235,4 +240,20 @@ export interface QaAutomationScheduleRepository {
   /** Creates the single default row on first read if none exists yet. */
   get(orgId: string): Promise<QaAutomationSchedule>;
   update(orgId: string, input: UpdateQaAutomationScheduleInput): Promise<QaAutomationSchedule>;
+}
+
+/**
+ * Single-row-per-org watermark for the deploy-notification mailbox poller
+ * (docs/adr/0058) — how far back the next poll needs to look, so an email
+ * already seen never re-triggers a run. `null` means "never polled yet."
+ */
+export interface DeployMailPollCursor {
+  lastPolledAt: Date | null;
+}
+
+export interface DeployMailPollCursorRepository {
+  /** Creates the single default row (lastPolledAt: null) on first read if none exists yet. */
+  get(orgId: string): Promise<DeployMailPollCursor>;
+  /** Always called after a poll, whether or not a matching email was found. */
+  updateLastPolledAt(orgId: string, lastPolledAt: Date): Promise<DeployMailPollCursor>;
 }

@@ -31,3 +31,4 @@ export * from './fake-portal-automation-test.js';
 export * from './fake-qa-browser.js';
 export * from './fake-staging-test-runner.js';
 export * from './fake-git-checkout-provider.js';
+export * from './in-memory-deploy-mail-poll-cursor-repository.js';

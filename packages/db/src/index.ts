@@ -22,3 +22,4 @@ export * from './prisma-qa-automation-schedule-repository.js';
 export * from './prisma-qa-automation-staging-schedule-repository.js';
 export * from './prisma-qa-automation-report-repository.js';
 export * from './prisma-onedrive-connection-repository.js';
+export * from './prisma-deploy-mail-poll-cursor-repository.js';
