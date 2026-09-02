@@ -90,6 +90,14 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_RECRUITER_EMAIL'),
     password: requireEnv('PORTAL_QA_RECRUITER_PASSWORD'),
   };
+  // A dedicated Scheduling Admin login for the scheduling-admin-persona
+  // dashboard check only (docs/adr/0060) — a third, distinct login
+  // form/URL (auth/curatal-users/login) from both the candidate/employer
+  // and recruiter logins above.
+  const schedulingAdminCredentials = {
+    email: requireEnv('PORTAL_QA_SCHEDULING_ADMIN_EMAIL'),
+    password: requireEnv('PORTAL_QA_SCHEDULING_ADMIN_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -140,6 +148,7 @@ async function main(): Promise<void> {
       slotCheckCredentials,
       candidateSearchCredentials,
       recruiterCredentials,
+      schedulingAdminCredentials,
     ),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });

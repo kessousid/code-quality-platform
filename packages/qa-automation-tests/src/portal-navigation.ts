@@ -122,6 +122,38 @@ export async function loginAndReachCompletedInterviewsTab(
   await page.waitForTimeout(2500);
 }
 
+/**
+ * Shared by every persona-dashboard check that logs into the
+ * recruiter/admin side of the app (recruiter, scheduling admin, ...:
+ * docs/adr/0059) — that whole app shell's sidebar loads collapsed to
+ * icons-only, with an expand control that has no discoverable accessible
+ * name (same fragility already noted above for the candidate portal's
+ * own sidebar, just a different coordinate). If the layout changes, this
+ * coordinate click is the first thing to re-verify.
+ */
+export async function expandCollapsedAdminSidebar(page: Page): Promise<void> {
+  await page.mouse.click(76, 109);
+  await page.waitForTimeout(1000);
+}
+
+/**
+ * Every expanded sidebar label in that same admin app shell renders as
+ * TWO same-text elements: the real visible nav item, and a second,
+ * zero-width one earlier in the DOM (confirmed live for both the
+ * recruiter and scheduling admin personas -- a leftover tooltip/label
+ * counterpart for the collapsed icon-only state, `boundingBox().width
+ * === 0`). `getByText(...).first()` silently resolves to the hidden one
+ * and reports "not visible" even when the item is plainly on screen, so
+ * every caller must check the last match, not the first.
+ */
+export async function isAdminSidebarNavItemVisible(page: Page, label: string): Promise<boolean> {
+  return page
+    .getByText(label, { exact: true })
+    .last()
+    .isVisible()
+    .catch(() => false);
+}
+
 /** Live-verified for the new Premium-upgrade test (docs/adr/0035) — "Jobs" is a sibling sidebar item to "My Interviews". */
 export async function loginAndReachJobsPage(
   page: Page,

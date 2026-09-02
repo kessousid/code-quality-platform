@@ -4,7 +4,8 @@ import type {
   PortalAutomationTestResult,
   PortalCredentials,
 } from './portal-automation-test.js';
-import { isSidebarNavItemVisible, loginToRecruiterDashboard } from './recruiter-navigation.js';
+import { isAdminSidebarNavItemVisible } from './portal-navigation.js';
+import { loginToRecruiterDashboard } from './recruiter-navigation.js';
 
 /**
  * The full recruiter sidebar, live-verified against production for the
@@ -51,7 +52,7 @@ export class RecruiterDashboardNavigationTest implements PortalAutomationTest {
 
     const missing: string[] = [];
     for (const item of EXPECTED_NAV_ITEMS) {
-      if (!(await isSidebarNavItemVisible(page, item))) {
+      if (!(await isAdminSidebarNavItemVisible(page, item))) {
         missing.push(item);
       }
     }

@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import type { PortalCredentials } from './portal-automation-test.js';
+import { expandCollapsedAdminSidebar } from './portal-navigation.js';
 
 const LOGIN_URL = 'https://portal.curatal.com/auth/recruiter/login';
 export const RECRUITER_DASHBOARD_URL = 'https://portal.curatal.com/app/recruiter/dashboard';
@@ -40,28 +41,5 @@ export async function loginToRecruiterDashboard(
     await page.waitForTimeout(1500);
   }
 
-  // The sidebar loads collapsed to icons-only, same as the candidate
-  // portal's own sidebar (portal-navigation.ts's loginAndExpandSidebar) --
-  // the expand control is icon-only with no discoverable accessible name,
-  // so this is the same real fragility point documented there: if the
-  // layout changes, this coordinate click is the first thing to re-verify.
-  await page.mouse.click(76, 109);
-  await page.waitForTimeout(1000);
-}
-
-/**
- * Every sidebar label renders as TWO same-text elements: the real visible
- * nav item, and a second, zero-width one earlier in the DOM (confirmed
- * live -- a leftover tooltip/label counterpart for the collapsed
- * icon-only state, `boundingBox().width === 0`). `getByText(...).first()`
- * silently resolves to the hidden one and reports "not visible" even
- * when the item is plainly on screen, so every caller must check the
- * last match, not the first.
- */
-export async function isSidebarNavItemVisible(page: Page, label: string): Promise<boolean> {
-  return page
-    .getByText(label, { exact: true })
-    .last()
-    .isVisible()
-    .catch(() => false);
+  await expandCollapsedAdminSidebar(page);
 }
