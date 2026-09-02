@@ -13,6 +13,8 @@ export * from './recruiter-navigation.js';
 export * from './recruiter-dashboard-navigation.test-impl.js';
 export * from './scheduling-admin-navigation.js';
 export * from './scheduling-admin-dashboard-navigation.test-impl.js';
+export * from './panel-admin-navigation.js';
+export * from './panel-admin-dashboard-navigation.test-impl.js';
 
 import type { PortalAutomationTest, PortalCredentials } from './portal-automation-test.js';
 import { SlotListingPricingTest } from './slot-listing-pricing.test-impl.js';
@@ -25,6 +27,7 @@ import { CandidateSearchGenderBreakdownTest } from './candidate-search-gender-br
 import { CandidateSearchEducationAdditiveTest } from './candidate-search-education-additive.test-impl.js';
 import { RecruiterDashboardNavigationTest } from './recruiter-dashboard-navigation.test-impl.js';
 import { SchedulingAdminDashboardNavigationTest } from './scheduling-admin-dashboard-navigation.test-impl.js';
+import { PanelAdminDashboardNavigationTest } from './panel-admin-dashboard-navigation.test-impl.js';
 
 /**
  * The extensible registry (see docs/adr/0035) — adding a new check means
@@ -55,6 +58,10 @@ import { SchedulingAdminDashboardNavigationTest } from './scheduling-admin-dashb
  * `schedulingAdminCredentials` is the same pattern for the Scheduling
  * Admin persona check (docs/adr/0060) — a real Scheduling Admin account,
  * logging into yet a third distinct login form/URL.
+ *
+ * `panelAdminCredentials` is the same pattern for the Panel Admin
+ * persona check (docs/adr/0061) — a real Panel Admin account, logging
+ * into the same `auth/curatal-users/login` form as Scheduling Admin.
  */
 export function createPortalAutomationTests(
   credentials: PortalCredentials,
@@ -62,6 +69,7 @@ export function createPortalAutomationTests(
   candidateSearchCredentials: PortalCredentials = credentials,
   recruiterCredentials: PortalCredentials = credentials,
   schedulingAdminCredentials: PortalCredentials = credentials,
+  panelAdminCredentials: PortalCredentials = credentials,
 ): PortalAutomationTest[] {
   return [
     new SlotListingPricingTest(slotCheckCredentials),
@@ -74,5 +82,6 @@ export function createPortalAutomationTests(
     new CandidateSearchEducationAdditiveTest(candidateSearchCredentials),
     new RecruiterDashboardNavigationTest(recruiterCredentials),
     new SchedulingAdminDashboardNavigationTest(schedulingAdminCredentials),
+    new PanelAdminDashboardNavigationTest(panelAdminCredentials),
   ];
 }

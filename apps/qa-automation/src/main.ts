@@ -98,6 +98,13 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_SCHEDULING_ADMIN_EMAIL'),
     password: requireEnv('PORTAL_QA_SCHEDULING_ADMIN_PASSWORD'),
   };
+  // A dedicated Panel Admin login for the panel-admin-persona dashboard
+  // check only (docs/adr/0061) — same auth/curatal-users/login form as
+  // Scheduling Admin, a different account.
+  const panelAdminCredentials = {
+    email: requireEnv('PORTAL_QA_PANEL_ADMIN_EMAIL'),
+    password: requireEnv('PORTAL_QA_PANEL_ADMIN_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -149,6 +156,7 @@ async function main(): Promise<void> {
       candidateSearchCredentials,
       recruiterCredentials,
       schedulingAdminCredentials,
+      panelAdminCredentials,
     ),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });
