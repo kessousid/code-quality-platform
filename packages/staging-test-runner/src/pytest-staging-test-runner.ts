@@ -2,7 +2,12 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { StagingTestRunner, StagingTestRunResult, StagingTestResult } from '@cqp/core';
-import { runSubprocess, SubprocessTimeoutError, type SubprocessResult } from '@cqp/plugin-shared';
+import {
+  redactUrlCredentials,
+  runSubprocess,
+  SubprocessTimeoutError,
+  type SubprocessResult,
+} from '@cqp/plugin-shared';
 import { parseJunitXml } from './junit-xml-parser.js';
 import { parseReportLog } from './report-log-parser.js';
 
@@ -32,11 +37,18 @@ function markRecovered(details: string): string {
  * (clone/install), a non-zero exit means the step itself didn't do what it
  * was supposed to, and silently continuing produces a confusing generic
  * "report.xml not found" error with no clue which step actually broke.
+ *
+ * stderr/stdout are redacted before going into the thrown message —
+ * confirmed live (2026-09-03) that a git clone auth failure's own fatal
+ * message embeds the full clone URL, credential included (see
+ * `cloneUrl()`'s corrected doc comment below), and this Error's message
+ * flows straight into Railway's persistent logs and the crash-alert email
+ * (RunStagingTestSuiteUseCase) — exactly where a credential must never end up.
  */
 function requireZeroExit(step: string, result: SubprocessResult): void {
   if (result.exitCode !== 0) {
     throw new Error(
-      `${step} exited with code ${result.exitCode}.\nstderr: ${result.stderr.trim()}\nstdout: ${result.stdout.trim()}`,
+      `${step} exited with code ${result.exitCode}.\nstderr: ${redactUrlCredentials(result.stderr.trim())}\nstdout: ${redactUrlCredentials(result.stdout.trim())}`,
     );
   }
 }
@@ -321,7 +333,15 @@ export interface PytestStagingTestRunnerOptions {
 export class PytestStagingTestRunner implements StagingTestRunner {
   constructor(private readonly options: PytestStagingTestRunnerOptions) {}
 
-  /** Never logged/thrown anywhere — git's own clone progress output doesn't echo the source URL, so the token never appears in stdout/stderr either. */
+  /**
+   * A successful clone's own progress output never echoes the source
+   * URL, but git's FATAL auth-failure message does ("could not read
+   * Password for '<full URL, credential included>'") — an assumption
+   * this comment used to make that held right up until the real token
+   * went invalid and proved it wrong (2026-09-03). `requireZeroExit`
+   * redacts any embedded credential before either stream can reach a
+   * thrown Error, so that failure mode is now covered too.
+   */
   private cloneUrl(): string {
     if (!this.options.gitToken) return this.options.repoUrl;
     const url = new URL(this.options.repoUrl);
@@ -814,7 +834,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     throw new Error(
       `pytest produced no usable report at ${reportPath} or ${reportLogPath} for ${testPaths.join(' ')} ` +
         `(exit code ${outcome.exitCode}, timed out: ${outcome.timedOut}).\n` +
-        `stderr (tail): ${outcome.stderr.trim().slice(-2000)}\nstdout (tail): ${outcome.stdout.trim().slice(-2000)}`,
+        `stderr (tail): ${redactUrlCredentials(outcome.stderr.trim().slice(-2000))}\nstdout (tail): ${redactUrlCredentials(outcome.stdout.trim().slice(-2000))}`,
     );
   }
 

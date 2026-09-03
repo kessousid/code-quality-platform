@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { GitCheckout, GitCheckoutProvider, Repo } from '@cqp/core';
-import { runSubprocess, SubprocessTimeoutError } from '@cqp/plugin-shared';
+import { redactUrlCredentials, runSubprocess, SubprocessTimeoutError } from '@cqp/plugin-shared';
 
 /**
  * Live-confirmed necessary: a clone with an invalid/expired token can hang
@@ -19,15 +19,19 @@ export interface GitCloneCheckoutProviderOptions {
 }
 
 /**
- * Never logged/thrown anywhere — same discipline as
- * PytestStagingTestRunner.cloneUrl(). GitHub and GitLab embed a token
- * differently: GitHub accepts the token as the URL username with no
- * password, but GitLab does not — a bare token-as-username leaves the
- * request looking unauthenticated, so GitLab challenges for real
- * credentials, which fails outright with `GIT_TERMINAL_PROMPT=0` set
- * (live-confirmed: "terminal prompts disabled" → exit code 128).
- * GitLab's own documented convention is a placeholder username
- * (`oauth2`) with the token as the password.
+ * A successful clone never echoes this URL, but git's own FATAL
+ * auth-failure message does embed it, credential included — confirmed
+ * live for PytestStagingTestRunner.cloneUrl()'s exact same pattern
+ * (2026-09-03), where a bad token's raw value reached Railway's logs and
+ * a crash-alert email before the checkout() catch block below started
+ * redacting it. GitHub and GitLab embed a token differently: GitHub
+ * accepts the token as the URL username with no password, but GitLab
+ * does not — a bare token-as-username leaves the request looking
+ * unauthenticated, so GitLab challenges for real credentials, which
+ * fails outright with `GIT_TERMINAL_PROMPT=0` set (live-confirmed:
+ * "terminal prompts disabled" → exit code 128). GitLab's own documented
+ * convention is a placeholder username (`oauth2`) with the token as the
+ * password.
  */
 export function cloneUrl(
   repo: Pick<Repo, 'provider' | 'remoteUrl'>,
@@ -82,7 +86,7 @@ export class GitCloneCheckoutProvider implements GitCheckoutProvider {
       });
       if (result.exitCode !== 0) {
         throw new Error(
-          `git clone exited with code ${result.exitCode}.\nstderr: ${result.stderr.trim()}`,
+          `git clone exited with code ${result.exitCode}.\nstderr: ${redactUrlCredentials(result.stderr.trim())}`,
         );
       }
     } catch (error) {
