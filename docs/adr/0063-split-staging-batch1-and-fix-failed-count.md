@@ -53,11 +53,21 @@ simply missed these two report-email call sites.
 implemented in `packages/staging-test-runner/src/pytest-staging-test-runner.ts`:
 
 - `BATCH1_SUB_BATCHES`: three groups of `tests/roles/*` directories
-  (plus `tests/EndToEnd` and every loose top-level/`panel_admin`-debug
-  file the old bare `'tests'` path used to pick up), balanced by rough
-  per-directory test-function count — `batch1a`
-  (scheduling_admin, EndToEnd, employer), `batch1b` (cod, candidate),
-  `batch1c` (coach, mentor, admin, interviewer).
+  (plus `tests/EndToEnd`, `tests/auth`, and every loose
+  top-level/`panel_admin`-debug file the old bare `'tests'` path used to
+  pick up), balanced by REAL `pytest --collect-only` counts against a
+  fresh clone, not estimated — `batch1a` (cod, candidate, admin,
+  interviewer + 3 loose files, 135), `batch1b` (scheduling_admin,
+  mentor, EndToEnd, 140), `batch1c` (auth, coach, employer + 4 debug
+  files, 137). 135 + 140 + 137 = 412, verified to exactly match `pytest
+--collect-only tests --ignore=test_paneladmin.py` against the real
+  repo, and 412 + batch 2's 100 = 512, matching the whole suite's own
+  collect-only count exactly. A first draft of this split, based on a
+  rough `grep -c 'def test_'` estimate rather than real pytest
+  collection, missed an entire directory (`tests/auth`, 66 tests, ~13%
+  of batch 1) — caught and corrected by actually running
+  `--collect-only` against every candidate grouping before this shipped,
+  not after.
 - Each sub-batch runs as its own `runBatch`/`runPytest` call — its own
   fresh `browser` process, its own `try`/`catch` (a total loss in one
   sub-batch no longer aborts the others), and its own progress-percent
@@ -71,7 +81,7 @@ implemented in `packages/staging-test-runner/src/pytest-staging-test-runner.ts`:
   consuming the old single 5h ceiling and losing everything after it.
 - `QUARANTINED_BATCH1_TESTS`' two node IDs both live under
   `tests/roles/cod/master_recruiter/`, so their `--deselect` flags moved
-  to `batch1b` specifically instead of the old single batch-1 call.
+  to `batch1a` specifically instead of the old single batch-1 call.
 
 **Report-email failed-count fix**, in both
 `run-staging-test-suite.use-case.ts` and
@@ -89,10 +99,11 @@ needing a second, separate quarantine check.
   overhead per run (each sub-batch re-clones and reinstalls
   dependencies, same as batch 2 already does today), traded for
   bounded blast radius when something goes wrong.
-- The three-way grouping is a best-effort balance from a rough
-  per-directory test count, not an exact one — worth rebalancing if the
-  suite's own directory sizes drift enough to make one sub-batch
-  noticeably longer than the other two.
+- The three-way grouping is balanced against a real, verified snapshot
+  of the suite (2026-09-04), not an estimate — but `curatal_tests`
+  keeps changing under active development, so it will still drift over
+  time. Worth re-running `pytest --collect-only` per candidate grouping
+  again if one sub-batch starts noticeably outrunning the other two.
 - The explicit file paths for loose top-level/`panel_admin`-debug files
   carry the same fragility already documented for `PANELADMIN_FILE`
   (docs/adr's own note on that): if `curatal_tests` renames or moves one

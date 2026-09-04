@@ -251,14 +251,19 @@ const QUARANTINED_BATCH1_TESTS = [
  * sub-batch can no longer cost the other two-thirds of batch 1, and no
  * single browser process has to survive as many sequential tests.
  *
- * Grouped by top-level `tests/roles/*` directory (plus `tests/EndToEnd`)
- * into three roughly-equal thirds by rough per-directory test-function
- * count (scheduling_admin 76, cod 74, coach 54, mentor 35, candidate 34,
- * EndToEnd 29, admin 16, employer 13, interviewer 1 — `panel_admin` is
- * excluded here, it's already its own separate batch 2). This is a
- * best-effort balance, not an exact one — worth rebalancing if the
- * suite's own directory sizes drift enough to make one sub-batch
- * noticeably longer than the other two.
+ * Grouped by top-level `tests/roles/*` directory (plus `tests/EndToEnd`
+ * and `tests/auth`) into three roughly-equal thirds by REAL `pytest
+ * --collect-only` counts against a fresh clone (2026-09-04): cod 81,
+ * scheduling_admin 76, auth 66, coach 54, mentor 35, candidate 34,
+ * EndToEnd 29, admin 16, employer 13, interviewer 1 — 405, plus 7 loose
+ * single-test files below = 412, matching `pytest --collect-only tests
+ * --ignore=test_paneladmin.py` exactly (`panel_admin` itself is excluded
+ * here, it's already its own separate batch 2). A first pass at this
+ * split (rough grep-based counts, no `tests/auth` at all) was caught and
+ * corrected before ever shipping -- `--collect-only` against the real
+ * repo is the only way to be sure every directory is actually accounted
+ * for, and worth re-running if the suite's own directory sizes drift
+ * enough to make one sub-batch noticeably longer than the other two.
  *
  * Also explicitly lists every loose top-level `tests/test_*.py` file and
  * the four `tests/roles/panel_admin/test_debug_*.py` files -- the old
@@ -266,34 +271,37 @@ const QUARANTINED_BATCH1_TESTS = [
  * itself `--ignore`d, not the whole `panel_admin` directory) collected
  * all of these too; naming each sub-batch's directories explicitly here
  * means they'd otherwise silently stop running. Bundled into whichever
- * sub-batch had the smallest rough count, not by any topical relevance.
+ * sub-batch had the smallest count, not by any topical relevance.
  */
 const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[] = [
   {
     name: 'batch1a',
+    // 81 + 34 + 16 + 1 + 3 = 135
     paths: [
-      'tests/roles/scheduling_admin',
-      'tests/EndToEnd',
-      'tests/roles/employer',
+      'tests/roles/cod',
+      'tests/roles/candidate',
+      'tests/roles/admin',
+      'tests/roles/interviewer',
       'tests/test_temp_dropdown.py',
       'tests/test_temp_tc081.py',
       'tests/test_temp_tc082.py',
     ],
-    deselect: [],
-  },
-  {
-    name: 'batch1b',
-    paths: ['tests/roles/cod', 'tests/roles/candidate'],
     // Both quarantined batch-1 tests live under tests/roles/cod/master_recruiter/ -- this is their real sub-batch.
     deselect: QUARANTINED_BATCH1_TESTS,
   },
   {
+    name: 'batch1b',
+    // 76 + 35 + 29 = 140
+    paths: ['tests/roles/scheduling_admin', 'tests/roles/mentor', 'tests/EndToEnd'],
+    deselect: [],
+  },
+  {
     name: 'batch1c',
+    // 66 + 54 + 13 + 4 = 137
     paths: [
+      'tests/auth',
       'tests/roles/coach',
-      'tests/roles/mentor',
-      'tests/roles/admin',
-      'tests/roles/interviewer',
+      'tests/roles/employer',
       'tests/roles/panel_admin/test_debug_tc008.py',
       'tests/roles/panel_admin/test_debug_tc023.py',
       'tests/roles/panel_admin/test_debug_tc023_2.py',
