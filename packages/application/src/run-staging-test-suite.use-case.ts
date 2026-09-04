@@ -1,11 +1,12 @@
-import type {
-  EmailSender,
-  QaAutomationRun,
-  QaAutomationRunRepository,
-  QaAutomationTestResultRepository,
-  QaAutomationTrigger,
-  StagingTestResult,
-  StagingTestRunner,
+import {
+  isSkippedTestResult,
+  type EmailSender,
+  type QaAutomationRun,
+  type QaAutomationRunRepository,
+  type QaAutomationTestResultRepository,
+  type QaAutomationTrigger,
+  type StagingTestResult,
+  type StagingTestRunner,
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import {
@@ -96,7 +97,16 @@ export class RunStagingTestSuiteUseCase {
       // to run (the catch block below), not for real per-test failures
       // recorded here. Those are still surfaced via the alert email and
       // the persisted pass/fail counts, just not via this status field.
-      const failing = results.filter((r) => !r.passed);
+      //
+      // A real skip and a quarantined-test stub (docs/adr/0055) are both
+      // stamped passed=false with a `SKIPPED:` details prefix -- excluded
+      // here so the email's "N of M failed" count means genuine failures,
+      // not "everything that isn't a pass." The dashboard and Excel/PDF
+      // reports already made this same split (docs/adr's mid-August fix);
+      // this email subject/body was the one spot that fix missed
+      // (confirmed live 2026-09-04: a run with 125 real failures, 10 real
+      // skips, and 4 quarantine stubs reported "139 of 364 test(s) failed").
+      const failing = results.filter((r) => !r.passed && !isSkippedTestResult(r.details));
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'completed',
       });

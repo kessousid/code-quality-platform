@@ -94,6 +94,21 @@ const STAGING_PLAYWRIGHT_BROWSERS_PATH = '/ms-playwright-staging';
 const MAX_PYTEST_DURATION_MS = 5 * 60 * 60 * 1000;
 
 /**
+ * Per-sub-batch ceiling for batch 1's own three-way split below
+ * (docs/adr/0063) — deliberately smaller than `MAX_PYTEST_DURATION_MS`,
+ * not a copy of it. Each sub-batch is roughly a third of batch 1's ~420
+ * tests, and a healthy run of the *whole* undivided batch 1 has
+ * historically finished in ~2.5-3h, so ~1/3 of that per sub-batch plus
+ * the same ~2x headroom ratio the original 5h figure was chosen with
+ * lands here. The real goal isn't a tighter timeout for its own sake —
+ * it's that three independent ceilings cap the worst case
+ * (3 x 2h = 6h if every sub-batch pathologically hangs) at roughly what
+ * the single old 5h ceiling already cost on one bad night, instead of
+ * the 15h+ three full-length ceilings would allow.
+ */
+const BATCH1_SUB_BATCH_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
+/**
  * `test_paneladmin.py` alone is ~107 of the suite's ~512 tests (~21%) —
  * confirmed live (docs/adr/0053) as the one file every stall/slow-stretch
  * observed on 2026-08-13/14 happened inside (always in the 74-85%
@@ -214,6 +229,78 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
 const QUARANTINED_BATCH1_TESTS = [
   'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
   'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
+];
+
+/**
+ * Batch 1's own three-way split (docs/adr/0063) — root-caused live on the
+ * 2026-09-03/04 scheduled run: `browser` is a session-scoped
+ * pytest-playwright fixture, so all ~420 of batch 1's tests shared ONE
+ * Chromium process for however long the whole batch took. That run
+ * needed its full 5h ceiling instead of the normal ~2.5-3h, and roughly
+ * 1h52m in, `BrowserContext.new_page` started throwing "Target crashed"
+ * across ten unrelated files/classes (cod, mentor, admin, ...) — not one
+ * broken fixture, but the one shared browser process degrading under
+ * sustained load. It then hung outright for 3+ hours until the 5h
+ * ceiling killed it, losing 158 of batch 1's 420 tests entirely (only
+ * partial-recovered results exist for the rest, docs/adr/0057).
+ *
+ * Splitting batch 1 into three independently-run sub-batches (mirroring
+ * batch 2's own long-standing split from the rest of the suite) means
+ * each gets its own fresh `browser` process and its own timeout ceiling
+ * (`BATCH1_SUB_BATCH_TIMEOUT_MS`) — a hang or crash-cascade in one
+ * sub-batch can no longer cost the other two-thirds of batch 1, and no
+ * single browser process has to survive as many sequential tests.
+ *
+ * Grouped by top-level `tests/roles/*` directory (plus `tests/EndToEnd`)
+ * into three roughly-equal thirds by rough per-directory test-function
+ * count (scheduling_admin 76, cod 74, coach 54, mentor 35, candidate 34,
+ * EndToEnd 29, admin 16, employer 13, interviewer 1 — `panel_admin` is
+ * excluded here, it's already its own separate batch 2). This is a
+ * best-effort balance, not an exact one — worth rebalancing if the
+ * suite's own directory sizes drift enough to make one sub-batch
+ * noticeably longer than the other two.
+ *
+ * Also explicitly lists every loose top-level `tests/test_*.py` file and
+ * the four `tests/roles/panel_admin/test_debug_*.py` files -- the old
+ * single bare `'tests'` batch-1 path (with only `test_paneladmin.py`
+ * itself `--ignore`d, not the whole `panel_admin` directory) collected
+ * all of these too; naming each sub-batch's directories explicitly here
+ * means they'd otherwise silently stop running. Bundled into whichever
+ * sub-batch had the smallest rough count, not by any topical relevance.
+ */
+const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[] = [
+  {
+    name: 'batch1a',
+    paths: [
+      'tests/roles/scheduling_admin',
+      'tests/EndToEnd',
+      'tests/roles/employer',
+      'tests/test_temp_dropdown.py',
+      'tests/test_temp_tc081.py',
+      'tests/test_temp_tc082.py',
+    ],
+    deselect: [],
+  },
+  {
+    name: 'batch1b',
+    paths: ['tests/roles/cod', 'tests/roles/candidate'],
+    // Both quarantined batch-1 tests live under tests/roles/cod/master_recruiter/ -- this is their real sub-batch.
+    deselect: QUARANTINED_BATCH1_TESTS,
+  },
+  {
+    name: 'batch1c',
+    paths: [
+      'tests/roles/coach',
+      'tests/roles/mentor',
+      'tests/roles/admin',
+      'tests/roles/interviewer',
+      'tests/roles/panel_admin/test_debug_tc008.py',
+      'tests/roles/panel_admin/test_debug_tc023.py',
+      'tests/roles/panel_admin/test_debug_tc023_2.py',
+      'tests/roles/panel_admin/test_debug_tc023_yes.py',
+    ],
+    deselect: [],
+  },
 ];
 
 /**
@@ -495,21 +582,26 @@ export class PytestStagingTestRunner implements StagingTestRunner {
 
   /**
    * One full clone -> install -> browser -> pytest batch(es) -> parse
-   * cycle against `main`. Split into two independent batches (docs/adr/0053)
-   * — everything except `test_paneladmin.py`, then `test_paneladmin.py`
-   * alone — each with its own timeout ceiling and its own try/catch, so a
-   * slow or hung stretch in one batch can no longer eat into the other
-   * batch's time budget or destroy its already-collected results. A batch
-   * that fails outright (timeout, crash, no report produced) is logged and
-   * skipped rather than aborting the whole run.
+   * cycle against `main`. Originally split into two independent batches
+   * (docs/adr/0053) — everything except `test_paneladmin.py`, then
+   * `test_paneladmin.py` alone. Batch 1 was further split into three
+   * independent sub-batches (docs/adr/0063, `BATCH1_SUB_BATCHES`) after a
+   * real run showed its single shared browser process degrading over the
+   * ~420-test batch's unusually long runtime — so this is now four
+   * independent runs total (1a, 1b, 1c, then batch 2), each with its own
+   * fresh browser process, its own timeout ceiling, and its own try/catch,
+   * so a slow or hung stretch in any one of them can no longer eat into
+   * the others' time budget or destroy their already-collected results. A
+   * (sub-)batch that fails outright (timeout, crash, no report produced)
+   * is logged and skipped rather than aborting the whole run.
    *
    * Batch 2 also deselects the six specific tests identified by static
    * analysis as hang-prone (`QUARANTINED_PANELADMIN_TESTS`, docs/adr/0055)
    * rather than skipping the whole file — the other ~101 tests in
    * `test_paneladmin.py` still run as part of batch 2. `RUN_PANELADMIN_BATCH`
    * remains available as an escape hatch to drop batch 2 entirely (in which
-   * case batch 1's progress maps to the full 0-100% range instead of the
-   * 0-79% split used when both batches run).
+   * case batch 1's three sub-batches together map to the full 0-100%
+   * progress range instead of the 0-79% split used when both run).
    */
   private async runSuite(
     onProgress?: (percent: number) => void,
@@ -666,40 +758,49 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       const batch1Weight = bothBatchesRun ? 0.79 : 1;
 
       // Batch 1: everything except test_paneladmin.py (~79% of tests, or
-      // effectively the whole suite while batch 2 is disabled). Skipped
-      // entirely when STAGING_SKIP_BATCH_1=true (e.g. re-running just batch
-      // 2 right after a batch 1 that already completed).
+      // effectively the whole suite while batch 2 is disabled), itself
+      // split into three independent sub-batches (docs/adr/0063,
+      // BATCH1_SUB_BATCHES) -- each with its own fresh browser process and
+      // its own BATCH1_SUB_BATCH_TIMEOUT_MS ceiling, so a hang or
+      // crash-cascade in one no longer costs the other two-thirds.
+      // Skipped entirely when STAGING_SKIP_BATCH_1=true (e.g. re-running
+      // just batch 2 right after a batch 1 that already completed).
       if (!SKIP_BATCH_1) {
-        try {
-          const batch1 = await this.runBatch(
-            python,
-            repoDir,
-            path.join(workDir, 'report-1.xml'),
-            path.join(workDir, 'report-1.jsonl'),
-            [
-              'tests',
-              `--ignore=${PANELADMIN_FILE}`,
-              ...QUARANTINED_BATCH1_TESTS.map((id) => `--deselect=${id}`),
-            ],
-            sourceUrl,
-            onStdout,
-            onStderr,
-            onProgress ? (percent) => onProgress(Math.round(percent * batch1Weight)) : undefined,
-          );
-          results.push(...batch1);
-        } catch (error) {
-          // Reaching this catch means BOTH the JUnit and report-log fallback
-          // (docs/adr/0057) inside runBatch came up empty — genuine total
-          // loss for this batch, not the partial-recovery case (that returns
-          // normally, logged separately inside runBatch itself).
-          console.error(
-            `[staging batch 1] failed with ZERO recoverable results (both JUnit and report-log unavailable): ${(error as Error).message}`,
-          );
+        const subBatchWeight = batch1Weight / BATCH1_SUB_BATCHES.length;
+        for (const [index, subBatch] of BATCH1_SUB_BATCHES.entries()) {
+          try {
+            const subBatchResults = await this.runBatch(
+              python,
+              repoDir,
+              path.join(workDir, `report-1-${subBatch.name}.xml`),
+              path.join(workDir, `report-1-${subBatch.name}.jsonl`),
+              [...subBatch.paths, ...subBatch.deselect.map((id) => `--deselect=${id}`)],
+              sourceUrl,
+              onStdout,
+              onStderr,
+              onProgress
+                ? (percent) =>
+                    onProgress(
+                      Math.round((index * subBatchWeight + (percent / 100) * subBatchWeight) * 100),
+                    )
+                : undefined,
+              BATCH1_SUB_BATCH_TIMEOUT_MS,
+            );
+            results.push(...subBatchResults);
+          } catch (error) {
+            // Reaching this catch means BOTH the JUnit and report-log fallback
+            // (docs/adr/0057) inside runBatch came up empty — genuine total
+            // loss for this sub-batch, not the partial-recovery case (that
+            // returns normally, logged separately inside runBatch itself).
+            console.error(
+              `[staging ${subBatch.name}] failed with ZERO recoverable results (both JUnit and report-log unavailable): ${(error as Error).message}`,
+            );
+          }
         }
 
         // Same "still show up in the report" rationale as the paneladmin
         // quarantine stubs below — pushed unconditionally, regardless of
-        // whether batch 1 itself succeeded or threw.
+        // whether the sub-batch that would have run them succeeded or threw.
         results.push(
           ...QUARANTINED_BATCH1_TESTS.map((id) => {
             const testName = id.split('::').pop() ?? id;
@@ -791,6 +892,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
+    timeoutMs?: number,
   ): Promise<StagingTestResult[]> {
     const outcome = await this.runPytest(
       python,
@@ -801,6 +903,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
       onStdout,
       onStderr,
       onProgress,
+      timeoutMs,
     );
 
     // Primary path — unchanged from before this existed: on a clean pytest
@@ -867,6 +970,11 @@ export class PytestStagingTestRunner implements StagingTestRunner {
    * a hang-kill uniformly instead of a hang-kill skipping past it entirely.
    * A genuine spawn failure (e.g. `xvfb-run` itself missing) still throws —
    * no report of any kind could ever help with that.
+   *
+   * `timeoutMs` defaults to `MAX_PYTEST_DURATION_MS` but batch 1's own
+   * sub-batches (docs/adr/0063) pass the smaller
+   * `BATCH1_SUB_BATCH_TIMEOUT_MS` instead, so a hang in one sub-batch is
+   * caught well before it could eat the old single-ceiling's full budget.
    */
   private async runPytest(
     python: string,
@@ -877,6 +985,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
     onStdout: (chunk: string) => void,
     onStderr: (chunk: string) => void,
     onProgress?: (percent: number) => void,
+    timeoutMs: number = MAX_PYTEST_DURATION_MS,
   ): Promise<SubprocessResult & { timedOut: boolean }> {
     const percentTracker = onProgress ? makePercentTracker(onProgress) : undefined;
     try {
@@ -904,7 +1013,7 @@ export class PytestStagingTestRunner implements StagingTestRunner {
             percentTracker?.(chunk);
           },
           onStderr,
-          timeoutMs: MAX_PYTEST_DURATION_MS,
+          timeoutMs,
         },
       );
       return { ...result, timedOut: false };

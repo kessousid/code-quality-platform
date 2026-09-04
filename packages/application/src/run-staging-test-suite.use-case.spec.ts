@@ -59,6 +59,37 @@ describe('RunStagingTestSuiteUseCase', () => {
     expect(sent?.attachments?.[0]?.content.length).toBeGreaterThan(0);
   });
 
+  it('excludes real skips and quarantine stubs from the "failed" count and subject line (docs/adr/0063)', async () => {
+    const { testRunner, emailSender, useCase } = setup();
+    testRunner.result = {
+      results: [
+        { testId: 't1', testName: 'candidate login', passed: true, details: 'ok' },
+        { testId: 't2', testName: 'employer login', passed: false, details: 'locator not found' },
+        {
+          testId: 't3',
+          testName: 'coach dashboard',
+          passed: false,
+          details: 'SKIPPED: 404 in this environment',
+        },
+        {
+          testId: 't4',
+          testName: 'TC_PANELADMIN_048',
+          passed: false,
+          details: 'SKIPPED: Deselected before this run -- known to hang. Not executed.',
+        },
+      ],
+    };
+
+    await useCase.execute({ orgId: ORG_ID, triggeredBy: 'manual' });
+
+    expect(emailSender.sent).toHaveLength(1);
+    const sent = emailSender.sent[0];
+    expect(sent?.subject).toBe('[Staging] QA Automation Report: 1 of 4 test(s) failed');
+    expect(sent?.body).toContain('employer login');
+    expect(sent?.body).not.toContain('coach dashboard');
+    expect(sent?.body).not.toContain('TC_PANELADMIN_048');
+  });
+
   it('persists a QaAutomationTestResult per result returned by the test runner', async () => {
     const { testRunner, resultRepository, useCase } = setup();
     testRunner.result = {

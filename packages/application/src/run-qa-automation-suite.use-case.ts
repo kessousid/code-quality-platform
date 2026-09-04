@@ -1,9 +1,10 @@
-import type {
-  EmailSender,
-  QaAutomationRun,
-  QaAutomationRunRepository,
-  QaAutomationTestResultRepository,
-  QaAutomationTrigger,
+import {
+  isSkippedTestResult,
+  type EmailSender,
+  type QaAutomationRun,
+  type QaAutomationRunRepository,
+  type QaAutomationTestResultRepository,
+  type QaAutomationTrigger,
 } from '@cqp/core';
 import { buildQaAutomationReportModel, getQaAutomationReportGenerator } from '@cqp/reporting';
 import type { PortalAutomationTest } from '@cqp/qa-automation-tests';
@@ -74,7 +75,12 @@ export class RunQaAutomationSuiteUseCase {
       // to run (the catch block below), not for real per-test failures
       // recorded here. Those are still surfaced via the report email and
       // the persisted pass/fail counts, just not via this status field.
-      const failing = results.filter((r) => !r.passed);
+      //
+      // Same skip-vs-failure split as the staging use case (docs/adr/0063)
+      // — no production check currently reports a SKIPPED: result, but
+      // this keeps both report emails consistent and correct if one ever
+      // does.
+      const failing = results.filter((r) => !r.passed && !isSkippedTestResult(r.details));
       const completed = await this.runRepository.complete(input.orgId, run.id, {
         status: 'completed',
       });
