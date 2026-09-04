@@ -225,10 +225,24 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
  * intermittent staging-side flakiness in master-recruiter dashboard
  * loading rather than a deterministic code bug -- quarantined defensively
  * since a single bad run costs the whole batch.
+ *
+ * `test_admin_verify_interview_queue_candidate`
+ * (tests/roles/admin/test_interview_queue.py) -- confirmed hung live
+ * 2026-09-04: zero output for 50+ minutes on the exact same live
+ * scheduled run whose 22%-stuck progress prompted this quarantine, well
+ * past pytest.ini's own `--timeout=600`. A previous run had this same
+ * test resolve cleanly (XFAIL) in ~3 minutes, so this looks like the same
+ * intermittent-hang shape as TC_MR_005/006 above rather than a
+ * deterministic bug -- confirmed via a scan of that same run's own full
+ * timeline that no other test came anywhere close (the next-longest gap
+ * was 101s, a legitimate multi-step COD job-application flow, not a
+ * hang). Batch 1's new three-way split (docs/adr/0063) meant this hang
+ * only cost `batch1a`'s own 2h ceiling instead of the old shared 5h one.
  */
 const QUARANTINED_BATCH1_TESTS = [
   'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
   'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
+  'tests/roles/admin/test_interview_queue.py::test_admin_verify_interview_queue_candidate',
 ];
 
 /**
