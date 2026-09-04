@@ -117,6 +117,7 @@ export const CURRENTLY_QUARANTINED_TEST_NAMES: string[] = [
   'test_TC_MR_006_Shortlist_Candidate',
   'test_TC_MR_005_Shortlist_Specific_Candidate',
   'test_admin_verify_interview_queue_candidate',
+  'test_admin_view_interview_queue_candidate',
 ];
 
 /**

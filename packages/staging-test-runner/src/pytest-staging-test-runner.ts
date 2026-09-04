@@ -227,22 +227,32 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
  * since a single bad run costs the whole batch.
  *
  * `test_admin_verify_interview_queue_candidate`
- * (tests/roles/admin/test_interview_queue.py) -- confirmed hung live
- * 2026-09-04: zero output for 50+ minutes on the exact same live
- * scheduled run whose 22%-stuck progress prompted this quarantine, well
- * past pytest.ini's own `--timeout=600`. A previous run had this same
- * test resolve cleanly (XFAIL) in ~3 minutes, so this looks like the same
- * intermittent-hang shape as TC_MR_005/006 above rather than a
- * deterministic bug -- confirmed via a scan of that same run's own full
- * timeline that no other test came anywhere close (the next-longest gap
- * was 101s, a legitimate multi-step COD job-application flow, not a
- * hang). Batch 1's new three-way split (docs/adr/0063) meant this hang
- * only cost `batch1a`'s own 2h ceiling instead of the old shared 5h one.
+ * (tests/roles/admin/test_interview_queue.py) and
+ * `test_admin_view_interview_queue_candidate`
+ * (tests/roles/admin/test_interview_queue_view_candidate.py) -- both
+ * confirmed hung live 2026-09-04, back to back on the same evening
+ * (first: zero output for 50+ minutes; second: the very next run, same
+ * symptom). Root-caused, not just pattern-matched: both are the ONLY two
+ * callers of `open_cod_job_with_interview_candidates`
+ * (tests/helpers/interview_queue_helper.py), which curatal_tests commit
+ * dd80210 (2026-09-03 18:30 IST, the same commit that added the whole
+ * `cod` suite) rewrote from a bounded search (`max_jobs=50` cap, 5-page
+ * limit, raises a clear error if nothing found) into one with no
+ * `max_jobs` cap at all, a 100-page limit, and no error raised on
+ * exhaustion -- if staging doesn't have enough COD jobs with
+ * interview-queue candidates to satisfy the search, the loop now just
+ * keeps paginating with nothing to stop it. This is a real upstream
+ * regression in curatal_tests, not staging-side flakiness like
+ * TC_MR_005/006 above -- worth un-quarantining once that helper gets its
+ * bounds back, not just "re-verify and see." Batch 1's three-way split
+ * (docs/adr/0063) meant each hang only cost its own sub-batch's 2h
+ * ceiling instead of the old shared 5h one.
  */
 const QUARANTINED_BATCH1_TESTS = [
   'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
   'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
   'tests/roles/admin/test_interview_queue.py::test_admin_verify_interview_queue_candidate',
+  'tests/roles/admin/test_interview_queue_view_candidate.py::test_admin_view_interview_queue_candidate',
 ];
 
 /**
