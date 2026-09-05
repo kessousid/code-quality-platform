@@ -354,8 +354,15 @@ const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[
   },
   {
     name: 'batch1b3',
-    // 29
-    paths: ['tests/EndToEnd'],
+    // 29 + 11 = 40. tests/unit (GmailClient/GraphClient, mocked, no
+    // staging/browser dependency at all -- confirmed via
+    // --collect-only against every other sub-batch's paths, 2026-09-05:
+    // it was in NONE of them, so these 11 tests had never actually run
+    // in the scheduled suite since tests/unit was added. Bundled into
+    // the smallest sub-batch, matching this array's existing policy for
+    // loose extras (see batch1a's debug files above) rather than paying
+    // a full clone/install cycle for a sub-batch this small.
+    paths: ['tests/EndToEnd', 'tests/unit'],
     deselect: [],
   },
   {
