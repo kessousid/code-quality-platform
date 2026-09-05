@@ -296,6 +296,23 @@ const QUARANTINED_BATCH1_TESTS = [
  * all of these too; naming each sub-batch's directories explicitly here
  * means they'd otherwise silently stop running. Bundled into whichever
  * sub-batch had the smallest count, not by any topical relevance.
+ *
+ * 2026-09-05 update: what was originally a three-way split (`batch1a`,
+ * `batch1b`, `batch1c`) is now five, because the same "one shared browser
+ * degrading over a long sub-batch" mechanism that motivated the original
+ * split was still measurably happening *inside* `batch1b` -- the
+ * 2026-09-04 full run had 35 failures overall, and rerunning just those
+ * failures in isolation (fresh browser each, per docs/adr's own rerun
+ * feature) turned 21 of them (60%) into passes with no code change at
+ * all. `batch1b` (scheduling_admin + mentor + EndToEnd, 140 tests) was
+ * the biggest remaining single-browser stretch left after the original
+ * split, and mentor specifically sits after scheduling_admin's own 76
+ * tests in it. Split `batch1b` into `batch1b1`/`batch1b2`/`batch1b3` (one
+ * directory each) so mentor and EndToEnd each start on a browser that's
+ * only ever run their own tests, not scheduling_admin's first. This is a
+ * mitigation for browser-under-load flakiness, not a fix for it -- the
+ * remaining 40% of that run's failures were genuine, reproducible bugs
+ * (docs/adr/0064 and its follow-ups) that a finer split doesn't touch.
  */
 const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[] = [
   {
@@ -313,10 +330,32 @@ const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[
     // Both quarantined batch-1 tests live under tests/roles/cod/master_recruiter/ -- this is their real sub-batch.
     deselect: QUARANTINED_BATCH1_TESTS,
   },
+  // batch1b was one 140-test sub-batch (scheduling_admin + mentor +
+  // EndToEnd) sharing a single browser/session for all three directories.
+  // 2026-09-04's full run: 21 of 35 full-run failures (60%) passed clean
+  // on an isolated rerun -- no sub-batch timeout-kill, no concurrent job,
+  // same deterministic bugs already fixed -- consistent with the shared
+  // browser/session degrading over 140 sequential tests rather than any
+  // one persona's own defect. Split by directory (each already its own
+  // fixture boundary -- admin_page/mentor_page/etc. are module-scoped)
+  // so mentor and EndToEnd each get a browser that's only ever run their
+  // own tests, not scheduling_admin's 76 first.
   {
-    name: 'batch1b',
-    // 76 + 35 + 29 = 140
-    paths: ['tests/roles/scheduling_admin', 'tests/roles/mentor', 'tests/EndToEnd'],
+    name: 'batch1b1',
+    // 76
+    paths: ['tests/roles/scheduling_admin'],
+    deselect: [],
+  },
+  {
+    name: 'batch1b2',
+    // 35
+    paths: ['tests/roles/mentor'],
+    deselect: [],
+  },
+  {
+    name: 'batch1b3',
+    // 29
+    paths: ['tests/EndToEnd'],
     deselect: [],
   },
   {
