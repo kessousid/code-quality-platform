@@ -112,10 +112,6 @@ export function isQuarantinedTestResult(details: string): boolean {
  * run's own historical details text, not the current list.
  */
 export const CURRENTLY_QUARANTINED_TEST_NAMES: string[] = [
-  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
-  'test_TC_PANELADMIN_086_change_interviewer_successful_change',
-  'test_TC_MR_006_Shortlist_Candidate',
-  'test_TC_MR_005_Shortlist_Specific_Candidate',
   'test_admin_verify_interview_queue_candidate',
   'test_admin_view_interview_queue_candidate',
 ];

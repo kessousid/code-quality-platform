@@ -166,13 +166,15 @@ const PANELADMIN_FILE = 'tests/roles/panel_admin/test_paneladmin.py';
  * hang. If a future full run shows both passing reliably again, these
  * are reasonable to re-verify and un-quarantine, same as every other
  * entry in this list.
+ *
+ * Un-quarantined 2026-09-05: scoped rerun of both passed cleanly (21m01s
+ * total, ~10.5min each) -- still right at the edge of the 600s per-test
+ * ceiling given how step-heavy these are, so re-quarantine on the first
+ * sign of a repeat timeout rather than assuming this margin holds.
  */
 const RUN_PANELADMIN_BATCH = true;
 
-const QUARANTINED_PANELADMIN_TESTS: string[] = [
-  'test_TC_PANELADMIN_048_add_interviewer_banking_required_fields_validation',
-  'test_TC_PANELADMIN_086_change_interviewer_successful_change',
-];
+const QUARANTINED_PANELADMIN_TESTS: string[] = [];
 
 /**
  * Batch 1's own quarantine list (docs/adr/0055's pattern, applied outside
@@ -215,7 +217,11 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
  * the whole pytest process instead of just failing that one test, losing
  * batch 1's results anyway, just faster. Reverted (PR #22); quarantining
  * specific known-hangs here is the actual mitigation, not the timeout
- * method.
+ * method. Un-quarantined 2026-09-05: scoped rerun completed in 41m45s
+ * with no hang at all -- resolved as XFAIL (a real product state, not an
+ * error). Matches this file's own "intermittent staging-side flakiness"
+ * read, not a deterministic bug -- if it hangs again, re-quarantine
+ * rather than re-diagnosing from scratch.
  *
  * `TC_MR_005_Shortlist_Specific_Candidate` (tests/roles/cod/
  * master_recruiter/test_mr_shortlist_specific_candidate.py) -- confirmed
@@ -224,7 +230,9 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
  * test completing cleanly (XFAIL) in two earlier runs. Looks like a real,
  * intermittent staging-side flakiness in master-recruiter dashboard
  * loading rather than a deterministic code bug -- quarantined defensively
- * since a single bad run costs the whole batch.
+ * since a single bad run costs the whole batch. Un-quarantined 2026-09-05:
+ * same scoped rerun as TC_MR_006 above, resolved as SKIPPED (staging data
+ * state), no hang.
  *
  * `test_admin_verify_interview_queue_candidate`
  * (tests/roles/admin/test_interview_queue.py) and
@@ -246,11 +254,15 @@ const QUARANTINED_PANELADMIN_TESTS: string[] = [
  * TC_MR_005/006 above -- worth un-quarantining once that helper gets its
  * bounds back, not just "re-verify and see." Batch 1's three-way split
  * (docs/adr/0063) meant each hang only cost its own sub-batch's 2h
- * ceiling instead of the old shared 5h one.
+ * ceiling instead of the old shared 5h one. Re-checked 2026-09-05, still
+ * quarantined: the helper's `max_jobs` bound hasn't landed, and a scoped
+ * rerun of both confirmed it's not actually an infinite hang (bounded by
+ * the loop's own 100-page cap, both eventually resolved XFAIL) -- but at
+ * ~15 minutes each just to reach that XFAIL, it's still far too slow for
+ * a scheduled run regardless of whether it technically terminates. Stays
+ * quarantined until the helper gets its bound back.
  */
 const QUARANTINED_BATCH1_TESTS = [
-  'tests/roles/cod/master_recruiter/test_shortlist_candidate.py::test_TC_MR_006_Shortlist_Candidate',
-  'tests/roles/cod/master_recruiter/test_mr_shortlist_specific_candidate.py::test_TC_MR_005_Shortlist_Specific_Candidate',
   'tests/roles/admin/test_interview_queue.py::test_admin_verify_interview_queue_candidate',
   'tests/roles/admin/test_interview_queue_view_candidate.py::test_admin_view_interview_queue_candidate',
 ];
