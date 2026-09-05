@@ -53,9 +53,34 @@ export function createQaAutomationStagingBullQueue(
 
 /**
  * The real pytest/playwright-python suite can plausibly run for
- * 30-90+ minutes (100+ real browser tests across 8 personas) — a generous
- * lock duration and no stalled-job timeout keep a long-but-healthy run
- * from ever being mistaken for a stuck one (docs/adr/0036).
+ * 30-90+ minutes (100+ real browser tests across 8 personas), so
+ * `lockDuration` stays generous (2h) — BullMQ auto-renews the lock well
+ * before then as long as the process is alive, so a long-but-healthy run
+ * never has its lock genuinely expire.
+ *
+ * docs/adr/0036 originally set `maxStalledCount: 0` here meaning to
+ * express "don't fail a long-but-healthy run over a stall" — that's
+ * backwards. Per BullMQ's own moveStalledJobsToWait.lua, a job is only
+ * hard-failed once `stalledCount > maxStalledCount`: with `0`, the very
+ * *first* stall detection is already fatal (zero tolerance), not "no
+ * stalled-job timeout". Confirmed live 2026-09-05: a deploy restarted
+ * this container mid-manual-run, killing the job's process and orphaning
+ * its lock; the *next* stalled-check (2h later, per the old
+ * `stalledInterval`) found the missing lock and immediately
+ * hard-failed a job that was really just interrupted by an ordinary
+ * deploy, not stuck. `maxStalledCount: 1` (BullMQ's own default) gives a
+ * genuinely-orphaned job (this deploy scenario, or a real crash) one
+ * automatic retry — safe here specifically because the failure mode that
+ * matters (the whole container died) also means there's no live old
+ * process left to run concurrently with the retry.
+ *
+ * `stalledInterval` dropped from 2h to 5 minutes: it only controls how
+ * *often* we check for a genuinely missing lock, not how long a healthy
+ * job's lock survives (that's `lockDuration`, unchanged) — checking more
+ * often doesn't make a false positive on a healthy job more likely, it
+ * just means an actually-orphaned job (deploy, crash) gets noticed and
+ * retried within minutes instead of leaving the run silently dead for up
+ * to 2 hours before anyone finds out.
  */
 export function createQaAutomationStagingBullWorker(
   connection: ConnectionOptions,
@@ -64,8 +89,8 @@ export function createQaAutomationStagingBullWorker(
   return new Worker<QaAutomationStagingJobData>(QA_AUTOMATION_STAGING_QUEUE_NAME, processor, {
     connection,
     lockDuration: 2 * 60 * 60 * 1000,
-    stalledInterval: 2 * 60 * 60 * 1000,
-    maxStalledCount: 0,
+    stalledInterval: 5 * 60 * 1000,
+    maxStalledCount: 1,
   });
 }
 
