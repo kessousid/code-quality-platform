@@ -325,13 +325,53 @@ const QUARANTINED_BATCH1_TESTS = [
  * mitigation for browser-under-load flakiness, not a fix for it -- the
  * remaining 40% of that run's failures were genuine, reproducible bugs
  * (docs/adr/0064 and its follow-ups) that a finer split doesn't touch.
+ *
+ * 2026-09-06 update: what was five sub-batches is now six -- `batch1a`
+ * (cod + candidate + admin + interviewer + 3 loose files, 135 tests) hit
+ * the same mechanism overnight (2026-09-05/06's scheduled run), this time
+ * triggered by intermittent staging-side login instability rather than
+ * sheer batch length: several module-scoped login fixtures failed
+ * mid-batch, cascading into 84 ERRORs, and the batch never recovered
+ * pace, running its full 2h ceiling before being killed and losing ~31
+ * tests entirely. Split into `batch1a1` (`cod`, 81 -- the majority of the
+ * batch and where the observed fixture failures actually clustered) and
+ * `batch1a2` (`candidate` + `admin` + `interviewer` + the 3 loose files,
+ * 54). Same caveat as the `batch1b` split above: this bounds the blast
+ * radius of a bad night, it doesn't prevent staging itself from being
+ * unstable.
  */
 const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[] = [
+  // batch1a was one 135-test sub-batch (cod + candidate + admin +
+  // interviewer + 3 loose debug files) sharing a single browser/session.
+  // 2026-09-05/06's scheduled run: intermittent staging-side login
+  // instability that night made several module-scoped login fixtures
+  // (admin_page, masterrecruiter_page) fail mid-batch -- confirmed live
+  // by the exact signature of a fixture-setup failure: e.g. all 12 tests
+  // in test_admin_cod_job_negative.py, and all 3 in
+  // test_mr_negative_validations.py, errored at the identical
+  // microsecond (pytest reports every test sharing a failed fixture as
+  // ERROR simultaneously, without running any of their bodies), while
+  // OTHER modules in the same run (test_cod_dashboard.py,
+  // test_mr_live_status.py) logged in and ran fine in between --
+  // intermittent, not a permanent crash. The batch never recovered
+  // pace and ran its full 2h ceiling before being killed, losing ~31 of
+  // its 132 selected tests entirely (never even started) and reporting
+  // 84 ERRORs against only 10 PASSED for whatever did get a result.
+  // `cod` (81 tests, the majority of the batch, and where every observed
+  // fixture-failure cluster actually lived that night) gets its own
+  // sub-batch so a bad night limits the damage to 81 tests and their own
+  // 2h ceiling, not the whole 135 plus candidate/admin/interviewer along
+  // with it.
   {
-    name: 'batch1a',
-    // 81 + 34 + 16 + 1 + 3 = 135
+    name: 'batch1a1',
+    // 81
+    paths: ['tests/roles/cod'],
+    deselect: [],
+  },
+  {
+    name: 'batch1a2',
+    // 34 + 16 + 1 + 3 = 54
     paths: [
-      'tests/roles/cod',
       'tests/roles/candidate',
       'tests/roles/admin',
       'tests/roles/interviewer',
@@ -339,7 +379,7 @@ const BATCH1_SUB_BATCHES: { name: string; paths: string[]; deselect: string[] }[
       'tests/test_temp_tc081.py',
       'tests/test_temp_tc082.py',
     ],
-    // Both quarantined batch-1 tests live under tests/roles/cod/master_recruiter/ -- this is their real sub-batch.
+    // Both quarantined batch-1 tests live under tests/roles/admin/ -- this is their real sub-batch.
     deselect: QUARANTINED_BATCH1_TESTS,
   },
   // batch1b was one 140-test sub-batch (scheduling_admin + mentor +
