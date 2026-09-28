@@ -5,19 +5,27 @@ import type {
   PortalCredentials,
 } from './portal-automation-test.js';
 import { isAdminSidebarNavItemVisible } from './portal-navigation.js';
+import {
+  clickThroughSidebar,
+  ensureSidebarOpen,
+  type SidebarNavTarget,
+} from './sidebar-click-through.js';
 import { loginToSchedulingAdminDashboard } from './scheduling-admin-navigation.js';
 
 /** Live-verified against production for the Scheduling Admin role (docs/adr/0060). */
-const EXPECTED_NAV_ITEMS = [
-  'Dashboard',
-  'User Management',
-  'Candidate Interview Management',
-  'Netting',
+const NAV_TARGETS: SidebarNavTarget[] = [
+  { label: 'Dashboard', expectedUrl: 'https://portal.curatal.com/app/scheduling/dashboard' },
+  { label: 'User Management', expectedUrl: 'https://portal.curatal.com/app/scheduling/users' },
+  {
+    label: 'Candidate Interview Management',
+    expectedUrl: 'https://portal.curatal.com/app/scheduling/candidate-interview-management',
+  },
+  { label: 'Netting', expectedUrl: 'https://portal.curatal.com/app/netting' },
 ];
 
 export class SchedulingAdminDashboardNavigationTest implements PortalAutomationTest {
   readonly id = 'scheduling-admin-dashboard-navigation';
-  readonly name = 'Scheduling Admin dashboard shows the expected sidebar navigation';
+  readonly name = 'Scheduling Admin dashboard shows and navigates the expected sidebar items';
 
   constructor(private readonly credentials: PortalCredentials) {}
 
@@ -36,10 +44,14 @@ export class SchedulingAdminDashboardNavigationTest implements PortalAutomationT
       };
     }
 
+    // The login helpers' one-shot expand click can land before the page is
+    // ready (seen live for Interviewer), leaving the sidebar icons-only.
+    await ensureSidebarOpen(page);
+
     const missing: string[] = [];
-    for (const item of EXPECTED_NAV_ITEMS) {
-      if (!(await isAdminSidebarNavItemVisible(page, item))) {
-        missing.push(item);
+    for (const { label } of NAV_TARGETS) {
+      if (!(await isAdminSidebarNavItemVisible(page, label))) {
+        missing.push(label);
       }
     }
 
@@ -50,9 +62,21 @@ export class SchedulingAdminDashboardNavigationTest implements PortalAutomationT
       };
     }
 
+    const navFailures = await clickThroughSidebar(
+      page,
+      'https://portal.curatal.com/app/scheduling/dashboard',
+      NAV_TARGETS,
+    );
+    if (navFailures.length > 0) {
+      return {
+        passed: false,
+        details: `${navFailures.length} of ${NAV_TARGETS.length} sidebar item(s) failed to navigate for Scheduling Admin: ${navFailures.join('; ')}`,
+      };
+    }
+
     return {
       passed: true,
-      details: `All ${EXPECTED_NAV_ITEMS.length} expected sidebar navigation items were visible for Scheduling Admin`,
+      details: `All ${NAV_TARGETS.length} expected sidebar navigation items were visible and navigated to their expected pages for Scheduling Admin`,
     };
   }
 }

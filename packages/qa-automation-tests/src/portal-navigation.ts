@@ -123,6 +123,26 @@ export async function loginAndReachCompletedInterviewsTab(
 }
 
 /**
+ * Clicks the login form's submit button until the app shell loads.
+ * Confirmed live on the recruiter login (docs/adr/0070): the first click
+ * on a freshly filled form sends no login request at all, only the second
+ * one POSTs `/api/v1/recruiter/login`. Prod_Automation clicks twice for
+ * the same reason. A single click here just times out on the login page.
+ */
+export async function submitLoginUntilAppLoads(page: Page, timeout: number): Promise<void> {
+  const submit = page.locator("button[type='submit']").first();
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await submit.click();
+    const landed = await page
+      .waitForURL('**/app/**', { timeout: attempt === 3 ? timeout : 10000 })
+      .then(() => true)
+      .catch(() => false);
+    if (landed) return;
+  }
+  throw new Error(`Login did not reach the app after 3 submit clicks (still on ${page.url()})`);
+}
+
+/**
  * Shared by every persona-dashboard check that logs into the
  * recruiter/admin side of the app (recruiter, scheduling admin, ...:
  * docs/adr/0059) — that whole app shell's sidebar loads collapsed to

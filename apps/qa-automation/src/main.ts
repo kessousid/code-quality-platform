@@ -105,6 +105,17 @@ async function main(): Promise<void> {
     email: requireEnv('PORTAL_QA_PANEL_ADMIN_EMAIL'),
     password: requireEnv('PORTAL_QA_PANEL_ADMIN_PASSWORD'),
   };
+  // Dedicated Interviewer and plain (non-master) Recruiter logins for the
+  // navigation checks ported from Prod_Automation (docs/adr/0070) — both
+  // sign in through the recruiter login form.
+  const interviewerCredentials = {
+    email: requireEnv('PORTAL_QA_INTERVIEWER_EMAIL'),
+    password: requireEnv('PORTAL_QA_INTERVIEWER_PASSWORD'),
+  };
+  const standardRecruiterCredentials = {
+    email: requireEnv('PORTAL_QA_STANDARD_RECRUITER_EMAIL'),
+    password: requireEnv('PORTAL_QA_STANDARD_RECRUITER_PASSWORD'),
+  };
   const emailSender = new NodemailerEmailSender({
     fromAddress: requireEnv('ALERT_EMAIL_FROM'),
     appPassword: requireEnv('ALERT_EMAIL_APP_PASSWORD'),
@@ -157,6 +168,8 @@ async function main(): Promise<void> {
       recruiterCredentials,
       schedulingAdminCredentials,
       panelAdminCredentials,
+      interviewerCredentials,
+      standardRecruiterCredentials,
     ),
     async (): Promise<QaBrowser> => {
       const browser: Browser = await chromium.launch({ headless: true });

@@ -1,6 +1,6 @@
 import type { Page } from 'playwright';
 import type { PortalCredentials } from './portal-automation-test.js';
-import { expandCollapsedAdminSidebar } from './portal-navigation.js';
+import { expandCollapsedAdminSidebar, submitLoginUntilAppLoads } from './portal-navigation.js';
 
 const LOGIN_URL = 'https://portal.curatal.com/auth/recruiter/login';
 export const RECRUITER_DASHBOARD_URL = 'https://portal.curatal.com/app/recruiter/dashboard';
@@ -30,9 +30,7 @@ export async function loginToRecruiterDashboard(
   await emailInput.waitFor({ state: 'visible', timeout: TIMEOUT });
   await emailInput.fill(credentials.email);
   await page.locator("input[type='password']").first().fill(credentials.password);
-  await page.locator("button[type='submit']").first().click();
-
-  await page.waitForURL('**/app/**', { timeout: TIMEOUT * 2 });
+  await submitLoginUntilAppLoads(page, TIMEOUT * 2);
   await page.waitForTimeout(3000);
 
   const skipButton = page.getByRole('button', { name: /^Skip$/i });

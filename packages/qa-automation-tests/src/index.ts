@@ -15,6 +15,12 @@ export * from './scheduling-admin-navigation.js';
 export * from './scheduling-admin-dashboard-navigation.test-impl.js';
 export * from './panel-admin-navigation.js';
 export * from './panel-admin-dashboard-navigation.test-impl.js';
+export * from './sidebar-click-through.js';
+export * from './candidate-dashboard-navigation.test-impl.js';
+export * from './interviewer-dashboard-navigation.test-impl.js';
+export * from './standard-recruiter-dashboard-navigation.test-impl.js';
+export * from './platform-admin-navigation.js';
+export * from './platform-admin-dashboard-navigation.test-impl.js';
 
 import type { PortalAutomationTest, PortalCredentials } from './portal-automation-test.js';
 import { SlotListingPricingTest } from './slot-listing-pricing.test-impl.js';
@@ -28,6 +34,10 @@ import { CandidateSearchEducationAdditiveTest } from './candidate-search-educati
 import { RecruiterDashboardNavigationTest } from './recruiter-dashboard-navigation.test-impl.js';
 import { SchedulingAdminDashboardNavigationTest } from './scheduling-admin-dashboard-navigation.test-impl.js';
 import { PanelAdminDashboardNavigationTest } from './panel-admin-dashboard-navigation.test-impl.js';
+import { CandidateDashboardNavigationTest } from './candidate-dashboard-navigation.test-impl.js';
+import { InterviewerDashboardNavigationTest } from './interviewer-dashboard-navigation.test-impl.js';
+import { StandardRecruiterDashboardNavigationTest } from './standard-recruiter-dashboard-navigation.test-impl.js';
+import { PlatformAdminDashboardNavigationTest } from './platform-admin-dashboard-navigation.test-impl.js';
 
 /**
  * The extensible registry (see docs/adr/0035) — adding a new check means
@@ -62,6 +72,13 @@ import { PanelAdminDashboardNavigationTest } from './panel-admin-dashboard-navig
  * `panelAdminCredentials` is the same pattern for the Panel Admin
  * persona check (docs/adr/0061) — a real Panel Admin account, logging
  * into the same `auth/curatal-users/login` form as Scheduling Admin.
+ *
+ * `interviewerCredentials` and `standardRecruiterCredentials` are the
+ * same pattern for the navigation checks ported from Prod_Automation
+ * (docs/adr/0070): a real Interviewer and a real plain (non-master)
+ * Recruiter, both signing in through the recruiter login form. That port
+ * also adds Candidate and Platform Admin navigation checks, which reuse
+ * `credentials` and `candidateSearchCredentials` respectively.
  */
 export function createPortalAutomationTests(
   credentials: PortalCredentials,
@@ -70,6 +87,8 @@ export function createPortalAutomationTests(
   recruiterCredentials: PortalCredentials = credentials,
   schedulingAdminCredentials: PortalCredentials = credentials,
   panelAdminCredentials: PortalCredentials = credentials,
+  interviewerCredentials: PortalCredentials = credentials,
+  standardRecruiterCredentials: PortalCredentials = credentials,
 ): PortalAutomationTest[] {
   return [
     new SlotListingPricingTest(slotCheckCredentials),
@@ -83,5 +102,9 @@ export function createPortalAutomationTests(
     new RecruiterDashboardNavigationTest(recruiterCredentials),
     new SchedulingAdminDashboardNavigationTest(schedulingAdminCredentials),
     new PanelAdminDashboardNavigationTest(panelAdminCredentials),
+    new CandidateDashboardNavigationTest(credentials),
+    new InterviewerDashboardNavigationTest(interviewerCredentials),
+    new StandardRecruiterDashboardNavigationTest(standardRecruiterCredentials),
+    new PlatformAdminDashboardNavigationTest(candidateSearchCredentials),
   ];
 }
