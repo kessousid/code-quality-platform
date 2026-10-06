@@ -72,6 +72,36 @@ describe('runJest', () => {
     void testFile;
   }, 30000);
 
+  it('names the real load-time error when every generated suite crashes before registering a test, not the testMatch guess', async () => {
+    // Live-observed (docs/adr/0071): the module under test throws at import because a required env var is unset.
+    await writeFile(
+      join(repoRoot, 'config.js'),
+      `if (!process.env.CQP_FIXTURE_SECRET) { throw new Error('Config validation error: "JWT_SECRET" is required'); }`,
+    );
+    const testFile = join(repoRoot, 'crashes.generated.test.js');
+    await writeFile(testFile, `require('./config'); it('never registers', () => {});`);
+
+    const error = await runJest(repoRoot, [testFile]).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(NoTestsFoundError);
+    expect((error as NoTestsFoundError).suiteLoadFailures).toHaveLength(1);
+    expect((error as Error).message).toContain('crashed while loading');
+    expect((error as Error).message).toContain('"JWT_SECRET" is required');
+    expect((error as Error).message).not.toContain('testMatch');
+    expect((error as Error).message).not.toContain('.env.example');
+  }, 30000);
+
+  it('adds a .env hint when a load-time crash happens in a project with .env.example but no .env', async () => {
+    await writeFile(join(repoRoot, '.env.example'), 'JWT_SECRET=example');
+    const testFile = join(repoRoot, 'crashes.generated.test.js');
+    await writeFile(
+      testFile,
+      `throw new Error('Config validation error: "JWT_SECRET" is required');`,
+    );
+
+    await expect(runJest(repoRoot, [testFile])).rejects.toThrow(/\.env\.example but no \.env/);
+  }, 30000);
+
   it('surfaces a clear ToolNotFoundError when jest cannot be resolved at all', async () => {
     process.env.CQP_JEST_PATH = join(repoRoot, 'definitely-not-a-real-jest-binary.exe');
     const testFile = join(repoRoot, 'sample.generated.test.js');

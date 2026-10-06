@@ -153,6 +153,8 @@ interface JestJsonAssertionResult {
 
 interface JestJsonTestResult {
   name: string;
+  /** Set (non-empty) when the suite itself crashed before registering any test — e.g. a throw at module load. */
+  message?: string;
   assertionResults: JestJsonAssertionResult[];
 }
 
@@ -171,13 +173,51 @@ const STATUS_MAP: Record<JestJsonAssertionResult['status'], TestCaseResult['stat
   todo: 'skipped',
 };
 
+export interface SuiteLoadFailure {
+  testFilePath: string;
+  message: string;
+}
+
+const MAX_SUITE_ERROR_CHARS = 1500;
+
+// eslint-disable-next-line no-control-regex
+const stripAnsi = (s: string): string => s.replace(/\u001b\[[0-9;]*m/g, '');
+
+/**
+ * Jest reports `numTotalTests === 0` both when testMatch excludes the files
+ * and — far more often in practice — when every generated suite crashes at
+ * module load before any `it()` registers (docs/adr/0048, 0051, 0071). The
+ * latter carries jest's real error per suite, so name it instead of guessing.
+ */
 export class NoTestsFoundError extends Error {
-  constructor() {
-    super(
-      "jest ran but found no tests among the generated files — check the target project's Jest config " +
-        '(testMatch/testPathIgnorePatterns) actually includes *.generated.test.* files.',
-    );
+  constructor(
+    readonly suiteLoadFailures: SuiteLoadFailure[] = [],
+    missingDotEnv = false,
+  ) {
+    super(NoTestsFoundError.describe(suiteLoadFailures, missingDotEnv));
     this.name = 'NoTestsFoundError';
+  }
+
+  private static describe(failures: SuiteLoadFailure[], missingDotEnv: boolean): string {
+    if (failures.length === 0) {
+      return (
+        "jest ran but found no tests among the generated files — check the target project's Jest config " +
+        '(testMatch/testPathIgnorePatterns) actually includes *.generated.test.* files.'
+      );
+    }
+    const [first] = failures;
+    let detail = first!.message.trim();
+    if (detail.length > MAX_SUITE_ERROR_CHARS) {
+      detail = `${detail.slice(0, MAX_SUITE_ERROR_CHARS)}\n…(truncated)`;
+    }
+    const hint = missingDotEnv
+      ? '\n\nThe target project has a .env.example but no .env — if the error above is a missing config/env value, create .env (copying .env.example is usually enough) and re-run.'
+      : '';
+    return (
+      `jest found no tests: ${failures.length} generated test file(s) crashed while loading, before any test could register. ` +
+      `This is usually the code under test throwing at import time (missing env/config, a DB/service connection, a bad import), not the Jest config.\n\n` +
+      `First failure — ${first!.testFilePath}:\n${detail}${hint}`
+    );
   }
 }
 
@@ -242,7 +282,12 @@ export async function runJest(
 
   const parsed = JSON.parse(raw) as JestJsonOutput;
   if (parsed.numTotalTests === 0) {
-    throw new NoTestsFoundError();
+    const suiteLoadFailures = parsed.testResults
+      .filter((t) => t.message && t.message.trim() !== '')
+      .map((t) => ({ testFilePath: t.name, message: stripAnsi(t.message!) }));
+    const missingDotEnv =
+      existsSync(join(repoRoot, '.env.example')) && !existsSync(join(repoRoot, '.env'));
+    throw new NoTestsFoundError(suiteLoadFailures, missingDotEnv);
   }
 
   const results: Omit<TestCaseResult, 'id' | 'runId'>[] = [];

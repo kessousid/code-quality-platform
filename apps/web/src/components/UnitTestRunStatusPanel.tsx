@@ -58,7 +58,7 @@ function StatusBanner({ run }: { run: UnitTestRun | undefined }) {
       );
     case 'failed':
       return (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="whitespace-pre-wrap break-words rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           This run failed{run.errorMessage ? `: ${run.errorMessage}` : '.'}
         </p>
       );
